@@ -60,6 +60,7 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 - The prompt's FIRST words are always a content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content)
 - For every female character, ALWAYS state her current breast size using one of these bands, matching the story's canon: flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts — body-size continuity is critical
 - Prefer concrete visual wording over abstractions: "torn apron, popped buttons, fabric straining across her chest" not "clothes in disarray"
+- Do NOT add art-style words to prompts ("realistic art style", "anime style", "digital art", etc.) — the visual style is appended automatically and style words in the prompt contradict it
 - Best used for: dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
 
 **EXAMPLE:**

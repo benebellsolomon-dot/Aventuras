@@ -21,6 +21,7 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
+import { sizeBandMarker } from './sizeBandMarker'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { createLogger } from '$lib/log'
 
@@ -162,7 +163,7 @@ export class InlineImageGenerationService {
 
     // Build full prompt with style
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const fullPrompt = `${tag.prompt}. ${stylePrompt}`
+    const fullPrompt = `${sizeBandMarker(tag.prompt)}${tag.prompt}. ${stylePrompt}`
 
     const { width, height } = parseImageSize(sizeToUse)
 

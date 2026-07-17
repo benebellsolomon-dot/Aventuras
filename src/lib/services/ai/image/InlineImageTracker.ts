@@ -23,6 +23,7 @@ import { database } from '$lib/services/database'
 import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
+import { sizeBandMarker } from './sizeBandMarker'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { createLogger } from '$lib/log'
 import type { Character, EmbeddedImage } from '$lib/types'
@@ -127,7 +128,7 @@ export class InlineImageTracker {
 
     // Build full prompt with style
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const fullPrompt = `${tag.prompt}. ${stylePrompt}`
+    const fullPrompt = `${sizeBandMarker(tag.prompt)}${tag.prompt}. ${stylePrompt}`
 
     log('Starting async image generation', {
       imageId,

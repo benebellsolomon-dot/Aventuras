@@ -5,6 +5,7 @@
  */
 
 import { generateImage, supportsImageGeneration } from './providers/registry'
+import { sizeBandMarker } from './sizeBandMarker'
 import { database } from '$lib/services/database'
 import { settings } from '$lib/stores/settings.svelte'
 import type { StorySettings } from '$lib/types'
@@ -161,6 +162,9 @@ export async function retryImageGeneration(imageId: string, prompt: string): Pro
  * Returns the base64 image data on success.
  */
 export async function generatePortrait(prompt: string): Promise<string> {
+  // Size-band → bridge tier marker (see sizeBandMarker.ts) — portraits carry the
+  // character's size vocabulary via visual descriptors, so mark them too.
+  prompt = `${sizeBandMarker(prompt)}${prompt}`
   const imageSettings = settings.systemServicesSettings.imageGeneration
 
   const profileId = imageSettings.portraitProfileId
