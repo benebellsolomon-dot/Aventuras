@@ -40,11 +40,15 @@ export const bodyStateSchema = z
   })
   .passthrough()
 
-export function defaultBodyState(tier = 6): BodyState {
+/** Genre-default transformation fluid — a fallback only; the played story's
+ * `settings.beFluidType` is the canonical source at seed time. */
+export const DEFAULT_FLUID_TYPE = 'milk'
+
+export function defaultBodyState(tier = 6, fluidType: string = DEFAULT_FLUID_TYPE): BodyState {
   return {
     tier: Math.max(0, tier),
     shape: 'natural',
-    fluids: { fillPercent: 0, fluidType: 'milk' },
+    fluids: { fillPercent: 0, fluidType: fluidType.trim() || DEFAULT_FLUID_TYPE },
     conditions: [],
     locked: false,
     cooldown: 0,
@@ -52,9 +56,9 @@ export function defaultBodyState(tier = 6): BodyState {
 }
 
 /** Seed a fresh state from a card's cup letter (e.g. "X" or "DD-cup"); null tier → default. */
-export function seedBodyStateFromCup(letter: string): BodyState {
+export function seedBodyStateFromCup(letter: string, fluidType?: string): BodyState {
   const tier = tierForCupLetter(letter)
-  return defaultBodyState(tier ?? defaultBodyState().tier)
+  return defaultBodyState(tier ?? defaultBodyState().tier, fluidType)
 }
 
 /**

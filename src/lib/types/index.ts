@@ -121,6 +121,7 @@ export interface StorySettings {
   referenceMode?: boolean
   customSystemPrompt?: string // Per-story Liquid template override; bypasses pack template when set
   beMode?: boolean // BE engine: classifier event extraction + deterministic body-state reducer + narrative grounding
+  beFluidType?: string // BE engine: this story's transformation fluid, used when seeding new body states (default 'milk')
 }
 
 export interface StoryEntry {

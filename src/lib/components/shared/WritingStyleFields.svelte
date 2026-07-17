@@ -17,6 +17,8 @@
     backgroundImagesEnabled: boolean
     referenceMode: boolean
     beMode: boolean
+    /** This story's transformation fluid (BE engine seed source). Input shown only when provided. */
+    beFluidType?: string
     onPOVChange: (v: POV) => void
     onTenseChange: (v: Tense) => void
     onToneChange: (v: string) => void
@@ -25,6 +27,7 @@
     onBackgroundImagesEnabledChange: (v: boolean) => void
     onReferenceModeChange: (v: boolean) => void
     onBeModeChange: (v: boolean) => void
+    onBeFluidTypeChange?: (v: string) => void
     disabledFields?: {
       pov?: boolean
       tense?: boolean
@@ -43,6 +46,7 @@
     backgroundImagesEnabled,
     referenceMode,
     beMode,
+    beFluidType,
     onPOVChange,
     onTenseChange,
     onToneChange,
@@ -51,6 +55,7 @@
     onBackgroundImagesEnabledChange,
     onReferenceModeChange,
     onBeModeChange,
+    onBeFluidTypeChange,
     disabledFields,
     disabledReason,
   }: Props = $props()
@@ -275,6 +280,17 @@
         </p>
       </div>
     </div>
+    {#if beMode && onBeFluidTypeChange}
+      <div class="grid w-full items-center gap-2 pb-2">
+        <Input
+          label="Transformation Fluid"
+          id="be-fluid-type"
+          value={beFluidType ?? ''}
+          oninput={(e) => onBeFluidTypeChange(e.currentTarget.value)}
+          placeholder="milk (this story's fluid — used when seeding new body states)"
+        />
+      </div>
+    {/if}
   </section>
 
   <!-- Visual Prose Styling -->

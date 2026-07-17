@@ -175,6 +175,7 @@
     backgroundImagesEnabled={storySettings.backgroundImagesEnabled ?? false}
     referenceMode={storySettings.referenceMode ?? false}
     beMode={storySettings.beMode ?? false}
+    beFluidType={storySettings.beFluidType ?? ''}
     onPOVChange={(v) => story.updateStorySettings({ pov: v })}
     onTenseChange={(v) => story.updateStorySettings({ tense: v })}
     onToneChange={(v) => story.updateStorySettings({ tone: v })}
@@ -184,6 +185,7 @@
       story.updateStorySettings({ backgroundImagesEnabled: v })}
     onReferenceModeChange={(v) => story.updateStorySettings({ referenceMode: v })}
     onBeModeChange={(v) => story.updateStorySettings({ beMode: v })}
+    onBeFluidTypeChange={(v) => story.updateStorySettings({ beFluidType: v })}
     disabledFields={{ pov: true, tense: true, visualProseMode: true }}
     disabledReason="Cannot be changed mid-story. Set during story creation."
   />

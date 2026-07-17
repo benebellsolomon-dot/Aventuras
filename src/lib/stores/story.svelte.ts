@@ -2849,7 +2849,7 @@ class StoryStore {
           character.description ?? '',
         ].join('\n')
         const sniffedTier = sniffTierFromText(sniffSource)
-        state = defaultBodyState(sniffedTier ?? undefined)
+        state = defaultBodyState(sniffedTier ?? undefined, this.currentStory?.settings?.beFluidType)
         seeded = true
         pendingLog.push({
           character: character.name,

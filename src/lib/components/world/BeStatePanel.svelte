@@ -67,7 +67,7 @@
     const sniffed = sniffTierFromText(
       [character.visualDescriptors?.build ?? '', character.description ?? ''].join('\n'),
     )
-    await persist(defaultBodyState(sniffed ?? undefined))
+    await persist(defaultBodyState(sniffed ?? undefined, story.currentStory?.settings?.beFluidType))
   }
 </script>
 

@@ -180,6 +180,14 @@ describe('maxBodyStateTier', () => {
   })
 })
 
+describe('story-sourced fluid type', () => {
+  test('seed uses the story fluid, falling back to the genre default', () => {
+    expect(defaultBodyState(10, 'nectar').fluids.fluidType).toBe('nectar')
+    expect(defaultBodyState(10, '   ').fluids.fluidType).toBe('milk')
+    expect(defaultBodyState(10).fluids.fluidType).toBe('milk')
+  })
+})
+
 describe('uniformBodyStateTier (the grounding gate)', () => {
   const characters = [
     { name: 'Lucy', metadata: writeBodyState(null, defaultBodyState(45)) }, // hyper band

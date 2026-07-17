@@ -33,6 +33,7 @@ export {
 export { buildBeStateBlock, type BeStateEntry } from './context'
 export {
   BODY_STATE_KEY,
+  DEFAULT_FLUID_TYPE,
   bodyStateSchema,
   defaultBodyState,
   maxBodyStateTier,
