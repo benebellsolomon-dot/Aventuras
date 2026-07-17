@@ -43,11 +43,22 @@ ambrosia-st: reverted the msgpackr package.json diff, left a `research/MOVED.md`
 ## Phase 1 — Lucy playtest (acceptance gate; Ben plays, Claude instruments)
 
 E14 checklist (research/34), metric-updated: seed Lucy in the panel (Ben rules the tier — canon
-X-cup = spine 47 vs established render marker 39) + waist/hips cm; verify the [BODY STATE] block
+X-cup = spine 47 vs established render marker 39; ⚠ live DB shows her seeded at tier 6 = her
+ORIGINAL DD, must be raised before real play) + waist/hips cm; verify the [BODY STATE] block
 renders metric in a live turn; drive a growth beat end-to-end (classifier event → reducer roll →
-next-turn GROWTH directive); verify `__betier_N__` reaches the bridge on an inline image; C8
+next-turn GROWTH directive); verify `__betier_N__` reaches the bridge on an inline image; C7
 probe (agentic image path renders markerless — confirm + log); pacing notes for D5 constant
 re-derivation. Findings feed Phase 2 ordering; nothing ships here.
+
+**Classifier schema-compliance probe (folds the queued C8 preflight, research/34 §C8):** over
+≥10 BE turns, log for the extended classifier schema (base + runtime-vars + beEvents/beStates):
+(a) schema-valid-JSON rate, (b) refusal/non-JSON count (must be 0), (c) per-field drop rate on
+beEvents/beStates. Run on the current `x-ai/grok-4.3` first; if either gate fails, swap the
+`classification` preset to GLM-5.2 (reasoning-off, `structuredOutputOverride:'on'`) and re-run.
+**Acceptance: 100% parseable, 0 refusals, no systematic field drops.** This probe picks the
+classifier model — do not hard-code a choice before it runs. Also confirm during play: narrator
+honors the [BODY STATE] metric block verbatim (the GLM-vs-Claude tiebreaker), and narrator
+maxTokens raised above 8192 doesn't truncate Peak scenes.
 
 ## Phases 2–4 — see Part II (full specs).
 
@@ -82,6 +93,43 @@ Every code phase gates on `npm test && npm run check && npm run lint` (Node 22 P
 proven deploy chain: backup `aventura.db` → graceful quit via osascript → `npx tauri build
 --bundles app` → `ditto` to /Applications → relaunch → live smoke turn. Fork commits per phase
 (conventional format, no attribution trailers); **never push** without Ben's say-so.
+
+## Model routing (researched 2026-07-17; app-global — no per-story override exists)
+
+Aventuras routes models **per role** via "Agent Profiles" (`GenerationPreset`, Settings →
+Generation): `servicePresetAssignments` maps ~29 service roles → presets
+(`settings.svelte.ts:1139`); each preset carries profileId/model/temperature/maxTokens/
+reasoningEffort/`structuredOutputOverride`. The **narrator is OUTSIDE this system** — global
+Main Narrative profile + `apiSettings.defaultModel` (`generate.ts:322`), always free-form.
+**No per-story routing** (`StorySettings.model` is vestigial, unread by generation) — a
+per-story override would be a new fork feature; NOT building for v1 (one BE campaign at a time,
+the global switch suffices).
+
+- **Deterministic steps make NO LLM call — assign nothing:** reducer, `drift.ts`,
+  `genre-rules.ts`, `measurements.ts`, `context.ts`, `milestones.ts`, the store wiring.
+- **Classifier** (`classification` preset; currently `x-ai/grok-4.3`): structured-JSON
+  reliability AND content-permissiveness are BOTH hard gates — a refusal returns non-JSON and
+  breaks the whole event→reducer pipeline. Candidate set: GLM-5.2 (reasoning off +
+  `structuredOutputOverride:'on'`) · grok-4.3 (current; the C8 concern was grok-**fast**, not
+  4.3) · Haiku 4.5 (gold-standard JSON, ONLY if non-refusal on BE content is confirmed).
+  **BAN:** DeepSeek v4 (dead for structured work, ST-era) + all Grok-fast tiers. Winner is
+  picked by the Phase-1 probe, not upfront.
+- **Narrator** (Main Narrative; currently `z-ai/glm-5.2`): keep GLM-5.2 — confirm reasoning
+  OFF and **raise maxTokens above 8192** (ST-era lesson: GLM wants ≥24k headroom; long Peak
+  scenes may truncate). Challenger if metric-block adherence drifts in play: Sonnet 5 / Fable 5
+  (permissiveness on explicit BE content UNVERIFIED — validate before adopting).
+- **actionChoices** ⚠ ACTIVE RISK (independent of BE): emits a structured schema but rides the
+  DeepSeek-v4-pro-backed `suggestions` preset — move it to a reliable structured model
+  (Haiku 4.5 / GLM-5.2 / Gemini 3 Flash).
+- **imageGeneration/bgImageGeneration** (`Images` preset): any cheap structured model; model
+  choice does NOT fix the C7 markerless bug (code gap — `ImageAnalysisService` never calls
+  `sizeBandMarker`).
+- **Config bug (live-DB-verified):** the `memory` AND `Images` presets carry the slug
+  `~x-ai/grok-latest` — the `~` prefix matches nothing, no `grok-latest` alias exists on
+  OpenRouter → both presets likely 404 silently. Fix in Settings → Generation (repoint to real
+  models).
+- Reaching Claude models: either OpenRouter passthrough IDs (`anthropic/claude-sonnet-5`,
+  `anthropic/claude-haiku-4.5`) on the existing profile, or a dedicated Anthropic APIProfile.
 
 ---
 
