@@ -122,14 +122,16 @@ describe('buildBeStateBlock', () => {
     expect(block).toContain('never invent growth')
   })
 
-  test('a stored band yields the US sizing string and BWH', () => {
+  test('metric measurements render with auto-derived bust', () => {
     const block = buildBeStateBlock([
       {
         name: 'Lucy',
-        state: at(47, { baseline: { bandIn: 38, waistIn: 32, hipsIn: 40 } }),
+        state: at(47, { baseline: { waistCm: 81, hipsCm: 94 } }),
       },
     ])
-    expect(block).toContain('Lucy — 38X-32-40')
+    expect(block).toContain('Lucy — X-cup (tier 47)')
+    expect(block).toContain('Measurements: 102-81-94 cm')
+    expect(block).toContain('All measurements are metric')
   })
 
   test('mood line renders attitude and arousal when present', () => {

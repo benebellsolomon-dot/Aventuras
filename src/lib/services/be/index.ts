@@ -25,7 +25,8 @@ export {
 export { groundingFacts } from './derive'
 export {
   bodyRow,
-  bwhString,
+  bustCm,
+  bwhCmString,
   capacityMlPerSide,
   dryKgPerSide,
   estimatedBodyWeightKg,

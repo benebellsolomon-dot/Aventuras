@@ -35,9 +35,8 @@ export const bodyStateSchema = z
       .object({
         heightCm: z.number().positive().optional(),
         build: z.string().optional(),
-        bandIn: z.number().positive().optional(),
-        waistIn: z.number().positive().optional(),
-        hipsIn: z.number().positive().optional(),
+        waistCm: z.number().positive().optional(),
+        hipsCm: z.number().positive().optional(),
         bodyWeightKg: z.number().positive().optional(),
       })
       .passthrough()

@@ -3,7 +3,8 @@ import { GOLDEN_MEASUREMENTS, BODY_ROWS_BY_SHAPE } from './ladder-data'
 import { cupLetter } from './ladder'
 import {
   bodyRow,
-  bwhString,
+  bustCm,
+  bwhCmString,
   capacityMlPerSide,
   dryKgPerSide,
   estimatedBodyWeightKg,
@@ -22,8 +23,15 @@ describe('curves reproduce the baked golden snapshots (the spine, at rung resolu
     expect(cupLetter(golden.tier)).toBe(golden.letter)
     expect(2 * dryKgPerSide(golden.tier)).toBeCloseTo(golden.dryTotalKg, 1)
     expect(2 * capacityMlPerSide(golden.tier)).toBeCloseTo(golden.capacityTotalMl, 0)
+    expect(bustCm(golden.tier, 'natural', 0)).toBeCloseTo(golden.bustCm, 0)
     const state = defaultBodyState(golden.tier)
     expect(measurements(state).breastMassPct).toBeCloseTo(golden.bodyPct, 0)
+  })
+
+  test('bust circumference grows with tier and with fill (automatic recomputation)', () => {
+    expect(bustCm(20, 'natural')).toBeGreaterThan(bustCm(10, 'natural'))
+    expect(bustCm(47, 'natural', 100)).toBeGreaterThan(bustCm(47, 'natural', 0))
+    expect(bustCm(5000, 'natural')).toBe(bustCm(300, 'natural')) // saturates
   })
 
   test('curves are strictly monotonic in tier', () => {
@@ -89,16 +97,24 @@ describe('body rows (baked NAI moment-model rungs)', () => {
   })
 })
 
-describe('sizing strings (US convention)', () => {
-  test('band + letter when the band is known; letter-cup fallback otherwise', () => {
-    expect(sizingString(47, { bandIn: 38 })).toBe('38X')
+describe('sizing strings (metric convention)', () => {
+  test('cup label is letter-only; measurements are cm', () => {
     expect(sizingString(47)).toBe('X-cup')
   })
 
-  test('full BWH only when all three dimensions exist', () => {
-    expect(bwhString(47, { bandIn: 38, waistIn: 32, hipsIn: 40 })).toBe('38X-32-40')
-    expect(bwhString(47, { bandIn: 38, waistIn: 32 })).toBeNull()
-    expect(bwhString(47)).toBeNull()
+  test('BWH renders bust-waist-hips in cm; bust alone when anatomy is unset', () => {
+    const full = { ...defaultBodyState(47), baseline: { waistCm: 81, hipsCm: 94 } }
+    expect(bwhCmString(full)).toBe('102-81-94 cm')
+    expect(bwhCmString(defaultBodyState(47))).toBe('bust ~102 cm')
+  })
+
+  test('BWH bust tracks fill (engorgement widens the measurement)', () => {
+    const engorged = {
+      ...defaultBodyState(47),
+      baseline: { waistCm: 81, hipsCm: 94 },
+      fluids: { fillPercent: 100, fluidType: 'milk' },
+    }
+    expect(bwhCmString(engorged)).toBe('106-81-94 cm')
   })
 })
 

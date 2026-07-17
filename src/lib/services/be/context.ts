@@ -3,17 +3,17 @@
  * research/35 §3.3).
  *
  * One pure function builds the whole `beStateBlock` string the narrative
- * templates render. Per character: US sizing/BWH + band, the validated size
- * comparative, carried-mass honesty (weight feel + proportion), the baked
- * shape/hang channel, posture/mobility/clothing (verbatim NAI rungs), fluid
- * state anchored to capacity, transformation mood, the size-lock assertion,
- * and the magnitude-scaled growth directive (31a §3.5, register tier-gated).
- * Numbers stay banded per the corpus's own register rule — bust circumference
- * in cm never appears (the sizing convention bans it).
+ * templates render. Per character: cup + metric BWH (bust auto-derived from
+ * tier/shape/fill — Ben's ruling: all measurements in cm, computed where
+ * possible), the validated size comparative, carried-mass honesty (weight feel
+ * + proportion), the baked shape/hang channel, posture/mobility/clothing
+ * (verbatim NAI rungs), capacity-anchored fluid state, transformation mood,
+ * the size-lock assertion, and the magnitude-scaled growth directive
+ * (31a §3.5, register tier-gated).
  */
 
 import { bandWord, comparative, cupLetter } from './ladder'
-import { bodyRow, bwhString, fluidPressureLabel, measurements, sizingString } from './measurements'
+import { bodyRow, bwhCmString, fluidPressureLabel, measurements } from './measurements'
 import type { BodyState } from './types'
 
 export interface BeStateEntry {
@@ -48,10 +48,12 @@ function characterLines(entry: BeStateEntry): string {
   const { name, state } = entry
   const row = bodyRow(state.tier, state.shape)
   const m = measurements(state)
-  const sizing = bwhString(state.tier, state.baseline) ?? sizingString(state.tier, state.baseline)
 
   const lines: string[] = []
-  lines.push(`${name} — ${sizing} (tier ${state.tier}), ${bandWord(state.tier)}.`)
+  lines.push(
+    `${name} — ${cupLetter(state.tier)}-cup (tier ${state.tier}), ${bandWord(state.tier)}.`,
+  )
+  lines.push(`Measurements: ${bwhCmString(state)} (bust auto-derived from her current size).`)
   lines.push(`Size: ${comparative(state.tier)}`)
 
   const massBits = [`~${kg(m.dryTotalKg)} kg of breast tissue`]
@@ -100,6 +102,6 @@ export function buildBeStateBlock(entries: BeStateEntry[]): string {
   if (entries.length === 0) return ''
   const body = entries.map(characterLines).join('\n')
   return `[BODY STATE — canonical and authoritative]
-The following body states are engine-tracked ground truth. Prose must respect them exactly: sizes, mass, posture, mobility and clothing reality. Bust size changes ONLY when a growth directive in this block says it changed — never invent growth, shrinkage, or ambient size drift. Use US bra sizing only; never metric bust measurements.
+The following body states are engine-tracked ground truth. Prose must respect them exactly: sizes, measurements, mass, posture, mobility and clothing reality. All measurements are metric (cm/kg/L) — use these exact numbers, never invent different ones. Bust size changes ONLY when a growth directive in this block says it changed — never invent growth, shrinkage, or ambient size drift.
 ${body}`
 }

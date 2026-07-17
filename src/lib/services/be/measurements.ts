@@ -10,13 +10,14 @@
 
 import {
   BODY_ROWS_BY_SHAPE,
+  BUST_CM_CURVES,
   MEASUREMENT_CONSTANTS,
   PROPORTION_THRESHOLDS,
   SKIN_TENSION_THRESHOLDS,
   WEIGHT_FEEL_THRESHOLDS,
 } from './ladder-data'
 import { cupLetter } from './ladder'
-import type { BodyBaseline, BodyShape, BodyState } from './types'
+import type { BodyShape, BodyState } from './types'
 
 const K = MEASUREMENT_CONSTANTS
 
@@ -109,22 +110,37 @@ export function bodyRow(tier: number, shape: BodyShape): BodyRow {
   }
 }
 
-/** US sizing string per the genre convention: "38X" with a stored band, bare letter without. */
-export function sizingString(tier: number, baseline?: BodyBaseline): string {
-  const letter = cupLetter(tier)
-  const band = baseline?.bandIn
-  return band && Number.isFinite(band) ? `${Math.round(band)}${letter}` : `${letter}-cup`
+/** Cup sizing label — derived, letter-only ("X-cup"). */
+export function sizingString(tier: number): string {
+  return `${cupLetter(tier)}-cup`
 }
 
-/** Full BWH string ("38X-32-40") when band, waist, and hips are all known; null otherwise. */
-export function bwhString(tier: number, baseline?: BodyBaseline): string | null {
-  if (!baseline) return null
-  const { bandIn, waistIn, hipsIn } = baseline
-  if (!bandIn || !waistIn || !hipsIn) return null
-  return `${Math.round(bandIn)}${cupLetter(tier)}-${Math.round(waistIn)}-${Math.round(hipsIn)}`
+/**
+ * Bust circumference (cm) — AUTOMATIC: interpolated on fill between the baked
+ * empty/full spine curves for (tier, shape); recomputes as tier grows. Reference
+ * frame; saturates at the curve's last tier.
+ */
+export function bustCm(tier: number, shape: BodyShape, fillPercent = 0): number {
+  const curves = BUST_CM_CURVES[shape] ?? BUST_CM_CURVES.natural
+  const t = Math.min(clampTier(tier), curves.empty.length - 1)
+  const fill = clampPercent(fillPercent) / 100
+  return curves.empty[t] + (curves.full[t] - curves.empty[t]) * fill
+}
+
+/**
+ * Metric BWH string: bust is always auto-derived; waist/hips appear when the
+ * baseline carries them ("102-81-94 cm"), otherwise bust alone ("bust ~102 cm").
+ */
+export function bwhCmString(state: BodyState): string {
+  const bust = Math.round(bustCm(state.tier, state.shape, state.fluids.fillPercent))
+  const waist = state.baseline?.waistCm
+  const hips = state.baseline?.hipsCm
+  if (waist && hips) return `${bust}-${Math.round(waist)}-${Math.round(hips)} cm`
+  return `bust ~${bust} cm`
 }
 
 export interface BodyMeasurements {
+  bustCm: number
   dryTotalKg: number
   nowTotalKg: number
   capacityTotalMl: number
@@ -150,6 +166,7 @@ export function measurements(state: BodyState): BodyMeasurements {
   // including the breasts themselves.
   const pct = bodyWeightKg > 0 ? (nowTotal / (bodyWeightKg + nowTotal)) * 100 : 0
   return {
+    bustCm: bustCm(state.tier, state.shape, fill),
     dryTotalKg: dryTotal,
     nowTotalKg: nowTotal,
     capacityTotalMl: capacityTotal,

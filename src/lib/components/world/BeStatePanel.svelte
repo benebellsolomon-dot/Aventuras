@@ -7,7 +7,7 @@
   import {
     bandWord,
     bodyRow,
-    bwhString,
+    bwhCmString,
     comparative,
     defaultBodyState,
     fluidPressureLabel,
@@ -83,10 +83,7 @@
     await persist({ ...bodyState, attitude })
   }
 
-  async function setBaselineField(
-    field: 'bandIn' | 'waistIn' | 'hipsIn' | 'bodyWeightKg',
-    raw: string,
-  ) {
+  async function setBaselineField(field: 'waistCm' | 'hipsCm' | 'bodyWeightKg', raw: string) {
     if (!bodyState) return
     const value = Number(raw)
     const baseline = { ...(bodyState.baseline ?? {}) }
@@ -131,8 +128,7 @@
             title="Tier {bodyState.tier} — click to edit"
             onclick={startTierEdit}
           >
-            {bwhString(bodyState.tier, bodyState.baseline) ??
-              sizingString(bodyState.tier, bodyState.baseline)} · tier {bodyState.tier}
+            {sizingString(bodyState.tier)} · tier {bodyState.tier}
           </button>
         {/if}
         <Button
@@ -152,9 +148,9 @@
       {bandWord(bodyState.tier)} — {comparative(bodyState.tier)}
     </p>
     <p class="text-muted-foreground/80 text-xs">
-      ~{kg(m.dryTotalKg)} kg tissue{m.weightFeel ? ` — ${m.weightFeel}` : ''}{m.proportionNote
-        ? ` · ${m.proportionNote}`
-        : ''}
+      {bwhCmString(bodyState)} · ~{kg(m.dryTotalKg)} kg tissue{m.weightFeel
+        ? ` — ${m.weightFeel}`
+        : ''}{m.proportionNote ? ` · ${m.proportionNote}` : ''}
     </p>
     <p class="text-muted-foreground/80 text-xs">
       {bodyState.shape} — {row.shape}{row.hang ? ` — ${row.hang}` : ''}
@@ -208,20 +204,23 @@
       baseline measurements
     </button>
     {#if baselineOpen}
-      <div class="grid grid-cols-4 gap-1">
-        {#each [{ field: 'bandIn', label: 'band (in)' }, { field: 'waistIn', label: 'waist (in)' }, { field: 'hipsIn', label: 'hips (in)' }, { field: 'bodyWeightKg', label: 'weight (kg)' }] as spec (spec.field)}
+      <div class="grid grid-cols-3 gap-1">
+        {#each [{ field: 'waistCm', label: 'waist (cm)' }, { field: 'hipsCm', label: 'hips (cm)' }, { field: 'bodyWeightKg', label: 'weight (kg)' }] as spec (spec.field)}
           <label class="text-muted-foreground grid gap-0.5 text-[10px]">
             {spec.label}
             <input
               class="border-muted bg-popover w-full rounded border px-1 text-xs"
               type="number"
               min="0"
-              value={bodyState.baseline?.[spec.field as 'bandIn'] ?? ''}
-              onchange={(e) => setBaselineField(spec.field as 'bandIn', e.currentTarget.value)}
+              value={bodyState.baseline?.[spec.field as 'waistCm'] ?? ''}
+              onchange={(e) => setBaselineField(spec.field as 'waistCm', e.currentTarget.value)}
             />
           </label>
         {/each}
       </div>
+      <p class="text-muted-foreground/70 text-[10px]">
+        Bust is derived automatically from her current size and fill.
+      </p>
     {/if}
   </div>
 {:else}

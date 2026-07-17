@@ -34,10 +34,9 @@ export interface PendingGrowth {
 export interface BodyBaseline {
   heightCm?: number
   build?: string
-  /** US bra band (28-44) — the sizing convention's stored half ("38" of "38X"). */
-  bandIn?: number
-  waistIn?: number
-  hipsIn?: number
+  /** Waist/hips in cm — stored anatomy (no tier relationship to derive them from). */
+  waistCm?: number
+  hipsCm?: number
   /** Overrides the height/build estimate when set (proportion honesty anchor). */
   bodyWeightKg?: number
 }
