@@ -1,0 +1,60 @@
+{
+  "frames": [
+    {
+      "id": "A0_baseline",
+      "note": "no-artist | no-style",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A0_baseline_00001_.png"
+      ]
+    },
+    {
+      "id": "A1_style_detailed",
+      "note": "no-artist | (highly detailed:1.2), intricate details, sharp focus",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A1_style_detailed_00001_.png"
+      ]
+    },
+    {
+      "id": "A2_style_semireal",
+      "note": "no-artist | (semi-realistic:1.15), realistic skin texture, volumetric lighting",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A2_style_semireal_00001_.png"
+      ]
+    },
+    {
+      "id": "A3_artist_clean",
+      "note": "(as109:0.9), (rella:0.8), (ciloranko:0.7) | no-style",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A3_artist_clean_00001_.png"
+      ]
+    },
+    {
+      "id": "A4_artist_painterly",
+      "note": "(ciloranko:0.85), (wlop:0.6), (ningen mame:0.7) | no-style",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A4_artist_painterly_00001_.png"
+      ]
+    },
+    {
+      "id": "A5_artist_glossy",
+      "note": "(as109:0.9), (todoroki masaru:0.7), (ciloranko:0.6) | no-style",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A5_artist_glossy_00001_.png"
+      ]
+    },
+    {
+      "id": "A6_clean_plus_detailed",
+      "note": "(as109:0.9), (rella:0.8), (ciloranko:0.7) | (highly detailed:1.2), intricate details, sharp focus",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A6_clean_plus_detailed_00001_.png"
+      ]
+    },
+    {
+      "id": "A7_clean_plus_semireal",
+      "note": "(as109:0.9), (rella:0.8), (ciloranko:0.7) | (semi-realistic:1.15), realistic skin texture, volumetric lighting",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QAS_A7_clean_plus_semireal_00001_.png"
+      ]
+    }
+  ]
+}

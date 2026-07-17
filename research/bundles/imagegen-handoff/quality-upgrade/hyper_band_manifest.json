@@ -1,0 +1,103 @@
+{
+  "frames": [
+    {
+      "label": "a_t35_gigantic_CUR",
+      "cup": "gigantic breasts",
+      "slider": 0.57,
+      "hyper": 0.0,
+      "prompt_id": "8d539f11-c044-4960-b425-1477d8a27708",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_a_t35_gigantic_CUR_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "b_t39_gigantic_CUR",
+      "cup": "gigantic breasts",
+      "slider": 0.7,
+      "hyper": 0.0,
+      "prompt_id": "112aa132-49b8-4132-83c3-7f8c23488d98",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_b_t39_gigantic_CUR_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "c_t40_hyper_CUR",
+      "cup": "hyper breasts",
+      "slider": 0.3,
+      "hyper": 0.3,
+      "prompt_id": "dcde4261-94a8-4080-8a11-a4b81438edea",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_c_t40_hyper_CUR_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "d_t40_hyper_FIX",
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "prompt_id": "d9a7178d-1c5c-4245-8b2a-aeb70fc98a00",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_d_t40_hyper_FIX_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "e_t45_hyper_CUR",
+      "cup": "hyper breasts",
+      "slider": 0.41,
+      "hyper": 0.4,
+      "prompt_id": "13bb7925-d05c-49ac-a17b-897ceb605802",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_e_t45_hyper_CUR_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "f_t45_hyper_FIX",
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.65,
+      "prompt_id": "19cd4c3f-337f-40f7-910d-918079ca859e",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_f_t45_hyper_FIX_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "g_t50_hyper_CUR",
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "prompt_id": "6863729a-c717-4c5c-a402-7b3aa5851666",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_g_t50_hyper_CUR_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "h_t50_hyper_FIX",
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "prompt_id": "f43ba0c5-9008-461c-9f36-c7a74b1f6431",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_h_t50_hyper_FIX_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "i_t50_hyper_FIX2",
+      "cup": "hyper breasts",
+      "slider": 0.7,
+      "hyper": 1.0,
+      "prompt_id": "b92adbb3-ca47-412c-a78f-8ef4876d062d",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HYPERBAND_i_t50_hyper_FIX2_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

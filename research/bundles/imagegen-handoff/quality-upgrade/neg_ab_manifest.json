@@ -1,0 +1,16 @@
+{
+  "frames": [
+    {
+      "id": "old_heavy",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNEG_old_heavy_00001_.png"
+      ]
+    },
+    {
+      "id": "new_light",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNEG_new_light_00001_.png"
+      ]
+    }
+  ]
+}

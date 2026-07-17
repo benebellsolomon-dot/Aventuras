@@ -1,0 +1,115 @@
+{
+  "preset": "illustrious_image.json (upgraded: dpmpp_2m/karras + 4x-AnimeSharp hires + Detail Daemon + hand/face detailer)",
+  "frames": [
+    {
+      "id": "01_small_casual",
+      "tier": 6,
+      "intimacy": "clean",
+      "note": "t6 clean",
+      "prompt_id": "bed318d0-078a-41dd-9d5b-7ff7070ca949",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_01_small_casual_00001_.png"
+      ]
+    },
+    {
+      "id": "02_large_handface",
+      "tier": 14,
+      "intimacy": "clean",
+      "note": "t14 clean",
+      "prompt_id": "cb083037-e19e-4faf-b798-1d281341ab4e",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_02_large_handface_00001_.png"
+      ]
+    },
+    {
+      "id": "03_huge_fitted",
+      "tier": 22,
+      "intimacy": "suggestive",
+      "note": "t22 suggestive",
+      "prompt_id": "7ddb85f8-d24c-47ee-8ad2-38d191c72448",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_03_huge_fitted_00001_.png"
+      ]
+    },
+    {
+      "id": "04_gigantic_strain",
+      "tier": 30,
+      "intimacy": "suggestive",
+      "note": "t30 suggestive",
+      "prompt_id": "30f3f972-ba64-4e3e-9158-9cc59c211f3f",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_04_gigantic_strain_00001_.png"
+      ]
+    },
+    {
+      "id": "05_hyper_solo",
+      "tier": 45,
+      "intimacy": "suggestive",
+      "note": "t45 suggestive",
+      "prompt_id": "8281ef2f-70b6-4b28-9007-f4ad33a4ed64",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_05_hyper_solo_00001_.png"
+      ]
+    },
+    {
+      "id": "06_fullbody",
+      "tier": 22,
+      "intimacy": "clean",
+      "note": "t22 clean",
+      "prompt_id": "dafdbed3-dd55-46ce-ad48-7ecbe89a31ed",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_06_fullbody_00001_.png"
+      ]
+    },
+    {
+      "id": "07_twochar",
+      "tier": 22,
+      "intimacy": "clean",
+      "note": "t22 clean",
+      "prompt_id": "69b90353-cc0b-4b21-b69d-f188ed01f7b9",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_07_twochar_00001_.png"
+      ]
+    },
+    {
+      "id": "08_topless",
+      "tier": 22,
+      "intimacy": "nude",
+      "note": "t22 nude",
+      "prompt_id": "7e8b0a8a-6512-4936-be63-b81441c15161",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_08_topless_00001_.png"
+      ]
+    },
+    {
+      "id": "09_closeup_eyes",
+      "tier": 14,
+      "intimacy": "clean",
+      "note": "t14 clean",
+      "prompt_id": "be569319-4a83-42b5-b57e-fcf1da594d8f",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_09_closeup_eyes_00001_.png"
+      ]
+    },
+    {
+      "id": "10_armsup_hands",
+      "tier": 18,
+      "intimacy": "suggestive",
+      "note": "t18 suggestive",
+      "prompt_id": "c1d04c3e-3a62-4ea0-b4c7-602fa28db844",
+      "status": "success",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\image\\fullsuite_10_armsup_hands_00001_.png"
+      ]
+    }
+  ]
+}

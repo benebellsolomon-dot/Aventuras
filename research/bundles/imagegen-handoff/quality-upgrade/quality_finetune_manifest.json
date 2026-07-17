@@ -1,0 +1,55 @@
+{
+  "sampler": "dpmpp_2m/karras",
+  "hires": "4x-AnimeSharp 1.5x d0.4",
+  "frames": [
+    {
+      "id": "cfg4",
+      "note": "cfg4.0 st28 sm0.5",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QFT_cfg4_00001_.png"
+      ]
+    },
+    {
+      "id": "cfg5",
+      "note": "cfg5.0 st28 sm0.5",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QFT_cfg5_00001_.png"
+      ]
+    },
+    {
+      "id": "cfg6",
+      "note": "cfg6.0 st28 sm0.5",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QFT_cfg6_00001_.png"
+      ]
+    },
+    {
+      "id": "cfg7",
+      "note": "cfg7.0 st28 sm0.5",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QFT_cfg7_00001_.png"
+      ]
+    },
+    {
+      "id": "cfg5_st36",
+      "note": "cfg5.0 st36 sm0.5",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QFT_cfg5_st36_00001_.png"
+      ]
+    },
+    {
+      "id": "cfg5_sm03",
+      "note": "cfg5.0 st28 sm0.3",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QFT_cfg5_sm03_00001_.png"
+      ]
+    },
+    {
+      "id": "cfg5_sm07",
+      "note": "cfg5.0 st28 sm0.7",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QFT_cfg5_sm07_00001_.png"
+      ]
+    }
+  ]
+}

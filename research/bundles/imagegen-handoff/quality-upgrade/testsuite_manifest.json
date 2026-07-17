@@ -1,0 +1,184 @@
+{
+  "cells": [
+    {
+      "label": "01_size_large",
+      "prompt_id": "6d4a393f-cd23-42bd-8710-85c71407e6f2",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, large breasts, fitted t-shirt, indoors, standing, smile",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_01_size_large_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "02_size_huge",
+      "prompt_id": "134cbb29-6ed6-441b-9b7a-c1e2e9819f35",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, fitted t-shirt, indoors, standing, smile",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_02_size_huge_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "03_size_gigantic",
+      "prompt_id": "7ea9f7f9-06af-4cf7-adda-51d070750b64",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, gigantic breasts, fitted t-shirt, indoors, standing, smile",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_03_size_gigantic_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "04_pipe_base",
+      "prompt_id": "a0127f67-c25d-4926-9383-31148236c5ef",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, fitted t-shirt, indoors, standing, smile",
+      "hires": false,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_04_pipe_base_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "05_pipe_hires",
+      "prompt_id": "a3fd6b24-1016-483c-b7d8-def62ddd625c",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, fitted t-shirt, indoors, standing, smile",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_05_pipe_hires_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "06_pipe_hires_face",
+      "prompt_id": "991fe801-6d65-4187-a623-942c4d2e2f30",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, fitted t-shirt, indoors, standing, smile",
+      "hires": true,
+      "face": true,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_06_pipe_hires_face_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "07_dtg_off",
+      "prompt_id": "8850a247-86bb-47a8-b01e-6abf8faa9639",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, swimsuit, beach",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_07_dtg_off_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "08_dtg_on",
+      "prompt_id": "10f7bb76-d9e9-43c7-af9e-1bfed4b0b23d",
+      "positive": "[DanTagGen] 1girl, solo, mature female, huge breasts, swimsuit, beach",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [],
+      "status": "error"
+    },
+    {
+      "label": "09_strain_taut",
+      "prompt_id": "b000a886-0fbe-4839-acf6-d8acc4d01cd9",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, taut shirt, cleavage, buttons straining, underboob",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_09_strain_taut_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "10_strain_burst",
+      "prompt_id": "49b912f2-54c0-45ff-9147-b39204f6d8ed",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, gigantic breasts, torn clothes, bursting breasts, clothes ripping, flying button, surprised, breast expansion",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_10_strain_burst_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "11_topless",
+      "prompt_id": "012f9f13-2675-4530-9818-4a1c3b21dadf",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, topless, nude, blush",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_11_topless_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "12_extreme_fullbody",
+      "prompt_id": "938220d9-5ba7-4f94-8128-126f07eb5da7",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, gigantic breasts, full body, standing, cowboy shot, plain background",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_12_extreme_fullbody_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "13_two_char",
+      "prompt_id": "9a14a949-1462-4671-ab7d-4a2060dcbf35",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 2girls, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, both huge breasts, bikini, beach, standing",
+      "hires": true,
+      "face": false,
+      "sampler": "euler_ancestral",
+      "cfg": 6.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_13_two_char_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "14_sampler_dpmpp",
+      "prompt_id": "c89da08e-a03b-4f2c-b54d-68f98df480f8",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, shiny skin, huge breasts, fitted t-shirt, indoors, standing, smile",
+      "hires": true,
+      "face": false,
+      "sampler": "dpmpp_2m",
+      "cfg": 5.0,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_14_sampler_dpmpp_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

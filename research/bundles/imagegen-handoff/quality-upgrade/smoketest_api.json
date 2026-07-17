@@ -1,0 +1,88 @@
+{
+  "prompt": {
+    "4": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": { "ckpt_name": "waiIllustriousSDXL_v170.safetensors" }
+    },
+    "6": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": ["4", 1],
+        "text": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long hair, blue eyes, curvy, wide hips, narrow waist, collarbone, huge breasts, blue bikini, taut swimsuit, cleavage, shiny skin, standing, smile, beach, ocean, blue sky, warm lighting, cowboy shot"
+      }
+    },
+    "7": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": ["4", 1],
+        "text": "worst quality, low quality, bad quality, lowres, bad anatomy, bad hands, bad proportions, missing fingers, extra digits, fused fingers, jpeg artifacts, signature, watermark, username, text, blurry, sketch, monochrome, greyscale, multiple views, oldest, censored, child, loli, baby face, chibi"
+      }
+    },
+    "5": {
+      "class_type": "EmptyLatentImage",
+      "inputs": { "width": 832, "height": 1216, "batch_size": 1 }
+    },
+    "3": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": 123456789,
+        "steps": 28,
+        "cfg": 6.0,
+        "sampler_name": "euler_ancestral",
+        "scheduler": "normal",
+        "denoise": 1.0,
+        "model": ["4", 0],
+        "positive": ["6", 0],
+        "negative": ["7", 0],
+        "latent_image": ["5", 0]
+      }
+    },
+    "8": {
+      "class_type": "VAEDecode",
+      "inputs": { "samples": ["3", 0], "vae": ["4", 2] }
+    },
+    "9": {
+      "class_type": "SaveImage",
+      "inputs": { "images": ["8", 0], "filename_prefix": "WAI_v17_smoketest_base" }
+    },
+    "10": {
+      "class_type": "UpscaleModelLoader",
+      "inputs": { "model_name": "4x-AnimeSharp.pth" }
+    },
+    "11": {
+      "class_type": "ImageUpscaleWithModel",
+      "inputs": { "upscale_model": ["10", 0], "image": ["8", 0] }
+    },
+    "12": {
+      "class_type": "ImageScale",
+      "inputs": { "image": ["11", 0], "upscale_method": "lanczos", "width": 1248, "height": 1824, "crop": "disabled" }
+    },
+    "13": {
+      "class_type": "VAEEncode",
+      "inputs": { "pixels": ["12", 0], "vae": ["4", 2] }
+    },
+    "14": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": 123456789,
+        "steps": 20,
+        "cfg": 6.0,
+        "sampler_name": "euler_ancestral",
+        "scheduler": "normal",
+        "denoise": 0.4,
+        "model": ["4", 0],
+        "positive": ["6", 0],
+        "negative": ["7", 0],
+        "latent_image": ["13", 0]
+      }
+    },
+    "15": {
+      "class_type": "VAEDecode",
+      "inputs": { "samples": ["14", 0], "vae": ["4", 2] }
+    },
+    "16": {
+      "class_type": "SaveImage",
+      "inputs": { "images": ["15", 0], "filename_prefix": "WAI_v17_smoketest_hires" }
+    }
+  }
+}

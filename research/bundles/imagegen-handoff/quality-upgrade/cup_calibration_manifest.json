@@ -1,0 +1,68 @@
+{
+  "frames": [
+    {
+      "slider": 0.0,
+      "prompt_id": "bb44e579-0840-480f-b0a2-ee87800125a7",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s00_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "slider": 0.5,
+      "prompt_id": "8a1f38a7-6edd-4d7e-b749-c4f3600ad322",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s05_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "slider": 1.0,
+      "prompt_id": "f32c45aa-134f-4d73-bf89-24518f0df3f7",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s10_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "slider": 1.5,
+      "prompt_id": "da5d5bc4-8abb-4f07-ad45-8c01083abdbe",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s15_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "slider": 2.0,
+      "prompt_id": "ac93e8ae-904d-4237-a79f-afabbae27506",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "slider": 2.5,
+      "prompt_id": "e2ecd611-e5ee-4cf0-b99d-abec1cd26cc7",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s25_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "slider": 3.0,
+      "prompt_id": "70f9d52f-5c5f-48e0-93f0-a1e71047baf1",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s30_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "slider": 3.5,
+      "prompt_id": "11678144-b7fa-453e-999c-3f32eb9b2767",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_cup_s35_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

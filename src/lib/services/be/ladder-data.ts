@@ -1,6 +1,7 @@
-// GENERATED FILE — do not edit by hand. Regenerate via the ambrosia-st session scratchpad
-// extract-ladder.mjs from be-story-engine dist/ambrosia-v0.4.7.naiscript (the final validated
-// NAI-era tables; see ambrosia-st research/31a §2.2 and research/ladder-reanchor-proposal.md).
+// GENERATED FILE — do not edit by hand. Regenerate via scripts/extract-ladder.mjs (v1 tables)
+// then scripts/extract-ladder2.mjs (v2 measurement/label channels appended) from be-story-engine
+// dist/ambrosia-v0.4.7.naiscript (the final validated NAI-era tables; see research/31a §2.2 and
+// research/ladder-reanchor-proposal.md).
 // Cup letters were baked by executing the NAI tier_index_to_letter (which rides the validated
 // body math) — a static snapshot per decision D4-thin; if the D4 research rules "port the
 // physics", replace this table with the live functions.

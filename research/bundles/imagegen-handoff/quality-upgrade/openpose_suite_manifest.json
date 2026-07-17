@@ -1,0 +1,1067 @@
+{
+  "cn": "controlnet-openpose-sdxl-xinsir.safetensors",
+  "tiers": [
+    0,
+    2,
+    8,
+    14,
+    20,
+    26,
+    33,
+    40,
+    45,
+    50
+  ],
+  "body_order": [
+    "petite",
+    "curvy",
+    "full",
+    "athletic"
+  ],
+  "clothing_order": [
+    "clothed",
+    "nude"
+  ],
+  "frames": [
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_petite_clothed_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_petite_clothed_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_petite_clothed_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_petite_clothed_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_petite_clothed_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_petite_clothed_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_petite_clothed_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_petite_clothed_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_petite_clothed_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_petite_clothed_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_clothed_t50_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_curvy_clothed_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_curvy_clothed_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_curvy_clothed_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_curvy_clothed_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_curvy_clothed_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_curvy_clothed_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_curvy_clothed_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_curvy_clothed_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_curvy_clothed_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "clothed",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_curvy_clothed_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_clothed_t50_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_full_clothed_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_full_clothed_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_full_clothed_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_full_clothed_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_full_clothed_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_full_clothed_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_full_clothed_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_full_clothed_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_full_clothed_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "clothed",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_full_clothed_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_clothed_t50_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_athletic_clothed_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_athletic_clothed_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_athletic_clothed_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_athletic_clothed_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_athletic_clothed_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_athletic_clothed_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_athletic_clothed_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_athletic_clothed_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_athletic_clothed_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "clothed",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_athletic_clothed_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_clothed_t50_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_petite_nude_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_petite_nude_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_petite_nude_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_petite_nude_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_petite_nude_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_petite_nude_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_petite_nude_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_petite_nude_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_petite_nude_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "petite",
+      "clothing": "nude",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_petite_nude_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_petite_nude_t50_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_curvy_nude_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_curvy_nude_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_curvy_nude_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_curvy_nude_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_curvy_nude_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_curvy_nude_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_curvy_nude_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_curvy_nude_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_curvy_nude_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "curvy",
+      "clothing": "nude",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_curvy_nude_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_curvy_nude_t50_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_full_nude_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_full_nude_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_full_nude_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_full_nude_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_full_nude_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_full_nude_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_full_nude_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_full_nude_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_full_nude_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "full",
+      "clothing": "nude",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_full_nude_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_full_nude_t50_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPS_athletic_nude_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t0_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPS_athletic_nude_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t2_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 8,
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPS_athletic_nude_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t8_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPS_athletic_nude_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t14_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 20,
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPS_athletic_nude_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t20_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPS_athletic_nude_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t26_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPS_athletic_nude_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t33_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPS_athletic_nude_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t40_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPS_athletic_nude_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t45_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "body": "athletic",
+      "clothing": "nude",
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPS_athletic_nude_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPS_athletic_nude_t50_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

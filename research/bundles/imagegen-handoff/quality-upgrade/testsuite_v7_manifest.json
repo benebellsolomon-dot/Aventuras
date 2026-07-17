@@ -1,0 +1,48 @@
+{
+  "cells": [
+    {
+      "label": "v7_01_self_grope",
+      "prompt_id": "a6315906-e629-4884-80df-2efae7fe8fc2",
+      "baseline": "v6_01",
+      "mode": "detailer_HR",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, grabbing own breast, hand on breast, (fingers sinking into breast:1.3), (skin indentation:1.2), flesh squeezed between fingers, soft breast deformation, fingertip pressing, (contact shadow under fingers:1.1), individual fingers, detailed knuckles, articulated thumb, asymmetric breasts, natural breast asymmetry, navel, defined abdomen, abdominal midline, bedroom, on bed, half-lidded eyes, (seductive expression:1.1), blush, parted lips, looking at viewer, warm bedside lamp lighting, soft rim light, intimate bedroom, (matte skin:1.2), subsurface skin",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v7_01_self_grope_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v7_02_closeup",
+      "prompt_id": "084398a2-566a-474e-b7e8-b21bf86839b0",
+      "baseline": "v6_02",
+      "mode": "detailer_HR",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, upper body, cowboy shot, topless, grabbing own breast, hand on breast, (fingers sinking into breast:1.3), (skin indentation:1.2), flesh squeezed between fingers, soft breast deformation, fingertip pressing, (contact shadow under fingers:1.1), individual fingers, detailed knuckles, articulated thumb, areola visible, nipples, asymmetric breasts, natural breast asymmetry, soft skin, warm bedside lamp lighting, soft rim light, intimate bedroom, (matte skin:1.2), subsurface skin",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v7_02_closeup_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v7_03_growth",
+      "prompt_id": "4a742de2-fff9-4761-9f7b-ab7223a5ba79",
+      "baseline": "v6_03",
+      "mode": "detailer_HR",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, gigantic breasts, breast expansion, grabbing own breast, hand on breast, (fingers sinking into breast:1.3), (skin indentation:1.2), flesh squeezed between fingers, soft breast deformation, fingertip pressing, (contact shadow under fingers:1.1), individual fingers, detailed knuckles, articulated thumb, asymmetric breasts, natural breast asymmetry, surprised, aroused, blush, torn clothes, bursting breasts, taut fabric, popped button, bedroom",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v7_03_growth_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v7_04_self_grope_HRonly",
+      "prompt_id": "2e219045-c386-48cd-a458-1ec03abd5f6c",
+      "baseline": "v6_01",
+      "mode": "HR_only",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, grabbing own breast, hand on breast, (fingers sinking into breast:1.3), (skin indentation:1.2), flesh squeezed between fingers, soft breast deformation, fingertip pressing, (contact shadow under fingers:1.1), individual fingers, detailed knuckles, articulated thumb, asymmetric breasts, natural breast asymmetry, navel, defined abdomen, abdominal midline, bedroom, on bed, half-lidded eyes, (seductive expression:1.1), blush, parted lips, looking at viewer, warm bedside lamp lighting, soft rim light, intimate bedroom, (matte skin:1.2), subsurface skin",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v7_04_self_grope_HRonly_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

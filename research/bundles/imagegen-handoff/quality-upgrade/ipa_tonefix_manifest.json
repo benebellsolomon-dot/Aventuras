@@ -1,0 +1,112 @@
+{
+  "tiers": [
+    0,
+    20,
+    33,
+    50
+  ],
+  "configs": [
+    [
+      "s30",
+      0.7,
+      0.3,
+      "V only"
+    ],
+    [
+      "s20kv",
+      0.7,
+      0.2,
+      "K+V"
+    ]
+  ],
+  "frames": [
+    {
+      "cfg": "s30",
+      "weight": 0.7,
+      "start_at": 0.3,
+      "scaling": "V only",
+      "tier": 0,
+      "label": "IPATONE_s30_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s30_t0_00001_.png"
+      ]
+    },
+    {
+      "cfg": "s30",
+      "weight": 0.7,
+      "start_at": 0.3,
+      "scaling": "V only",
+      "tier": 20,
+      "label": "IPATONE_s30_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s30_t20_00001_.png"
+      ]
+    },
+    {
+      "cfg": "s30",
+      "weight": 0.7,
+      "start_at": 0.3,
+      "scaling": "V only",
+      "tier": 33,
+      "label": "IPATONE_s30_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s30_t33_00001_.png"
+      ]
+    },
+    {
+      "cfg": "s30",
+      "weight": 0.7,
+      "start_at": 0.3,
+      "scaling": "V only",
+      "tier": 50,
+      "label": "IPATONE_s30_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s30_t50_00001_.png"
+      ]
+    },
+    {
+      "cfg": "s20kv",
+      "weight": 0.7,
+      "start_at": 0.2,
+      "scaling": "K+V",
+      "tier": 0,
+      "label": "IPATONE_s20kv_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s20kv_t0_00001_.png"
+      ]
+    },
+    {
+      "cfg": "s20kv",
+      "weight": 0.7,
+      "start_at": 0.2,
+      "scaling": "K+V",
+      "tier": 20,
+      "label": "IPATONE_s20kv_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s20kv_t20_00001_.png"
+      ]
+    },
+    {
+      "cfg": "s20kv",
+      "weight": 0.7,
+      "start_at": 0.2,
+      "scaling": "K+V",
+      "tier": 33,
+      "label": "IPATONE_s20kv_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s20kv_t33_00001_.png"
+      ]
+    },
+    {
+      "cfg": "s20kv",
+      "weight": 0.7,
+      "start_at": 0.2,
+      "scaling": "K+V",
+      "tier": 50,
+      "label": "IPATONE_s20kv_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPATONE_s20kv_t50_00001_.png"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+{
+  "rating": "sensitive",
+  "params": {
+    "seed": 111,
+    "sampler": "euler_ancestral"
+  },
+  "frames": [
+    {
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "prompt_id": "a3b7719b-ddab-4956-b80c-d0835a909b40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t000_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "prompt_id": "86341573-06e3-4153-b86b-a2e9a4d24c47",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t002_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 6,
+      "cup": "medium breasts",
+      "slider": -0.45,
+      "hyper": 0.0,
+      "prompt_id": "0d282096-a672-42fe-bea4-feb838d4629d",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t006_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 10,
+      "cup": "medium breasts",
+      "slider": -0.05,
+      "hyper": 0.0,
+      "prompt_id": "0acd25f5-5ef1-4b9e-9771-454c91be56b1",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t010_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "prompt_id": "377a3a13-603e-4ac2-b3cc-a712b1d8db64",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t014_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 18,
+      "cup": "large breasts",
+      "slider": 0.23,
+      "hyper": 0.0,
+      "prompt_id": "0afc84bd-c753-42b8-a871-6d02ba327fe8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t018_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 22,
+      "cup": "huge breasts",
+      "slider": 0.3,
+      "hyper": 0.0,
+      "prompt_id": "dc183994-0632-4ad0-a993-0184bac8451c",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t022_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "prompt_id": "6388a117-dc72-4a8d-9adf-4c8fadff1cc7",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t026_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 30,
+      "cup": "gigantic breasts",
+      "slider": 0.4,
+      "hyper": 0.0,
+      "prompt_id": "e5e3dca3-d789-4892-8613-ad2dc90ca538",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t030_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 35,
+      "cup": "gigantic breasts",
+      "slider": 0.57,
+      "hyper": 0.0,
+      "prompt_id": "9e2fdde8-c536-4697-aa75-81950627745f",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t035_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "prompt_id": "dfd59697-198b-42f6-90a9-9f0d7fc98254",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t040_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "prompt_id": "6fc20f6c-9c3b-4280-89fe-5fc866c529a8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t045_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "prompt_id": "e78cf1f5-969f-4b08-85a7-24932c68dd99",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\NUDELAD_t050_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

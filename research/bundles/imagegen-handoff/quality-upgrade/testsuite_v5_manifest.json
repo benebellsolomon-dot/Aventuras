@@ -1,0 +1,92 @@
+{
+  "cells": [
+    {
+      "label": "v5_01_self_grope",
+      "prompt_id": "7cebc49e-9604-4840-9f14-e9cc8eccc678",
+      "focus": "hand-on-breast self-interaction + soft-tissue deform",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, hands on own breasts, grabbing own breasts, squeezing breast, fingers sinking into breast, soft tissue compression, breast deformed by hand, bedroom, on bed, aroused, blush, parted lips, looking at viewer, warm lighting",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_01_self_grope_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v5_02_lying_back",
+      "prompt_id": "129a7ee6-3652-4cce-9327-dfb7390ae8c8",
+      "focus": "reclining gravity (breasts settle to sides)",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, lying on back, on bed, white sheets, breasts spread to sides, soft breasts, looking at viewer, blush, from above, warm lighting",
+      "face": true,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_02_lying_back_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v5_03_lying_side",
+      "prompt_id": "0269a057-011d-4d3d-9082-2be17e38d37c",
+      "focus": "side-lying breast drape",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, lying on side, on bed, breast drape, hanging breasts, soft breasts, seductive smile, looking at viewer, warm lighting",
+      "face": true,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_03_lying_side_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v5_04_arched",
+      "prompt_id": "1e8b8851-6b7c-4172-baca-840815b453bd",
+      "focus": "arched/presenting pose coherence",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, arched back, kneeling on bed, presenting, aroused, parted lips, blush, hands on thighs, warm lighting",
+      "face": true,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_04_arched_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v5_05_expression",
+      "prompt_id": "1e1805a0-4520-40b6-a417-805c7296d9a5",
+      "focus": "intimate expression/affect (large face)",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, upper body, close-up, aroused, half-closed eyes, blush, parted lips, seductive, bedroom, looking at viewer, warm lighting",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_05_expression_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v5_06_pov",
+      "prompt_id": "43783c68-fce7-4d01-9ec0-babce5d08398",
+      "focus": "POV / looking-at-viewer reclining intimacy",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, pov, lying down, looking at viewer, intimate, dim lighting, warm lighting, blush, arms up, both breasts visible",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_06_pov_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v5_07_growth_intimate",
+      "prompt_id": "f8d026cc-2a3d-4023-81ea-a83fa9c90b89",
+      "focus": "BE growth in intimate context (self-touch + reaction)",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, gigantic breasts, breast expansion, hands on own breasts, soft tissue compression, surprised, aroused, blush, torn clothes, bursting breasts, taut fabric, popped button, bedroom, on bed",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_07_growth_intimate_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v5_08_closeup",
+      "prompt_id": "897e8146-98fd-4a42-bd0f-7c41f8e57494",
+      "focus": "close framing detail + hand-on-breast",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, close-up on breasts, topless, hand on own breast, fingers sinking into breast, soft skin, soft tissue compression, intimate lighting, bedroom",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v5_08_closeup_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

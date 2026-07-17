@@ -1,0 +1,57 @@
+{
+  "chain": [
+    14,
+    22,
+    30,
+    40,
+    50
+  ],
+  "d_step": 0.5,
+  "frames": [
+    {
+      "step": 0,
+      "tier": 14,
+      "denoise": 1.0,
+      "label": "EXPCHAIN_s0_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPCHAIN_s0_t14_00001_.png"
+      ]
+    },
+    {
+      "step": 1,
+      "tier": 22,
+      "denoise": 0.5,
+      "label": "EXPCHAIN_s1_t22",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPCHAIN_s1_t22_00001_.png"
+      ]
+    },
+    {
+      "step": 2,
+      "tier": 30,
+      "denoise": 0.5,
+      "label": "EXPCHAIN_s2_t30",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPCHAIN_s2_t30_00001_.png"
+      ]
+    },
+    {
+      "step": 3,
+      "tier": 40,
+      "denoise": 0.5,
+      "label": "EXPCHAIN_s3_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPCHAIN_s3_t40_00001_.png"
+      ]
+    },
+    {
+      "step": 4,
+      "tier": 50,
+      "denoise": 0.5,
+      "label": "EXPCHAIN_s4_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPCHAIN_s4_t50_00001_.png"
+      ]
+    }
+  ]
+}

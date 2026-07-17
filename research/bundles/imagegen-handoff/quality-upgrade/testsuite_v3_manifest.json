@@ -1,0 +1,70 @@
+{
+  "cells": [
+    {
+      "label": "v3_01_two_char",
+      "prompt_id": "5dd6332c-95f0-4a25-a317-2723310c20bd",
+      "baseline": "v2_07",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 2girls, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, both huge breasts, cleavage, between breasts, underboob shadow, narrow waist, bikini, beach, standing, hands behind back, empty hands",
+      "face": true,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v3_01_two_char_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v3_02_burst",
+      "prompt_id": "9940cd04-fd75-44d9-9f61-ac99f79a910c",
+      "baseline": "v2_08",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, gigantic breasts, (deep cleavage:1.2), between breasts, inter-breast shadow, cast shadow under breast, narrow waist, torn clothes, bursting breasts, taut fabric, fabric stretched, stress folds, gaping shirt, popped button, torn seam, asymmetric strain, fabric puckering at seams, stress wrinkles converging at closure, flying button, surprised, breast expansion, hands raised",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v3_02_burst_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v3_03_strain_geo",
+      "prompt_id": "2f57974c-e21e-47d9-b652-fa3df82b3991",
+      "baseline": "v2_03",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, taut shirt, taut fabric, fabric stretched, stress folds, gaping shirt, popped button, torn seam, asymmetric strain, fabric puckering at seams, stress wrinkles converging at closure, cleavage, underboob, hands at sides",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v3_03_strain_geo_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v3_04_gravity",
+      "prompt_id": "a3a377df-a74b-4d2d-ab30-c84347e8631a",
+      "baseline": "v2_04",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, nude, hanging breasts, heavy breasts, soft breasts, sagging, both breasts sagging, soft tissue compression, cast shadow under breast, arms up, hands behind head, both breasts visible, blush",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v3_04_gravity_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v3_05_fullbody",
+      "prompt_id": "bedc22ff-77b7-4dda-aeac-2fd10cb55ae4",
+      "baseline": "v2_06",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, gigantic breasts, cleavage, between breasts, underboob shadow, narrow waist, full body, feet visible, head to toe, full figure, wide shot, standing, arms down, plain background",
+      "face": true,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v3_05_fullbody_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v3_06_swimsuit",
+      "prompt_id": "23841504-e837-4081-9a7a-50899fec1538",
+      "baseline": "v2_05",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, competition swimsuit, taut fabric, fabric stretched, stress folds, gaping shirt, popped button, torn seam, asymmetric strain, fabric puckering at seams, stress wrinkles converging at closure, asymmetric strain, beach, hand on hip",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v3_06_swimsuit_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

@@ -1,0 +1,547 @@
+{
+  "200:101": {
+    "inputs": {
+      "ckpt_name": "waiIllustriousSDXL_v170.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "WAI-illustrious-SDXL v17 (v2.1 calibration; SDXL backbone for IPAdapter)"
+    }
+  },
+  "200:105": {
+    "inputs": {
+      "stop_at_clip_layer": -2,
+      "clip": [
+        "200:101",
+        1
+      ]
+    },
+    "class_type": "CLIPSetLastLayer",
+    "_meta": {
+      "title": "Clip Skip 2 (Illustrious community-canonical)"
+    }
+  },
+  "200:108": {
+    "inputs": {
+      "lora_name": "Smooth_Booster_v5.safetensors",
+      "strength_model": "{{SMOOTH_BOOSTER_STRENGTH}}",
+      "model": [
+        "200:101",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Smooth Detailer Booster v5"
+    }
+  },
+  "200:110": {
+    "inputs": {
+      "lora_name": "Breast_Size_Slider_Illustrious_V2.safetensors",
+      "strength_model": "{{SLIDER_LORA_STRENGTH}}",
+      "model": [
+        "200:108",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Breast Size Slider (v2.1 tier-driven)"
+    }
+  },
+  "200:111": {
+    "inputs": {
+      "lora_name": "hyper_breasts_ILXL_concept.safetensors",
+      "strength_model": "{{HYPER_CONCEPT_STRENGTH}}",
+      "model": [
+        "200:110",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Hyper Breasts concept (tier 40+ ramp)"
+    }
+  },
+  "200:112": {
+    "inputs": {
+      "lora_name": "{{SERIES_LORA_NAME}}",
+      "strength_model": "{{SERIES_LORA_WEIGHT}}",
+      "model": [
+        "200:111",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Series style LoRA (v2.2 \u2014 per-project kohya-trained style anchor; comic-continuer)"
+    }
+  },
+  "200:115": {
+    "inputs": {
+      "image": "{{REFERENCE_IMAGE_FILENAME}}",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Reference image (source page \u2014 IPAdapter conditioning anchor)"
+    }
+  },
+  "200:116": {
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"
+    },
+    "class_type": "IPAdapterModelLoader",
+    "_meta": {
+      "title": "IPAdapter Plus SDXL loader"
+    }
+  },
+  "200:117": {
+    "inputs": {
+      "clip_name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "CLIP-ViT-H-14 image encoder"
+    }
+  },
+  "200:118": {
+    "inputs": {
+      "weight": "{{IPADAPTER_WEIGHT}}",
+      "weight_type": "style transfer",
+      "combine_embeds": "concat",
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "embeds_scaling": "V only",
+      "model": [
+        "200:112",
+        0
+      ],
+      "ipadapter": [
+        "200:116",
+        0
+      ],
+      "image": [
+        "200:115",
+        0
+      ],
+      "clip_vision": [
+        "200:117",
+        0
+      ]
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": {
+      "title": "IPAdapter Advanced \u2014 style-transfer weight type, V-only scaling (style cues only; doesn't override composition)"
+    }
+  },
+  "200:120": {
+    "inputs": {
+      "text": "{{POSITIVE_PROMPT}}",
+      "clip": [
+        "200:105",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive)"
+    }
+  },
+  "200:121": {
+    "inputs": {
+      "text": "{{NEGATIVE_PROMPT}}",
+      "clip": [
+        "200:105",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative)"
+    }
+  },
+  "200:130": {
+    "inputs": {
+      "width": "{{WIDTH}}",
+      "height": "{{HEIGHT}}",
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent (832x1216 portrait \u2014 first pass native)"
+    }
+  },
+  "200:140": {
+    "inputs": {
+      "seed": "{{SEED}}",
+      "steps": "{{STEPS}}",
+      "cfg": "{{CFG}}",
+      "sampler_name": "{{SAMPLER}}",
+      "scheduler": "{{SCHEDULER}}",
+      "denoise": 1.0,
+      "model": [
+        "200:118",
+        0
+      ],
+      "positive": [
+        "200:120",
+        0
+      ],
+      "negative": [
+        "200:121",
+        0
+      ],
+      "latent_image": [
+        "200:130",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler \u2014 primary pass with IPAdapter-conditioned model"
+    }
+  },
+  "200:142": {
+    "inputs": {
+      "samples": [
+        "200:140",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode first pass for model-upscale hires"
+    }
+  },
+  "200:143": {
+    "inputs": {
+      "model_name": "4x-AnimeSharp.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "4x-AnimeSharp ESRGAN"
+    }
+  },
+  "200:144": {
+    "inputs": {
+      "upscale_model": [
+        "200:143",
+        0
+      ],
+      "image": [
+        "200:142",
+        0
+      ]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "4x model upscale"
+    }
+  },
+  "200:145": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "scale_by": 0.375,
+      "image": [
+        "200:144",
+        0
+      ]
+    },
+    "class_type": "ImageScaleBy",
+    "_meta": {
+      "title": "Downscale 4x->1.5x (0.375); resolution-independent"
+    }
+  },
+  "200:147": {
+    "inputs": {
+      "pixels": [
+        "200:145",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Encode upscaled image -> latent"
+    }
+  },
+  "200:148": {
+    "inputs": {
+      "noise": [
+        "200:148d",
+        0
+      ],
+      "guider": [
+        "200:148e",
+        0
+      ],
+      "sampler": [
+        "200:148b",
+        0
+      ],
+      "sigmas": [
+        "200:148c",
+        0
+      ],
+      "latent_image": [
+        "200:147",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "Hires-fix refine (Detail Daemon via SamplerCustomAdvanced)"
+    }
+  },
+  "200:150": {
+    "inputs": {
+      "samples": [
+        "200:148",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "200:160": {
+    "inputs": {
+      "filename_prefix": "image/{{JOB_ID}}",
+      "images": [
+        "200:173",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save PNG"
+    }
+  },
+  "200:148a": {
+    "inputs": {
+      "sampler_name": "{{SAMPLER}}"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Base sampler for Detail Daemon"
+    }
+  },
+  "200:148b": {
+    "inputs": {
+      "sampler": [
+        "200:148a",
+        0
+      ],
+      "detail_amount": 0.18,
+      "start": 0.2,
+      "end": 0.8,
+      "bias": 0.5,
+      "exponent": 1.0,
+      "start_offset": 0.0,
+      "end_offset": 0.0,
+      "fade": 0.0,
+      "smooth": true,
+      "cfg_scale_override": 0.0
+    },
+    "class_type": "DetailDaemonSamplerNode",
+    "_meta": {
+      "title": "Detail Daemon"
+    }
+  },
+  "200:148c": {
+    "inputs": {
+      "model": [
+        "200:118",
+        0
+      ],
+      "scheduler": "{{SCHEDULER}}",
+      "steps": "{{STEPS_HIRES}}",
+      "denoise": "{{HIRES_DENOISE}}"
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "Hires sigmas"
+    }
+  },
+  "200:148d": {
+    "inputs": {
+      "noise_seed": "{{SEED_HIRES}}"
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "Hires noise"
+    }
+  },
+  "200:148e": {
+    "inputs": {
+      "model": [
+        "200:118",
+        0
+      ],
+      "positive": [
+        "200:120",
+        0
+      ],
+      "negative": [
+        "200:121",
+        0
+      ],
+      "cfg": "{{CFG}}"
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "Hires guider"
+    }
+  },
+  "200:170": {
+    "inputs": {
+      "model_name": "bbox/hand_yolov8s.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "Hand detector"
+    }
+  },
+  "200:171": {
+    "inputs": {
+      "image": [
+        "200:150",
+        0
+      ],
+      "model": [
+        "200:118",
+        0
+      ],
+      "clip": [
+        "200:105",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ],
+      "guide_size": 512.0,
+      "guide_size_for": true,
+      "max_size": 1024.0,
+      "seed": "{{SEED}}",
+      "steps": 20,
+      "cfg": "{{CFG}}",
+      "sampler_name": "{{SAMPLER}}",
+      "scheduler": "{{SCHEDULER}}",
+      "positive": [
+        "200:120",
+        0
+      ],
+      "negative": [
+        "200:121",
+        0
+      ],
+      "denoise": 0.45,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.5,
+      "bbox_dilation": 4,
+      "bbox_crop_factor": 2.0,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "bbox_detector": [
+        "200:170",
+        0
+      ],
+      "wildcard": "(perfect hands, five fingers, detailed fingers:1.1)",
+      "cycle": 1
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "Hand-detailer"
+    }
+  },
+  "200:172": {
+    "inputs": {
+      "model_name": "bbox/face_yolov8m.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "Face detector"
+    }
+  },
+  "200:173": {
+    "inputs": {
+      "image": [
+        "200:171",
+        0
+      ],
+      "model": [
+        "200:118",
+        0
+      ],
+      "clip": [
+        "200:105",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ],
+      "guide_size": 512.0,
+      "guide_size_for": true,
+      "max_size": 1024.0,
+      "seed": "{{SEED}}",
+      "steps": 20,
+      "cfg": "{{CFG}}",
+      "sampler_name": "{{SAMPLER}}",
+      "scheduler": "{{SCHEDULER}}",
+      "positive": [
+        "200:120",
+        0
+      ],
+      "negative": [
+        "200:121",
+        0
+      ],
+      "denoise": 0.4,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.5,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 3.0,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "bbox_detector": [
+        "200:172",
+        0
+      ],
+      "wildcard": "detailed face, detailed eyes",
+      "cycle": 1
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "Face-detailer (faces + eyes)"
+    }
+  }
+}
