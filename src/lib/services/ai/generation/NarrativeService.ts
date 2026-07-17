@@ -51,25 +51,31 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 
 **USAGE GUIDELINES:**
 - Place <pic> tags AFTER the prose that describes the scene they illustrate
-- Write prompts as detailed visual descriptions: subject, action, setting, mood, lighting, art style
+- Write prompts as comma-separated Danbooru-style tags and short tag-phrases (the image backend is a booru-tag anime model), front-loaded: rating tag, subject count, character appearance, clothing and its state, action/pose, setting, lighting
 - Include character names in the "characters" attribute if they appear in the image
 - Re-describe each character's physical appearance IN FULL in every prompt (hair, eyes, build, notable body proportions, current clothing and its state) — the image model cannot see the story, previous images, or other prompts
 - Use sparingly: 1-3 images per response maximum, reserved for impactful visual moments
+
+**RATING AND BODY TAGS (required in every prompt):**
+- The FIRST tag is always a content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit" (nudity or sexual content)
+- When the rating is explicit, also add: uncensored, detailed anatomy, clear view
+- For every female character, ALWAYS include a breast-size tag matching the story's current canon (flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts) — body-size continuity is critical
+- Prefer concrete visual tags over abstractions: "torn apron, popped buttons, straining fabric" not "clothes in disarray"
 - Best used for: dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
 
 **EXAMPLE:**
 The dragon descended from the storm clouds, its obsidian scales gleaming with each flash of lightning.
-<pic prompt="A massive black dragon descending from dark storm clouds, scales gleaming with rain, lightning illuminating the scene, dramatic low angle shot, dark fantasy art style" characters=""></pic>
+<pic prompt="general, no humans, massive black dragon, descending from dark storm clouds, gleaming wet scales, rain, lightning, dramatic low angle, dark fantasy" characters=""></pic>
 
 Elena drew her blade, firelight dancing along the steel edge as she faced the creature.
-<pic prompt="Young woman warrior with determined expression drawing a glowing sword, firelight reflecting on blade and face, medieval interior background, dramatic lighting, fantasy art" characters="Elena"></pic>
+<pic prompt="sensitive, 1girl, solo, young woman warrior, determined expression, long red hair, green eyes, athletic build, medium breasts, fitted leather armor, drawing a glowing sword, firelight on blade and face, medieval interior, dramatic lighting" characters="Elena"></pic>
 
 **CRITICAL RULES:**
 - **PROMPTS MUST BE IN ENGLISH** - Image generation models only understand English prompts. Always write the prompt attribute in English, even if the surrounding narrative is in another language.
 - The prompt must be a COMPLETE visual description - do not write "the dragon from the scene" or "as described above"
 - Never place <pic> tags in the middle of a sentence - always after the descriptive prose
 - Do not use <pic> for every scene - reserve for truly striking visual moments
-- Keep prompts between 50-150 words for best results
+- Keep prompts to roughly 20-40 tags and under 500 characters
 </InlineImages>`
 
 /**

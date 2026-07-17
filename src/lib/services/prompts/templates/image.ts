@@ -24,6 +24,14 @@ const photorealisticStyleTemplate: PromptTemplate = {
   content: `Photorealistic digital art with true-to-life rendering. Natural lighting with accurate shadows and highlights. Detailed textures on skin, fabric, and materials. Accurate human proportions and anatomy. Professional photography aesthetic with cinematic depth of field. High dynamic range with realistic contrast. Detailed environments with accurate perspective. Materials rendered with proper reflectance and subsurface scattering where appropriate. Film grain optional for cinematic feel. 8K quality, hyperrealistic detail.`,
 }
 
+const illustriousBridgeStyleTemplate: PromptTemplate = {
+  id: 'image-style-illustrious-bridge',
+  name: 'Illustrious (SI Bridge)',
+  category: 'image-style',
+  description: 'Booru-tag quality/style block for the SI-bridge WAI-Illustrious house recipe',
+  content: `masterpiece, best quality, very aesthetic, newest, absurdres, highres, official art, mature female, adult, (as109:0.9), (rella:0.8), (ciloranko:0.7), (highly detailed:1.2), intricate details, sharp focus, anime illustration`,
+}
+
 const imagePromptAnalysisTemplate: PromptTemplate = {
   id: 'image-prompt-analysis',
   name: 'Image Prompt Analysis',
@@ -319,6 +327,7 @@ export const imageTemplates: PromptTemplate[] = [
   softAnimeStyleTemplate,
   semiRealisticAnimeStyleTemplate,
   photorealisticStyleTemplate,
+  illustriousBridgeStyleTemplate,
   imagePromptAnalysisTemplate,
   imagePromptAnalysisReferenceTemplate,
   imagePortraitGenerationTemplate,

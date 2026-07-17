@@ -38,6 +38,7 @@
     { value: 'image-style-soft-anime', label: 'Soft Anime' },
     { value: 'image-style-semi-realistic', label: 'Semi-realistic Anime' },
     { value: 'image-style-photorealistic', label: 'Photorealistic' },
+    { value: 'image-style-illustrious-bridge', label: 'Illustrious (SI Bridge)' },
   ] as const
 
   const imageSizes = [
