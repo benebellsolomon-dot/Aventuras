@@ -74,6 +74,8 @@ export interface PersistentCharacterSnapshot {
   relationship: string | null
   visualDescriptors: VisualDescriptors
   portrait: string | null // Data URL (data:image/...) or legacy base64
+  /** Metadata snapshot (runtimeVars, bodyState). Optional: absent on snapshots persisted before this field existed. */
+  metadata?: Record<string, unknown> | null
 }
 
 // Persistent style review state - saved per-story for style analysis tracking
@@ -118,6 +120,7 @@ export interface StorySettings {
   backgroundImagesEnabled?: boolean
   referenceMode?: boolean
   customSystemPrompt?: string // Per-story Liquid template override; bypasses pack template when set
+  beMode?: boolean // BE engine: classifier event extraction + deterministic body-state reducer + narrative grounding
 }
 
 export interface StoryEntry {
@@ -968,6 +971,9 @@ export interface WorldStateDelta {
     itemIds: string[]
     storyBeatIds: string[]
   }
+
+  /** BE reducer outcome log for this turn (cadence instrumentation; rollback-aware by riding the delta) */
+  beLog?: import('$lib/services/be/types').BeLogRecord[]
 }
 
 /**

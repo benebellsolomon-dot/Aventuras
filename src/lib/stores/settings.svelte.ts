@@ -807,7 +807,9 @@ export interface ServiceSpecificSettings {
 
 export function getDefaultExperimentalFeatures(): ExperimentalFeatures {
   return {
-    stateTracking: false,
+    // Fork default (D6, research/31): deltas + snapshots ARE the undo story the
+    // BE engine leans on — ON by default in the be-patches fork.
+    stateTracking: true,
     rollbackOnDelete: false,
     lightweightBranches: false,
     autoSnapshotInterval: 20,

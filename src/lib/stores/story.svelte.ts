@@ -26,6 +26,16 @@ import { database } from '$lib/services/database'
 import { rollbackService } from '$lib/services/rollbackService'
 import { ui } from './ui.svelte'
 import { settings } from './settings.svelte'
+import {
+  DEFAULT_BE_STORY_CONFIG,
+  beEventsFromResult,
+  defaultBodyState,
+  readBodyState,
+  reduceCharacterBody,
+  sniffTierFromText,
+  writeBodyState,
+  type BeLogRecord,
+} from '$lib/services/be'
 import { extractInlineCustomVars } from '$lib/services/ai/sdk/schemas/runtime-variables'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
 import type { RuntimeVariable } from '$lib/services/packs/types'
@@ -2685,6 +2695,20 @@ class StoryStore {
       await this.applyTimeProgression(result.scene.timeProgression)
     }
 
+    // BE engine (Phase A): deterministic body-state reduction. Runs after every
+    // entity loop and BEFORE the delta is built/saved so its writes are
+    // rollback-visible (research/31 §2.2).
+    let beLog: BeLogRecord[] = []
+    if (this.currentStory.settings?.beMode === true) {
+      beLog = await this.applyBeEvents(
+        result,
+        entryId,
+        trackingEnabled,
+        charactersBefore,
+        createdCharacterIds,
+      )
+    }
+
     // Phase 1: Save world state delta on the entry
     if (trackingEnabled && entryId) {
       try {
@@ -2704,6 +2728,7 @@ class StoryStore {
             itemIds: createdItemIds,
             storyBeatIds: createdStoryBeatIds,
           },
+          ...(beLog.length > 0 ? { beLog } : {}),
         }
 
         await database.updateStoryEntry(entryId, { worldStateDelta: delta })
@@ -2741,6 +2766,7 @@ class StoryStore {
 
     // Emit state updated event if there were any changes
     const hasChanges =
+      beLog.length > 0 ||
       result.entryUpdates.newCharacters.length > 0 ||
       result.entryUpdates.newLocations.length > 0 ||
       result.entryUpdates.newItems.length > 0 ||
@@ -2761,6 +2787,144 @@ class StoryStore {
           result.entryUpdates.newStoryBeats.length + result.entryUpdates.storyBeatUpdates.length,
       })
     }
+  }
+
+  /**
+   * BE engine (Phase A): run the deterministic body-state reducer for every
+   * non-protagonist character carrying (or gaining) bodyState, feeding it this
+   * turn's classifier-extracted events. This is the ONLY production caller of
+   * reduceCharacterBody — single-writer as code (research/31 §2.2). Mutates the
+   * caller's before-state arrays so BE-only changes are rollback-visible
+   * (31b §3.3 widened capture). Returns the outcome log for the delta.
+   */
+  private async applyBeEvents(
+    result: ClassificationResult,
+    entryId: string | undefined,
+    trackingEnabled: boolean,
+    charactersBefore: CharacterBeforeState[],
+    createdCharacterIds: string[],
+  ): Promise<BeLogRecord[]> {
+    const beLog: BeLogRecord[] = []
+    const storyId = this.currentStory?.id
+    if (!storyId) return beLog
+    // No entry means no delta carrier AND no stable roll seed — skip rather than
+    // resolve with a degenerate constant seed. (The sole production caller always
+    // passes an entry id; a retried turn gets a NEW entry id and re-rolls by design.)
+    if (!entryId) {
+      log('applyBeEvents: no entryId, skipping BE reduction this apply')
+      return beLog
+    }
+
+    const events = beEventsFromResult(result as unknown as Record<string, unknown>)
+
+    // Group events by resolved character (same case-insensitive matching as the entity loops).
+    const eventsByCharacterId = new SvelteMap<string, typeof events>()
+    for (const event of events) {
+      const target = this.characters.find(
+        (c) => c.name.toLowerCase() === event.character.toLowerCase(),
+      )
+      if (!target) continue
+      if (target.relationship === 'self') continue // the protagonist is the catalyst, not a subject
+      const bucket = eventsByCharacterId.get(target.id) ?? []
+      bucket.push(event)
+      eventsByCharacterId.set(target.id, bucket)
+    }
+
+    const config = { ...DEFAULT_BE_STORY_CONFIG, enabled: true }
+
+    for (const character of this.characters) {
+      if (character.relationship === 'self') continue
+      const charEvents = eventsByCharacterId.get(character.id) ?? []
+      let state = readBodyState(character.metadata)
+
+      // Auto-seed on a character's first event: tier sniffed from her own
+      // description/build when possible, module default otherwise. The panel is
+      // the correction surface for a wrong sniff.
+      const pendingLog: BeLogRecord[] = []
+      let seeded = false
+      if (!state) {
+        if (charEvents.length === 0) continue
+        const sniffSource = [
+          character.visualDescriptors?.build ?? '',
+          character.description ?? '',
+        ].join('\n')
+        const sniffedTier = sniffTierFromText(sniffSource)
+        state = defaultBodyState(sniffedTier ?? undefined)
+        seeded = true
+        pendingLog.push({
+          character: character.name,
+          kind: 'seed',
+          outcome: 'none',
+          delta: 0,
+          tierAfter: state.tier,
+          note: sniffedTier !== null ? 'tier sniffed from descriptors' : 'default tier',
+        })
+      } else if (
+        charEvents.length === 0 &&
+        state.cooldown === 0 &&
+        !state.lastGrowth &&
+        state.conditions.every((c) => c.ttl === undefined)
+      ) {
+        // Fully settled and untargeted: skip the no-op write.
+        continue
+      }
+
+      const seed = `${storyId}:${entryId}:${character.id}`
+      const { state: nextState, log: reducerLog } = reduceCharacterBody(
+        state,
+        charEvents,
+        config,
+        seed,
+        character.name,
+      )
+      pendingLog.push(...reducerLog)
+
+      // A targeted-but-muzzled (locked/cooldown) character can come out unchanged:
+      // keep her outcome records for the cadence log, skip the no-op write and the
+      // before-state churn.
+      const stateChanged = seeded || JSON.stringify(nextState) !== JSON.stringify(state)
+      if (!stateChanged) {
+        beLog.push(...pendingLog)
+        continue
+      }
+
+      // Widened before-state capture: the reducer touches characters the
+      // classifier never flagged, and rollback must cover them too.
+      if (
+        trackingEnabled &&
+        !createdCharacterIds.includes(character.id) &&
+        !charactersBefore.some((cb) => cb.id === character.id)
+      ) {
+        charactersBefore.push({
+          id: character.id,
+          name: character.name,
+          status: character.status,
+          relationship: character.relationship,
+          traits: [...character.traits],
+          visualDescriptors: { ...character.visualDescriptors },
+          metadata: character.metadata ? { ...character.metadata } : null,
+        })
+      }
+
+      await this.wrapUpdate('BE body state', character.name, async () => {
+        const { entity: ownedChar, wasCowed } = await this.cowCharacter(character)
+        const metadata = writeBodyState(ownedChar.metadata, nextState)
+        await database.updateCharacter(ownedChar.id, { metadata })
+        this.characters = this.characters.map((c) =>
+          c.id === ownedChar.id ? { ...c, metadata } : c,
+        )
+        // Log only after the write landed — a swallowed failure must not leave
+        // phantom growth records in the cadence log.
+        beLog.push(...pendingLog)
+        if (wasCowed && trackingEnabled) {
+          createdCharacterIds.push(ownedChar.id)
+          const idx = charactersBefore.findIndex((cb) => cb.id === character.id)
+          if (idx !== -1) charactersBefore.splice(idx, 1)
+        }
+      })
+    }
+
+    return beLog
   }
 
   // Clear current story (when switching or closing)
@@ -4044,6 +4208,10 @@ class StoryStore {
           relationship,
           visualDescriptors: snapshot.visualDescriptors ?? {},
           portrait: snapshot.portrait,
+          // D7 (research/31): restore metadata (runtimeVars/bodyState) when the
+          // snapshot carried it. Old persisted snapshots predate the field —
+          // leave current metadata alone rather than wiping it.
+          ...(snapshot.metadata !== undefined ? { metadata: snapshot.metadata } : {}),
         },
       })
     }
@@ -4068,6 +4236,10 @@ class StoryStore {
         relationship,
         visualDescriptors: snapshot.visualDescriptors ?? character.visualDescriptors,
         portrait: snapshot.portrait, // Use snapshot value directly (null means no portrait)
+        // D7: mirror the DB restore — without this the persistent-retry path leaves
+        // stale post-generation metadata (runtimeVars/bodyState) in memory, and the
+        // next apply would compound on the un-rolled-back value.
+        ...(snapshot.metadata !== undefined ? { metadata: snapshot.metadata } : {}),
       }
     })
 

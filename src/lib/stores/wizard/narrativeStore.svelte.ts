@@ -31,6 +31,7 @@ export class NarrativeStore {
   imageGenerationMode = $state<'none' | 'agentic' | 'inline'>('none')
   backgroundImagesEnabled = $state(false)
   referenceMode = $state(false)
+  beMode = $state(false)
 
   // Step 9: Opening
   storyTitle = $state('')

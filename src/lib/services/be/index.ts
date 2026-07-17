@@ -17,16 +17,27 @@ export {
   bandWord,
   comparative,
   cupLetter,
+  groundImagePromptSize,
   imageSizePhrase,
+  sniffTierFromText,
   tierForCupLetter,
 } from './ladder'
 export { groundingFacts } from './derive'
 export { reduceCharacterBody, seededRoll } from './reducer'
 export {
+  beEventSchema,
+  beEventsFromResult,
+  buildBeEventInstructions,
+  extendClassificationSchemaWithBeEvents,
+} from './schema'
+export { buildBeStateBlock, type BeStateEntry } from './context'
+export {
   BODY_STATE_KEY,
   bodyStateSchema,
   defaultBodyState,
+  maxBodyStateTier,
   readBodyState,
   seedBodyStateFromCup,
+  uniformBodyStateTier,
   writeBodyState,
 } from './metadata'

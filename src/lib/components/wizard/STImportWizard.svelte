@@ -160,6 +160,7 @@
           imageGenerationMode={wizard.imageGenerationMode}
           backgroundImagesEnabled={wizard.backgroundImagesEnabled}
           referenceMode={wizard.referenceMode}
+          beMode={wizard.beMode}
           importChatAsEntries={wizard.importChatAsEntries}
           hasChatFile={wizard.chatParseResult !== null}
           hasCardOpening={!!wizard.cardImportResult?.firstMessage}
@@ -172,6 +173,7 @@
           onImageGenerationModeChange={(v) => (wizard.imageGenerationMode = v)}
           onBackgroundImagesEnabledChange={(v) => (wizard.backgroundImagesEnabled = v)}
           onReferenceModeChange={(v) => (wizard.referenceMode = v)}
+          onBeModeChange={(v) => (wizard.beMode = v)}
           onImportChatToggle={(v) => (wizard.importChatAsEntries = v)}
         />
       {:else if wizard.currentStep === 7}

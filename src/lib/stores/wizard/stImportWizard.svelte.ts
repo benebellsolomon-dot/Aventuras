@@ -98,6 +98,7 @@ export class STImportWizardStore {
   imageGenerationMode = $state<'none' | 'agentic' | 'inline'>('none')
   backgroundImagesEnabled = $state(false)
   referenceMode = $state(false)
+  beMode = $state(false)
   importChatAsEntries = $state(false) // true = import chat, false = fresh start with card opening
 
   // Step 6: Review
@@ -692,6 +693,7 @@ export class STImportWizardStore {
           imageGenerationMode: this.imageGenerationMode,
           backgroundImagesEnabled: this.backgroundImagesEnabled,
           referenceMode: this.referenceMode,
+          beMode: this.beMode,
         },
         title: this.storyTitle,
       }

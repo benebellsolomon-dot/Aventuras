@@ -22,6 +22,7 @@ import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/s
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { sizeBandMarker } from './sizeBandMarker'
+import { groundImagePromptSize, uniformBodyStateTier } from '$lib/services/be'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { createLogger } from '$lib/log'
 
@@ -33,6 +34,8 @@ export interface InlineImageContext {
   narrativeContent: string
   presentCharacters: Character[]
   referenceMode: boolean
+  /** BE grounding gate — mirrors the narrative block's beMode gating. */
+  beMode: boolean
 }
 
 export class InlineImageGenerationService {
@@ -161,9 +164,18 @@ export class InlineImageGenerationService {
       return
     }
 
-    // Build full prompt with style
+    // Build full prompt with style. BE grounding first (beMode stories only —
+    // same gate as the narrative block): when the tagged characters carrying
+    // bodyState share one size band, that canonical band word overrides the
+    // model's own size vocabulary; mixed-band multi-character prompts are left
+    // ungrounded (one size would render the others wrong). The bridge marker is
+    // then derived from the grounded prompt.
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const fullPrompt = `${sizeBandMarker(tag.prompt)}${tag.prompt}. ${stylePrompt}`
+    const beTier = context.beMode
+      ? uniformBodyStateTier(context.presentCharacters, tag.characters)
+      : null
+    const groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
 
     const { width, height } = parseImageSize(sizeToUse)
 

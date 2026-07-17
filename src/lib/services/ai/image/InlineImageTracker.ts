@@ -24,6 +24,7 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { sizeBandMarker } from './sizeBandMarker'
+import { groundImagePromptSize, uniformBodyStateTier } from '$lib/services/be'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { createLogger } from '$lib/log'
 import type { Character, EmbeddedImage } from '$lib/types'
@@ -52,6 +53,8 @@ export class InlineImageTracker {
     private storyId: string,
     private entryId: string,
     private getCharacters: () => Character[],
+    /** BE grounding gate — mirrors the narrative block's beMode gating. */
+    private getBeMode: () => boolean = () => false,
   ) {
     log('Tracker created', { storyId, entryId })
   }
@@ -126,9 +129,14 @@ export class InlineImageTracker {
     if (!profile) return
     if (!supportsImageGeneration(profile.providerType)) return
 
-    // Build full prompt with style
+    // Build full prompt with style (BE grounding mirrors InlineImageService:
+    // beMode-gated; uniform-band only — mixed-band prompts stay ungrounded).
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const fullPrompt = `${sizeBandMarker(tag.prompt)}${tag.prompt}. ${stylePrompt}`
+    const beTier = this.getBeMode()
+      ? uniformBodyStateTier(this.getCharacters(), tag.characters)
+      : null
+    const groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
 
     log('Starting async image generation', {
       imageId,

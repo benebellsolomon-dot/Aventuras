@@ -16,6 +16,7 @@
     imageGenerationMode: 'none' | 'agentic' | 'inline'
     backgroundImagesEnabled: boolean
     referenceMode: boolean
+    beMode: boolean
     onPOVChange: (v: POV) => void
     onTenseChange: (v: Tense) => void
     onToneChange: (v: string) => void
@@ -23,6 +24,7 @@
     onImageGenerationModeChange: (v: 'none' | 'agentic' | 'inline') => void
     onBackgroundImagesEnabledChange: (v: boolean) => void
     onReferenceModeChange: (v: boolean) => void
+    onBeModeChange: (v: boolean) => void
     disabledFields?: {
       pov?: boolean
       tense?: boolean
@@ -40,6 +42,7 @@
     imageGenerationMode,
     backgroundImagesEnabled,
     referenceMode,
+    beMode,
     onPOVChange,
     onTenseChange,
     onToneChange,
@@ -47,6 +50,7 @@
     onImageGenerationModeChange,
     onBackgroundImagesEnabledChange,
     onReferenceModeChange,
+    onBeModeChange,
     disabledFields,
     disabledReason,
   }: Props = $props()
@@ -258,6 +262,20 @@
       </div>
     </section>
   {/if}
+
+  <!-- Body Transformation Engine -->
+  <section class="space-y-2 pt-1">
+    <div class="flex items-center space-x-2 py-4">
+      <Switch id="be-mode" checked={beMode} onCheckedChange={onBeModeChange} />
+      <div class="grid gap-1.5 leading-none">
+        <Label for="be-mode">Body Transformation Engine</Label>
+        <p class="text-muted-foreground text-xs">
+          Track character body state mechanically: transformation events, deterministic growth
+          resolution, and size-grounded narration and images.
+        </p>
+      </div>
+    </div>
+  </section>
 
   <!-- Visual Prose Styling -->
   <section class="space-y-2 pt-1">

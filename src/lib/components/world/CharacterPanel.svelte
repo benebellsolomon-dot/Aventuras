@@ -28,6 +28,7 @@
   } from '$lib/services/ai/image'
   import { database } from '$lib/services/database'
   import RuntimeVariableDisplay from './RuntimeVariableDisplay.svelte'
+  import BeStatePanel from './BeStatePanel.svelte'
   import { ContextBuilder } from '$lib/services/context'
   import { normalizeImageDataUrl } from '$lib/utils/image'
   import { createLogger } from '$lib/log'
@@ -936,6 +937,11 @@
                     values={character.metadata?.runtimeVars as RuntimeVarsMap | undefined}
                     pinnedOnly={false}
                   />
+                {/if}
+
+                <!-- BE body state (BE-mode stories, non-protagonist) -->
+                {#if story.currentStory?.settings?.beMode === true && !isProtagonist}
+                  <BeStatePanel {character} />
                 {/if}
               </div>
             {/if}

@@ -299,6 +299,7 @@
       narrativeContent: entry.translatedContent ?? entry.content,
       presentCharacters: story.characters, // Use all story characters for lookup
       referenceMode: story.currentStory.settings?.referenceMode ?? false,
+      beMode: story.currentStory.settings?.beMode === true,
     }
 
     await inlineImageService.processNarrativeForInlineImages(context)
@@ -1026,6 +1027,7 @@
         userAction: '',
         presentCharacters: story.characters,
         referenceMode: story.currentStory.settings?.referenceMode ?? false,
+        beMode: story.currentStory.settings?.beMode === true,
         translatedNarrative: entry.translatedContent ?? undefined,
         imageGenerationMode: story.currentStory.settings?.imageGenerationMode,
         allCharacters: story.characters,

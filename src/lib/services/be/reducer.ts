@@ -82,6 +82,8 @@ export function reduceCharacterBody(
   let cooldown = Math.max(0, Math.floor(state.cooldown ?? 0))
   let fillPercent = state.fluids.fillPercent
   let pendingGrowth = state.pendingGrowth
+  // The previous turn's growth marker expires now; this turn may set a fresh one.
+  let lastGrowth: BodyState['lastGrowth'] = undefined
 
   // Per-turn condition decay happens exactly once, before events resolve.
   const conditions = decayConditions(state.conditions)
@@ -167,8 +169,11 @@ export function reduceCharacterBody(
       if (config.sizeCapTier !== null) {
         delta = Math.min(delta, Math.max(0, config.sizeCapTier - tier))
       }
-      tier += delta
-      if (delta > 0) cooldown = Math.max(0, Math.floor(config.growthCooldownBeats))
+      if (delta > 0) {
+        lastGrowth = { delta, tierBefore: tier }
+        tier += delta
+        cooldown = Math.max(0, Math.floor(config.growthCooldownBeats))
+      }
     }
 
     log.push({
@@ -189,6 +194,7 @@ export function reduceCharacterBody(
       conditions,
       fluids: { ...state.fluids, fillPercent },
       pendingGrowth,
+      lastGrowth,
     },
     log,
   }

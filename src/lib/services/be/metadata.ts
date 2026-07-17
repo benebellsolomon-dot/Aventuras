@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod'
-import { tierForCupLetter } from './ladder'
+import { bandWord, tierForCupLetter } from './ladder'
 import type { BodyState } from './types'
 
 export const BODY_STATE_KEY = 'bodyState'
@@ -36,6 +36,7 @@ export const bodyStateSchema = z
       .passthrough()
       .optional(),
     pendingGrowth: z.object({ delta: z.number(), source: z.string() }).passthrough().optional(),
+    lastGrowth: z.object({ delta: z.number(), tierBefore: z.number() }).passthrough().optional(),
   })
   .passthrough()
 
@@ -80,4 +81,48 @@ export function writeBodyState(
   state: BodyState,
 ): Record<string, unknown> {
   return { ...(metadata ?? {}), [BODY_STATE_KEY]: structuredClone(state) }
+}
+
+/**
+ * Largest engine-tracked tier among the named characters (case-insensitive), or
+ * null when none of them carries bodyState.
+ */
+export function maxBodyStateTier(
+  characters: ReadonlyArray<{ name: string; metadata: Record<string, unknown> | null }>,
+  names: ReadonlyArray<string>,
+): number | null {
+  let max: number | null = null
+  for (const name of names) {
+    const character = characters.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (!character) continue
+    const state = readBodyState(character.metadata)
+    if (state && (max === null || state.tier > max)) max = state.tier
+  }
+  return max
+}
+
+/**
+ * The grounding tier for an image prompt: defined ONLY when every named
+ * character carrying bodyState falls in the same size band (then the largest
+ * tier of that band, for marker precision). Characters in different bands
+ * return null — grounding a shared prompt to one character's size would render
+ * the others wrong, so the caller must fall back to the model's own words.
+ */
+export function uniformBodyStateTier(
+  characters: ReadonlyArray<{ name: string; metadata: Record<string, unknown> | null }>,
+  names: ReadonlyArray<string>,
+): number | null {
+  let max: number | null = null
+  let band: string | null = null
+  for (const name of names) {
+    const character = characters.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (!character) continue
+    const state = readBodyState(character.metadata)
+    if (!state) continue
+    const characterBand = bandWord(state.tier)
+    if (band === null) band = characterBand
+    else if (band !== characterBand) return null
+    if (max === null || state.tier > max) max = state.tier
+  }
+  return max
 }

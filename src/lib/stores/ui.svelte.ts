@@ -509,6 +509,9 @@ class UIStore {
       relationship: c.relationship ?? null,
       visualDescriptors: { ...(c.visualDescriptors ?? {}) },
       portrait: c.portrait,
+      // D7 (research/31): without this, a cross-session retry restore loses
+      // runtimeVars and bodyState (the pre-existing metadata gap).
+      metadata: c.metadata ? { ...c.metadata } : null,
     }))
 
     // Create new backup and store by story ID

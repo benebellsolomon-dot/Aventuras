@@ -123,6 +123,9 @@ End with a natural opening for action, not a direct question.{% endif %}
 
 {% if visualProseMode %}{{ visualProseInstructions }}{% endif %}
 {% if inlineImageMode %}{{ inlineImageInstructions }}{% endif %}
+{% if beStateBlock != '' %}
+{{ beStateBlock }}
+{% endif %}
 
 {% if storyTime != '' %}
 [CURRENT STORY TIME]
@@ -291,6 +294,9 @@ End at a natural narrative beat.{% endif %}
 
 {% if visualProseMode %}{{ visualProseInstructions }}{% endif %}
 {% if inlineImageMode %}{{ inlineImageInstructions }}{% endif %}
+{% if beStateBlock != '' %}
+{{ beStateBlock }}
+{% endif %}
 
 {% if storyTime != '' %}
 [CURRENT STORY TIME]

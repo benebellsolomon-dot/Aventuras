@@ -17,6 +17,7 @@
     imageGenerationMode: 'none' | 'agentic' | 'inline'
     backgroundImagesEnabled: boolean
     referenceMode: boolean
+    beMode: boolean
     importChatAsEntries: boolean
     hasChatFile: boolean
     hasCardOpening: boolean
@@ -29,6 +30,7 @@
     onImageGenerationModeChange: (v: 'none' | 'agentic' | 'inline') => void
     onBackgroundImagesEnabledChange: (v: boolean) => void
     onReferenceModeChange: (v: boolean) => void
+    onBeModeChange: (v: boolean) => void
     onImportChatToggle: (v: boolean) => void
   }
 
@@ -41,6 +43,7 @@
     imageGenerationMode,
     backgroundImagesEnabled,
     referenceMode,
+    beMode,
     importChatAsEntries,
     hasChatFile,
     hasCardOpening,
@@ -53,6 +56,7 @@
     onImageGenerationModeChange,
     onBackgroundImagesEnabledChange,
     onReferenceModeChange,
+    onBeModeChange,
     onImportChatToggle,
   }: Props = $props()
 
@@ -189,6 +193,7 @@
       {imageGenerationMode}
       {backgroundImagesEnabled}
       {referenceMode}
+      {beMode}
       {onPOVChange}
       {onTenseChange}
       {onToneChange}
@@ -196,6 +201,7 @@
       {onImageGenerationModeChange}
       {onBackgroundImagesEnabledChange}
       {onReferenceModeChange}
+      {onBeModeChange}
     />
   </ScrollArea>
 </div>

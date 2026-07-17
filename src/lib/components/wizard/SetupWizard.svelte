@@ -372,8 +372,10 @@
           onImageGenerationModeChange={(v) => (wizard.narrative.imageGenerationMode = v)}
           backgroundImagesEnabled={wizard.narrative.backgroundImagesEnabled}
           referenceMode={wizard.narrative.referenceMode}
+          beMode={wizard.narrative.beMode}
           onBackgroundImagesEnabledChange={(v) => (wizard.narrative.backgroundImagesEnabled = v)}
           onReferenceModeChange={(v) => (wizard.narrative.referenceMode = v)}
+          onBeModeChange={(v) => (wizard.narrative.beMode = v)}
         />
       {:else if wizard.currentStep === 9}
         <Step8Opening

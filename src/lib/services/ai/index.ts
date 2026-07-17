@@ -152,6 +152,8 @@ export interface ImageGenerationContext {
   translatedNarrative?: string
   translationLanguage?: string
   referenceMode: boolean
+  /** BE grounding gate — supplied by caller to avoid store access */
+  beMode: boolean
   /** Story-level image generation mode — supplied by caller to avoid store access */
   imageGenerationMode?: string | null
   /** All story characters — supplied by caller for portrait/reference lookups */
@@ -877,6 +879,7 @@ class AIService {
           narrativeContent: narrativeToProcess,
           presentCharacters: context.presentCharacters,
           referenceMode: context.referenceMode,
+          beMode: context.beMode,
         }
         await inlineImageService.processNarrativeForInlineImages(inlineContext)
       } else {

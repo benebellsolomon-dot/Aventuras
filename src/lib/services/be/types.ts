@@ -50,6 +50,11 @@ export interface BodyState {
   baseline?: BodyBaseline
   /** Two-beat anticipation carrier (Phase B). */
   pendingGrowth?: PendingGrowth
+  /**
+   * Set when growth landed THIS turn, cleared by the next reduce — drives the
+   * magnitude-scaled narration directive (31a §3.5) for exactly one narration.
+   */
+  lastGrowth?: { delta: number; tierBefore: number }
 }
 
 /** Classifier-extracted event kinds (research/31 §2.2). The LLM proposes EVENTS, not values. */
@@ -78,7 +83,7 @@ export type GrowthOutcome =
  */
 export interface BeLogRecord {
   character: string
-  kind: BeEventKind | 'decay'
+  kind: BeEventKind | 'decay' | 'seed'
   outcome: GrowthOutcome
   delta: number
   tierAfter: number

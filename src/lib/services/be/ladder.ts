@@ -79,3 +79,51 @@ export function bandIndex(tier: number): number {
   }
   return idx
 }
+
+/**
+ * Sniff a tier from free text (card descriptions, visual descriptors) for
+ * auto-seeding. Order: explicit "<letter>-cup" mention (global scan, first
+ * RESOLVABLE letter wins — word-embedded pseudo-letters like "teacup" resolve to
+ * nothing and are skipped, the NAI sniff lesson), then band vocabulary. Null when
+ * neither appears.
+ */
+export function sniffTierFromText(text: string): number | null {
+  const s = String(text || '')
+  const cupRe = /\b([A-Za-z]{1,3})[-\s]?cups?\b/gi
+  let match: RegExpExecArray | null
+  while ((match = cupRe.exec(s)) !== null) {
+    const tier = tierForCupLetter(match[1])
+    if (tier !== null) return tier
+  }
+  for (let i = BAND_WORD_THRESHOLDS.length - 1; i >= 0; i--) {
+    const row = BAND_WORD_THRESHOLDS[i]
+    if (new RegExp(row.word.replace(/ /g, '[\\s,]+'), 'i').test(s)) return row.minTier
+  }
+  return null
+}
+
+// Derived from the ladder's own band table so a future band word can't drift out
+// of the replacement vocabulary (a literal copy here silently stopped matching
+// new bands).
+const ALL_BAND_WORDS_PATTERN = new RegExp(
+  `\\b(?:${BAND_WORD_THRESHOLDS.map((row) => row.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`,
+  'gi',
+)
+
+/**
+ * Ground an image prompt's size vocabulary in the canonical tier (research/31
+ * §2.3): the engine's derived band word replaces whatever size band the model
+ * wrote, or is appended when the model wrote none. The model's words become a
+ * fallback, never the source of truth. Callers must only pass a tier when it is
+ * unambiguous for the prompt (see uniformBodyStateTier — a multi-character
+ * prompt with different bands must NOT be grounded to one character's size).
+ */
+export function groundImagePromptSize(prompt: string, tier: number): string {
+  const canonical = bandWord(tier)
+  const hasBandWords = ALL_BAND_WORDS_PATTERN.test(prompt)
+  ALL_BAND_WORDS_PATTERN.lastIndex = 0
+  if (hasBandWords) {
+    return prompt.replace(ALL_BAND_WORDS_PATTERN, canonical)
+  }
+  return `${prompt.trimEnd().replace(/[.,]$/, '')}, ${canonical}`
+}

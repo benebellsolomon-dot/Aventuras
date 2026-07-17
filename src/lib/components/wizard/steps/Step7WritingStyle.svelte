@@ -12,6 +12,7 @@
     imageGenerationMode: 'none' | 'agentic' | 'inline'
     backgroundImagesEnabled: boolean
     referenceMode: boolean
+    beMode: boolean
     onPOVChange: (v: POV) => void
     onTenseChange: (v: Tense) => void
     onToneChange: (v: string) => void
@@ -19,6 +20,7 @@
     onImageGenerationModeChange: (v: 'none' | 'agentic' | 'inline') => void
     onBackgroundImagesEnabledChange: (v: boolean) => void
     onReferenceModeChange: (v: boolean) => void
+    onBeModeChange: (v: boolean) => void
   }
 
   let {
@@ -30,6 +32,7 @@
     imageGenerationMode,
     backgroundImagesEnabled,
     referenceMode,
+    beMode,
     onPOVChange,
     onTenseChange,
     onToneChange,
@@ -37,6 +40,7 @@
     onImageGenerationModeChange,
     onBackgroundImagesEnabledChange,
     onReferenceModeChange,
+    onBeModeChange,
   }: Props = $props()
 
   // Force "none" mode when image generation is disabled (wizard only)
@@ -67,6 +71,7 @@
       {imageGenerationMode}
       {backgroundImagesEnabled}
       {referenceMode}
+      {beMode}
       {onPOVChange}
       {onTenseChange}
       {onToneChange}
@@ -74,6 +79,7 @@
       {onImageGenerationModeChange}
       {onBackgroundImagesEnabledChange}
       {onReferenceModeChange}
+      {onBeModeChange}
     />
   </ScrollArea>
 </div>
