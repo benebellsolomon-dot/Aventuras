@@ -53,6 +53,7 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 - Place <pic> tags AFTER the prose that describes the scene they illustrate
 - Write prompts as detailed visual descriptions: subject, action, setting, mood, lighting, art style
 - Include character names in the "characters" attribute if they appear in the image
+- Re-describe each character's physical appearance IN FULL in every prompt (hair, eyes, build, notable body proportions, current clothing and its state) — the image model cannot see the story, previous images, or other prompts
 - Use sparingly: 1-3 images per response maximum, reserved for impactful visual moments
 - Best used for: dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
 

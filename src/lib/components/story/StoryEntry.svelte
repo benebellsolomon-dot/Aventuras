@@ -36,6 +36,7 @@
     type TTSQueuedEvent,
   } from '$lib/services/events'
   import { inlineImageService, retryImageGeneration } from '$lib/services/ai/image'
+  import { matchAttribute } from '$lib/utils/inlineImageParser'
   import { database } from '$lib/services/database'
   import { onMount } from 'svelte'
   import ReasoningBlock from './ReasoningBlock.svelte'
@@ -574,8 +575,8 @@
 
   function getRawPrompt(image: (typeof embeddedImages)[0]): string {
     if (image.generationMode === 'inline' && image.sourceText?.startsWith('<pic')) {
-      const match = image.sourceText.match(/prompt=["']([^"']+)["']/i)
-      if (match?.[1]) return match[1]
+      const raw = matchAttribute(image.sourceText, 'prompt')
+      if (raw) return raw
     }
     return stripStyleSuffix(image.prompt)
   }
@@ -724,10 +725,8 @@
       image.sourceText.startsWith('<pic')
     ) {
       // Extract raw prompt from sourceText
-      const match = image.sourceText.match(/prompt=["']([^"']+)["']/i)
-      if (match && match[1]) {
-        const rawPrompt = match[1]
-
+      const rawPrompt = matchAttribute(image.sourceText, 'prompt')
+      if (rawPrompt) {
         const stylePrompt = await fetchCurrentStylePrompt()
         finalPrompt = `${rawPrompt.replace(/\.+$/, '')}. ${stylePrompt}`
         console.log('[StoryEntry] Reconstructed prompt with new style:', finalPrompt)

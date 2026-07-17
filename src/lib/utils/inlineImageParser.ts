@@ -19,6 +19,20 @@ export interface ParsedPicTag {
 }
 
 /**
+ * Match a quoted attribute value inside a tag's attribute string.
+ * Honors the opening quote style, so the other quote character may appear
+ * inside the value (e.g. prompt="a man's chest" or prompt='she said "now"').
+ *
+ * @param attrs - The raw attribute section of a tag
+ * @param name - The attribute name to extract
+ * @returns The attribute value, or null if the attribute is absent
+ */
+export function matchAttribute(attrs: string, name: string): string | null {
+  const match = attrs.match(new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i'))
+  return match ? (match[1] ?? match[2] ?? '') : null
+}
+
+/**
  * Extract all <pic> tags from content.
  * Supports both self-closing (<pic ... />) and paired tags (<pic ...></pic>).
  *
@@ -39,17 +53,13 @@ export function extractPicTags(content: string): ParsedPicTag[] {
     const attributes = match[1]
 
     // Extract prompt attribute (required)
-    const promptMatch = attributes.match(/prompt=["']([^"']+)["']/i)
-    const prompt = promptMatch ? promptMatch[1] : ''
+    const prompt = matchAttribute(attributes, 'prompt') ?? ''
 
     // Extract characters attribute (optional)
-    const charsMatch = attributes.match(/characters=["']([^"']*)["']/i)
-    const characters = charsMatch
-      ? charsMatch[1]
-          .split(',')
-          .map((c) => c.trim())
-          .filter((c) => c)
-      : []
+    const characters = (matchAttribute(attributes, 'characters') ?? '')
+      .split(',')
+      .map((c) => c.trim())
+      .filter((c) => c)
 
     // Only include tags with valid prompts
     if (prompt && prompt.length >= 10) {
@@ -180,8 +190,7 @@ export function renderSinglePicTag(
 ): string {
   const attrMatch = match.match(/<pic\s+([^>]*?)(?:\/>|>\s*<\/pic>)/i)
   const attrs = attrMatch ? attrMatch[1] : ''
-  const promptMatch = attrs.match(/prompt=["']([^"']+)["']/i)
-  const prompt = promptMatch ? promptMatch[1] : ''
+  const prompt = matchAttribute(attrs, 'prompt') ?? ''
   const shortPrompt = prompt.length > 60 ? prompt.slice(0, 60) + '...' : prompt
 
   const imageInfo = imageMap.get(match)
@@ -230,8 +239,7 @@ export function renderSinglePicTag(
  */
 export function replacePicTagsWithPlaceholders(content: string): string {
   return content.replace(/<pic\s+([^>]*?)(?:\/>|>\s*<\/pic>)/gi, (match, attrs) => {
-    const promptMatch = attrs.match(/prompt=["']([^"']+)["']/i)
-    const prompt = promptMatch ? promptMatch[1] : 'Image'
+    const prompt = matchAttribute(attrs, 'prompt') || 'Image'
     const shortPrompt = prompt.length > 60 ? prompt.slice(0, 60) + '...' : prompt
     // No imageId during streaming — use empty string
     return buildPlaceholder(
