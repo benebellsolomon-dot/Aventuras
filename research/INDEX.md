@@ -20,6 +20,7 @@ are never renumbered (cross-references depend on numbers). ⭐ = load-bearing to
 | [35-d4-prose-body-math.md](35-d4-prose-body-math.md) | **D4 research**: body-math depth for honest prose — depth (b), baked at build time from the NAI spine | Enacted (metric build) |
 | [36-cross-era-feature-gap-analysis.md](36-cross-era-feature-gap-analysis.md) | **Cross-era gap analysis** (3-agent sweep of NAI/ST/bundles+bridge vs the built engine): quick-win list, big-subsystem rulings, the bridge A1111-shim finding, C6 mining list, inventory register | Verdict delivered |
 | [37-implementation-plan.md](37-implementation-plan.md) | **The roadmap + full file-level specs** for the quick-wins batch, si-bridge provider, and C6 pack (Phases 2–4) | ⭐ Active plan |
+| [38-body-math-audit.md](38-body-math-audit.md) | **Body-math audit** (Ben-triggered): bust channel = saturating projection miscalibrated ~35% low vs the Norma anchor; correction menu C1–C5 (P6 retune, droop surfacing, honest total weight, letter policy) | ⏸ Ben's rulings pending; GATES Phase 2 |
 
 ## Task → read this
 

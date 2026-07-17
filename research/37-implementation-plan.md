@@ -62,6 +62,12 @@ maxTokens raised above 8192 doesn't truncate Peak scenes.
 
 ## Phases 2–4 — see Part II (full specs).
 
+⚠ **GATE (2026-07-17): research/38 body-math rulings must land before Phase 2's
+measurement-dependent tasks ship** (Task 8 ladders + all BWH surfaces build on the corrected
+bust curves; Ben confirmed the shipped bust channel under-reads at volume). The
+math-independent Phase 2 tasks (conditions writer, anticipation, pressure, drift detectors)
+may proceed in parallel if ruled.
+
 ## Phase 5 — Chronicler-lite (design brief)
 
 Deterministic milestone ledger from what already exists: band/letter crossings detected in the
