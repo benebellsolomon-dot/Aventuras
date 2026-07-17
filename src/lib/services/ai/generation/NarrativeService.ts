@@ -51,31 +51,30 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 
 **USAGE GUIDELINES:**
 - Place <pic> tags AFTER the prose that describes the scene they illustrate
-- Write prompts as comma-separated Danbooru-style tags and short tag-phrases (the image backend is a booru-tag anime model), front-loaded: rating tag, subject count, character appearance, clothing and its state, action/pose, setting, lighting
+- Write prompts as vivid natural-language visual descriptions (the image backend uses an LLM-class text encoder — flowing descriptive English works best): open with content-rating words, then character appearance, clothing and its state, action/pose, setting and lighting
 - Include character names in the "characters" attribute if they appear in the image
 - Re-describe each character's physical appearance IN FULL in every prompt (hair, eyes, build, notable body proportions, current clothing and its state) — the image model cannot see the story, previous images, or other prompts
 - Use sparingly: 1-3 images per response maximum, reserved for impactful visual moments
 
-**RATING AND BODY TAGS (required in every prompt):**
-- The FIRST tag is always a content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit" (nudity or sexual content)
-- When the rating is explicit, also add: uncensored, detailed anatomy, clear view
-- For every female character, ALWAYS include a breast-size tag matching the story's current canon (flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts) — body-size continuity is critical
-- Prefer concrete visual tags over abstractions: "torn apron, popped buttons, straining fabric" not "clothes in disarray"
+**RATING AND BODY WORDS (required in every prompt):**
+- The prompt's FIRST words are always a content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content)
+- For every female character, ALWAYS state her current breast size using one of these bands, matching the story's canon: flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts — body-size continuity is critical
+- Prefer concrete visual wording over abstractions: "torn apron, popped buttons, fabric straining across her chest" not "clothes in disarray"
 - Best used for: dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
 
 **EXAMPLE:**
 The dragon descended from the storm clouds, its obsidian scales gleaming with each flash of lightning.
-<pic prompt="general, no humans, massive black dragon, descending from dark storm clouds, gleaming wet scales, rain, lightning, dramatic low angle, dark fantasy" characters=""></pic>
+<pic prompt="general, a massive black dragon descending from dark storm clouds, gleaming rain-wet scales, lightning illuminating the scene from a dramatic low angle, dark fantasy atmosphere" characters=""></pic>
 
 Elena drew her blade, firelight dancing along the steel edge as she faced the creature.
-<pic prompt="sensitive, 1girl, solo, young woman warrior, determined expression, long red hair, green eyes, athletic build, medium breasts, fitted leather armor, drawing a glowing sword, firelight on blade and face, medieval interior, dramatic lighting" characters="Elena"></pic>
+<pic prompt="sensitive, a young woman warrior with a determined expression, long red hair, green eyes, an athletic build and medium breasts, wearing fitted leather armor, drawing a glowing sword with firelight reflecting on the blade and her face, medieval interior, dramatic lighting" characters="Elena"></pic>
 
 **CRITICAL RULES:**
 - **PROMPTS MUST BE IN ENGLISH** - Image generation models only understand English prompts. Always write the prompt attribute in English, even if the surrounding narrative is in another language.
 - The prompt must be a COMPLETE visual description - do not write "the dragon from the scene" or "as described above"
 - Never place <pic> tags in the middle of a sentence - always after the descriptive prose
 - Do not use <pic> for every scene - reserve for truly striking visual moments
-- Keep prompts to roughly 20-40 tags and under 500 characters
+- Keep prompts under 500 characters
 </InlineImages>`
 
 /**
