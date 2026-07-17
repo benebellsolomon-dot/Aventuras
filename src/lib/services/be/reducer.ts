@@ -20,6 +20,7 @@ import {
 import type {
   BeEvent,
   BeLogRecord,
+  BeSoftState,
   BeStoryConfig,
   BodyCondition,
   BodyState,
@@ -63,11 +64,16 @@ function decayConditions(conditions: ReadonlyArray<BodyCondition>): BodyConditio
   return next
 }
 
+const clampPercent = (value: number): number =>
+  Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0
+
 /**
  * Apply one turn's events for ONE character. Pure: neither `state` nor `events`
  * is mutated. `seed` must be stable per (story, entry, character) so a re-applied
  * turn (retry, branch replay) resolves identically. `characterName` attributes
- * non-event log records (condition decay) for the D11 cadence log.
+ * non-event log records (condition decay) for the D11 cadence log. `softState`
+ * (classifier-proposed attitude/arousal/fluid fullness) applies FIRST, so a
+ * same-turn drain event nets against the observed fill.
  */
 export function reduceCharacterBody(
   state: BodyState,
@@ -75,6 +81,7 @@ export function reduceCharacterBody(
   config: BeStoryConfig,
   seed: string,
   characterName = '',
+  softState?: BeSoftState,
 ): ReducerResult {
   const log: BeLogRecord[] = []
 
@@ -82,8 +89,44 @@ export function reduceCharacterBody(
   let cooldown = Math.max(0, Math.floor(state.cooldown ?? 0))
   let fillPercent = state.fluids.fillPercent
   let pendingGrowth = state.pendingGrowth
+  let attitude = state.attitude
+  let arousal = state.arousal
   // The previous turn's growth marker expires now; this turn may set a fresh one.
   let lastGrowth: BodyState['lastGrowth'] = undefined
+
+  // Soft states are LLM-proposed and clamp-applied (the platform-native tier of
+  // the single-writer spectrum; hard growth stays event→roll below).
+  if (softState) {
+    const moodNotes: string[] = []
+    if (softState.attitude && softState.attitude !== attitude) {
+      attitude = softState.attitude
+      moodNotes.push(`attitude→${attitude}`)
+    }
+    if (softState.arousal !== undefined) {
+      const next = Math.round(clampPercent(softState.arousal))
+      if (next !== arousal) {
+        arousal = next
+        moodNotes.push(`arousal→${next}`)
+      }
+    }
+    if (softState.fluidFill !== undefined) {
+      const next = clampPercent(softState.fluidFill)
+      if (next !== fillPercent) {
+        fillPercent = next
+        moodNotes.push(`fill→${next}%`)
+      }
+    }
+    if (moodNotes.length > 0) {
+      log.push({
+        character: characterName,
+        kind: 'mood',
+        outcome: 'none',
+        delta: 0,
+        tierAfter: tier,
+        note: moodNotes.join(', '),
+      })
+    }
+  }
 
   // Per-turn condition decay happens exactly once, before events resolve.
   const conditions = decayConditions(state.conditions)
@@ -195,6 +238,8 @@ export function reduceCharacterBody(
       fluids: { ...state.fluids, fillPercent },
       pendingGrowth,
       lastGrowth,
+      attitude,
+      arousal,
     },
     log,
   }

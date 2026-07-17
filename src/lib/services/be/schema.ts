@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod'
-import type { BeEvent } from './types'
+import type { BeEvent, BeSoftState } from './types'
 
 export const beEventSchema = z.object({
   character: z.string().describe('Exact name of the affected female character'),
@@ -28,6 +28,27 @@ const BE_EVENTS_DESCRIPTION =
 /** Hard cap on events per turn — bounds reducer work and the persisted cadence log. */
 export const MAX_BE_EVENTS_PER_TURN = 16
 
+export const beSoftStateSchema = z.object({
+  character: z.string().describe('Exact name of the female character'),
+  attitude: z
+    .enum(['craving', 'accepting', 'conflicted', 'fearful', 'resentful'])
+    .describe('Her CURRENT emotional stance toward her transformation, when the scene shows it')
+    .optional(),
+  arousal: z
+    .number()
+    .describe('Her current arousal 0-100, when the scene evidences a level')
+    .optional(),
+  fluidFill: z
+    .number()
+    .describe(
+      'How full her breasts currently are, 0-100 percent of capacity, when the scene establishes it (engorgement, recent expressing, time passing)',
+    )
+    .optional(),
+})
+
+const BE_STATES_DESCRIPTION =
+  'Per-character soft-state reads OBSERVED in this response: transformation attitude, arousal, fluid fullness. Include a character only when the scene gives evidence; omit fields you cannot ground. Empty array is correct when nothing changed.'
+
 /**
  * Extend a classification schema (base or runtime-vars-extended — both are object
  * schemas with entryUpdates + scene) with the top-level beEvents array.
@@ -44,6 +65,11 @@ export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.Zod
       .max(MAX_BE_EVENTS_PER_TURN)
       .default([])
       .describe(BE_EVENTS_DESCRIPTION),
+    beStates: z
+      .array(beSoftStateSchema)
+      .max(MAX_BE_EVENTS_PER_TURN)
+      .default([])
+      .describe(BE_STATES_DESCRIPTION),
   })
 }
 
@@ -54,9 +80,15 @@ export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.Zod
 export function buildBeEventInstructions(): string {
   return `## Body Transformation Events to Extract
 This story tracks breast-expansion events mechanically. Additionally fill the top-level \`beEvents\` array:
-- Report each transformation-relevant act in this response: catalyst (magical/alchemical influence), contact (intimate escalation), attempt (explicit growth attempt), milking (draining), stabilize (settling).
+- Report each transformation-relevant act in this response: catalyst (magical/alchemical/supernatural growth influence), contact (intimate escalation), attempt (explicit growth attempt), milking (draining), stabilize (settling).
 - \`character\` = the affected female character's exact name. \`intensity\` = 1 (incidental) to 3 (scene-defining).
-- Report the ATTEMPT, not the outcome — the engine rolls outcomes. Do not invent events; empty array is correct for scenes without transformation content.`
+- Report the ATTEMPT, not the outcome — the engine rolls outcomes. Do not invent events; empty array is correct for scenes without transformation content.
+
+Also fill the top-level \`beStates\` array with per-character soft-state reads the scene evidenced:
+- \`attitude\`: her current emotional stance toward her transformation (craving/accepting/conflicted/fearful/resentful) — only when the scene shows it.
+- \`arousal\`: 0-100 — only when the scene evidences a level.
+- \`fluidFill\`: 0-100 percent of breast capacity — only when the scene establishes fullness (engorgement, expressing, time passing).
+Omit fields without evidence; empty array when nothing changed.`
 }
 
 /**
@@ -72,4 +104,16 @@ export function beEventsFromResult(result: Record<string, unknown>): BeEvent[] {
     if (parsed.success) events.push(parsed.data)
   }
   return events
+}
+
+/** Pull validated soft-state reads off a classification result (same tolerance rules). */
+export function beSoftStatesFromResult(result: Record<string, unknown>): BeSoftState[] {
+  const raw = result['beStates']
+  if (!Array.isArray(raw)) return []
+  const states: BeSoftState[] = []
+  for (const candidate of raw.slice(0, MAX_BE_EVENTS_PER_TURN)) {
+    const parsed = beSoftStateSchema.safeParse(candidate)
+    if (parsed.success) states.push(parsed.data)
+  }
+  return states
 }

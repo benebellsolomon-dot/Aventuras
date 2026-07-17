@@ -29,12 +29,14 @@ import { settings } from './settings.svelte'
 import {
   DEFAULT_BE_STORY_CONFIG,
   beEventsFromResult,
+  beSoftStatesFromResult,
   defaultBodyState,
   readBodyState,
   reduceCharacterBody,
   sniffTierFromText,
   writeBodyState,
   type BeLogRecord,
+  type BeSoftState,
 } from '$lib/services/be'
 import { extractInlineCustomVars } from '$lib/services/ai/sdk/schemas/runtime-variables'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
@@ -2816,6 +2818,7 @@ class StoryStore {
     }
 
     const events = beEventsFromResult(result as unknown as Record<string, unknown>)
+    const softStates = beSoftStatesFromResult(result as unknown as Record<string, unknown>)
 
     // Group events by resolved character (same case-insensitive matching as the entity loops).
     const eventsByCharacterId = new SvelteMap<string, typeof events>()
@@ -2829,12 +2832,22 @@ class StoryStore {
       bucket.push(event)
       eventsByCharacterId.set(target.id, bucket)
     }
+    // Soft-state reads resolve the same way; last read wins per character.
+    const softStateByCharacterId = new SvelteMap<string, BeSoftState>()
+    for (const soft of softStates) {
+      const target = this.characters.find(
+        (c) => c.name.toLowerCase() === soft.character.toLowerCase(),
+      )
+      if (!target || target.relationship === 'self') continue
+      softStateByCharacterId.set(target.id, soft)
+    }
 
     const config = { ...DEFAULT_BE_STORY_CONFIG, enabled: true }
 
     for (const character of this.characters) {
       if (character.relationship === 'self') continue
       const charEvents = eventsByCharacterId.get(character.id) ?? []
+      const charSoftState = softStateByCharacterId.get(character.id)
       let state = readBodyState(character.metadata)
 
       // Auto-seed on a character's first event: tier sniffed from her own
@@ -2843,7 +2856,7 @@ class StoryStore {
       const pendingLog: BeLogRecord[] = []
       let seeded = false
       if (!state) {
-        if (charEvents.length === 0) continue
+        if (charEvents.length === 0) continue // soft reads alone don't seed; events do
         const sniffSource = [
           character.visualDescriptors?.build ?? '',
           character.description ?? '',
@@ -2861,11 +2874,12 @@ class StoryStore {
         })
       } else if (
         charEvents.length === 0 &&
+        !charSoftState &&
         state.cooldown === 0 &&
         !state.lastGrowth &&
         state.conditions.every((c) => c.ttl === undefined)
       ) {
-        // Fully settled and untargeted: skip the no-op write.
+        // Fully settled, untargeted, no soft reads: skip the no-op write.
         continue
       }
 
@@ -2876,6 +2890,7 @@ class StoryStore {
         config,
         seed,
         character.name,
+        charSoftState,
       )
       pendingLog.push(...reducerLog)
 

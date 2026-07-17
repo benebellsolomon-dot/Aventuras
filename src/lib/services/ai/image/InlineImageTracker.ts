@@ -24,7 +24,12 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { sizeBandMarker } from './sizeBandMarker'
-import { groundImagePromptSize, uniformBodyStateTier } from '$lib/services/be'
+import {
+  groundImagePromptSize,
+  imageStateCues,
+  soloBodyState,
+  uniformBodyStateTier,
+} from '$lib/services/be'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { createLogger } from '$lib/log'
 import type { Character, EmbeddedImage } from '$lib/types'
@@ -135,7 +140,12 @@ export class InlineImageTracker {
     const beTier = this.getBeMode()
       ? uniformBodyStateTier(this.getCharacters(), tag.characters)
       : null
-    const groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    let groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    if (this.getBeMode()) {
+      const solo = soloBodyState(this.getCharacters(), tag.characters)
+      const cues = solo ? imageStateCues(solo) : []
+      if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
+    }
     const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
 
     log('Starting async image generation', {

@@ -23,10 +23,26 @@ export {
   tierForCupLetter,
 } from './ladder'
 export { groundingFacts } from './derive'
+export {
+  bodyRow,
+  bwhString,
+  capacityMlPerSide,
+  dryKgPerSide,
+  estimatedBodyWeightKg,
+  fluidPressureLabel,
+  imageStateCues,
+  measurements,
+  nowKgPerSide,
+  proportionNote,
+  sizingString,
+  weightFeel,
+} from './measurements'
 export { reduceCharacterBody, seededRoll } from './reducer'
 export {
   beEventSchema,
   beEventsFromResult,
+  beSoftStateSchema,
+  beSoftStatesFromResult,
   buildBeEventInstructions,
   extendClassificationSchemaWithBeEvents,
 } from './schema'
@@ -39,6 +55,7 @@ export {
   maxBodyStateTier,
   readBodyState,
   seedBodyStateFromCup,
+  soloBodyState,
   uniformBodyStateTier,
   writeBodyState,
 } from './metadata'

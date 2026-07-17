@@ -32,11 +32,20 @@ export const bodyStateSchema = z
     locked: z.boolean(),
     cooldown: z.number().int().nonnegative().default(0),
     baseline: z
-      .object({ heightCm: z.number().positive().optional(), build: z.string().optional() })
+      .object({
+        heightCm: z.number().positive().optional(),
+        build: z.string().optional(),
+        bandIn: z.number().positive().optional(),
+        waistIn: z.number().positive().optional(),
+        hipsIn: z.number().positive().optional(),
+        bodyWeightKg: z.number().positive().optional(),
+      })
       .passthrough()
       .optional(),
     pendingGrowth: z.object({ delta: z.number(), source: z.string() }).passthrough().optional(),
     lastGrowth: z.object({ delta: z.number(), tierBefore: z.number() }).passthrough().optional(),
+    attitude: z.enum(['craving', 'accepting', 'conflicted', 'fearful', 'resentful']).optional(),
+    arousal: z.number().min(0).max(100).optional(),
   })
   .passthrough()
 
@@ -103,6 +112,27 @@ export function maxBodyStateTier(
     if (state && (max === null || state.tier > max)) max = state.tier
   }
   return max
+}
+
+/**
+ * The single body state for an image prompt's cue channel: defined ONLY when
+ * exactly one named character carries bodyState (a shared prompt can't wear one
+ * character's engorgement/arousal cues).
+ */
+export function soloBodyState(
+  characters: ReadonlyArray<{ name: string; metadata: Record<string, unknown> | null }>,
+  names: ReadonlyArray<string>,
+): BodyState | null {
+  let found: BodyState | null = null
+  for (const name of names) {
+    const character = characters.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (!character) continue
+    const state = readBodyState(character.metadata)
+    if (!state) continue
+    if (found) return null
+    found = state
+  }
+  return found
 }
 
 /**

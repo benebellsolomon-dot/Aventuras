@@ -34,7 +34,21 @@ export interface PendingGrowth {
 export interface BodyBaseline {
   heightCm?: number
   build?: string
+  /** US bra band (28-44) — the sizing convention's stored half ("38" of "38X"). */
+  bandIn?: number
+  waistIn?: number
+  hipsIn?: number
+  /** Overrides the height/build estimate when set (proportion honesty anchor). */
+  bodyWeightKg?: number
 }
+
+/** How she feels about transforming (the genre's five, from the [BE] rules). */
+export type TransformationAttitude =
+  | 'craving'
+  | 'accepting'
+  | 'conflicted'
+  | 'fearful'
+  | 'resentful'
 
 export interface BodyState {
   /** THE canonical size scalar (unbounded above per D1; >= 0). */
@@ -55,6 +69,14 @@ export interface BodyState {
    * magnitude-scaled narration directive (31a §3.5) for exactly one narration.
    */
   lastGrowth?: { delta: number; tierBefore: number }
+  /**
+   * Soft emotional states — classifier-proposed and clamped (LLM-set tier of the
+   * single-writer spectrum; transformation attitude only, NOT the D2 relationship
+   * model, which stays deferred to Phase C).
+   */
+  attitude?: TransformationAttitude
+  /** Arousal 0-100 (soft state; feeds prose mood + image expression cues). */
+  arousal?: number
 }
 
 /** Classifier-extracted event kinds (research/31 §2.2). The LLM proposes EVENTS, not values. */
@@ -66,6 +88,18 @@ export interface BeEvent {
   kind: BeEventKind
   /** 1 (incidental) — 3 (scene-defining). Clamped by the reducer. */
   intensity: number
+}
+
+/**
+ * Classifier-proposed soft-state read for one character this turn. All fields
+ * optional — the model reports only what the scene evidenced. Applied by the
+ * reducer with clamps; fluidFill is set BEFORE drain events resolve.
+ */
+export interface BeSoftState {
+  character: string
+  attitude?: TransformationAttitude
+  arousal?: number
+  fluidFill?: number
 }
 
 export type GrowthOutcome =
@@ -83,7 +117,7 @@ export type GrowthOutcome =
  */
 export interface BeLogRecord {
   character: string
-  kind: BeEventKind | 'decay' | 'seed'
+  kind: BeEventKind | 'decay' | 'seed' | 'mood'
   outcome: GrowthOutcome
   delta: number
   tierAfter: number

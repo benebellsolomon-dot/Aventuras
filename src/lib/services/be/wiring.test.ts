@@ -12,6 +12,7 @@ import {
 import {
   MAX_BE_EVENTS_PER_TURN,
   beEventsFromResult,
+  beSoftStatesFromResult,
   extendClassificationSchemaWithBeEvents,
 } from './schema'
 import type { BodyState } from './types'
@@ -74,6 +75,33 @@ describe('beEventsFromResult', () => {
   })
 })
 
+describe('beSoftStatesFromResult', () => {
+  test('accepts partial reads, drops malformed ones, tolerates absence', () => {
+    expect(beSoftStatesFromResult({})).toEqual([])
+    const states = beSoftStatesFromResult({
+      beStates: [
+        { character: 'Lucy', attitude: 'craving', fluidFill: 62 },
+        { character: 'Zaria', arousal: 30 },
+        { character: 'Mira', attitude: 'euphoric' },
+      ],
+    })
+    expect(states).toEqual([
+      { character: 'Lucy', attitude: 'craving', fluidFill: 62 },
+      { character: 'Zaria', arousal: 30 },
+    ])
+  })
+
+  test('the extended schema validates beStates alongside beEvents', () => {
+    const schema = extendClassificationSchemaWithBeEvents(classificationResultSchema)
+    const parsed = schema.safeParse({
+      entryUpdates: {},
+      scene: {},
+      beStates: [{ character: 'Lucy', attitude: 'conflicted' }],
+    })
+    expect(parsed.success).toBe(true)
+  })
+})
+
 describe('buildBeStateBlock', () => {
   const at = (tier: number, extra: Partial<BodyState> = {}): BodyState => ({
     ...defaultBodyState(tier),
@@ -84,12 +112,32 @@ describe('buildBeStateBlock', () => {
     expect(buildBeStateBlock([])).toBe('')
   })
 
-  test('carries cup, band, and the authority preamble', () => {
+  test('carries sizing, band, mass, and the authority preamble', () => {
     const block = buildBeStateBlock([{ name: 'Lucy', state: at(39) }])
     expect(block).toContain('canonical and authoritative')
-    expect(block).toContain('Lucy:')
+    expect(block).toContain('Lucy —')
     expect(block).toContain('-cup')
+    expect(block).toContain('Carried mass:')
+    expect(block).toContain('kg of breast tissue')
     expect(block).toContain('never invent growth')
+  })
+
+  test('a stored band yields the US sizing string and BWH', () => {
+    const block = buildBeStateBlock([
+      {
+        name: 'Lucy',
+        state: at(47, { baseline: { bandIn: 38, waistIn: 32, hipsIn: 40 } }),
+      },
+    ])
+    expect(block).toContain('Lucy — 38X-32-40')
+  })
+
+  test('mood line renders attitude and arousal when present', () => {
+    const block = buildBeStateBlock([
+      { name: 'Lucy', state: at(21, { attitude: 'craving', arousal: 80 }) },
+    ])
+    expect(block).toContain('transformation attitude craving')
+    expect(block).toContain('arousal 80/100')
   })
 
   test('locked characters get the exact-size assertion', () => {
@@ -118,15 +166,16 @@ describe('buildBeStateBlock', () => {
     expect(high).toContain('Dramatic register is earned')
   })
 
-  test('fluid fullness appears only at 50%+', () => {
-    const low = buildBeStateBlock([
-      { name: 'Lucy', state: at(20, { fluids: { fillPercent: 30, fluidType: 'milk' } }) },
+  test('fluid fullness renders with a capacity anchor whenever fill > 0', () => {
+    const empty = buildBeStateBlock([
+      { name: 'Lucy', state: at(20, { fluids: { fillPercent: 0, fluidType: 'milk' } }) },
     ])
-    expect(low).not.toContain('fullness')
+    expect(empty).not.toContain('fullness')
     const high = buildBeStateBlock([
       { name: 'Lucy', state: at(20, { fluids: { fillPercent: 80, fluidType: 'milk' } }) },
     ])
-    expect(high).toContain('fullness: 80%')
+    expect(high).toContain('milk fullness: 80%')
+    expect(high).toContain('L capacity')
   })
 })
 

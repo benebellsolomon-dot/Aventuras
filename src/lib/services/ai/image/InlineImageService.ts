@@ -22,7 +22,12 @@ import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/s
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { sizeBandMarker } from './sizeBandMarker'
-import { groundImagePromptSize, uniformBodyStateTier } from '$lib/services/be'
+import {
+  groundImagePromptSize,
+  imageStateCues,
+  soloBodyState,
+  uniformBodyStateTier,
+} from '$lib/services/be'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { createLogger } from '$lib/log'
 
@@ -174,7 +179,13 @@ export class InlineImageGenerationService {
     const beTier = context.beMode
       ? uniformBodyStateTier(context.presentCharacters, tag.characters)
       : null
-    const groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    let groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    // State cues (engorgement/arousal) apply only for a single unambiguous subject.
+    if (context.beMode) {
+      const solo = soloBodyState(context.presentCharacters, tag.characters)
+      const cues = solo ? imageStateCues(solo) : []
+      if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
+    }
     const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
 
     const { width, height } = parseImageSize(sizeToUse)

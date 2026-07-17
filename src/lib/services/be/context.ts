@@ -1,15 +1,19 @@
 /**
- * BE engine — the narrative context block (research/31 §2.3).
+ * BE engine — the narrative context block (research/31 §2.3, assembled per
+ * research/35 §3.3).
  *
- * One pure function builds the whole `beStateBlock` string the narrative templates
- * render; the ContextBuilder only gathers inputs. Carries per-character: canonical
- * size (letter + band + comparative), grounding facts, the size-lock assertion, and
- * the magnitude-scaled narration directive when growth just landed (31a §3.5 —
- * overshoot is a distinct failure from drift; register is tier-gated).
+ * One pure function builds the whole `beStateBlock` string the narrative
+ * templates render. Per character: US sizing/BWH + band, the validated size
+ * comparative, carried-mass honesty (weight feel + proportion), the baked
+ * shape/hang channel, posture/mobility/clothing (verbatim NAI rungs), fluid
+ * state anchored to capacity, transformation mood, the size-lock assertion,
+ * and the magnitude-scaled growth directive (31a §3.5, register tier-gated).
+ * Numbers stay banded per the corpus's own register rule — bust circumference
+ * in cm never appears (the sizing convention bans it).
  */
 
-import { groundingFacts } from './derive'
 import { bandWord, comparative, cupLetter } from './ladder'
+import { bodyRow, bwhString, fluidPressureLabel, measurements, sizingString } from './measurements'
 import type { BodyState } from './types'
 
 export interface BeStateEntry {
@@ -17,7 +21,10 @@ export interface BeStateEntry {
   state: BodyState
 }
 
-const HIGH_REGISTER_MIN_BAND = 'gigantic breasts'
+const HIGH_REGISTER_BANDS = new Set(['gigantic breasts', 'hyper breasts'])
+
+const kg = (value: number): string => (value < 10 ? value.toFixed(1) : String(Math.round(value)))
+const liters = (ml: number): string => (ml / 1000).toFixed(1)
 
 // Timing note (by design, not a lag bug): events are extracted from turn N's
 // prose, so the reducer resolves AFTER narration and lastGrowth surfaces this
@@ -27,41 +34,62 @@ const HIGH_REGISTER_MIN_BAND = 'gigantic breasts'
 function growthDirective(name: string, state: BodyState): string {
   const growth = state.lastGrowth
   if (!growth) return ''
-  const band = bandWord(state.tier)
-  const highRegister = band === HIGH_REGISTER_MIN_BAND || band === 'hyper breasts'
+  const highRegister = HIGH_REGISTER_BANDS.has(bandWord(state.tier))
   if (growth.delta >= 2) {
     const register = highRegister
       ? 'Dramatic register is earned: render the surge with full weight and spatial consequence.'
       : 'Render it as a clear, startling change — but keep comparisons within one band of her actual new size; no room-scale imagery.'
-    return `\n  GROWTH JUST LANDED: ${name} grew significantly this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). ${register}`
+    return `GROWTH JUST LANDED: ${name} grew significantly this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). ${register}`
   }
-  return `\n  GROWTH JUST LANDED: ${name} grew one increment this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). Narrate it as subtle and incremental — noticeable strain and warmth, NOT a dramatic transformation. Exactly this much and no further.`
+  return `GROWTH JUST LANDED: ${name} grew one increment this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). Narrate it as subtle and incremental — noticeable strain and warmth, NOT a dramatic transformation. Exactly this much and no further.`
 }
 
 function characterLines(entry: BeStateEntry): string {
   const { name, state } = entry
-  const facts = groundingFacts(state.tier, state.shape)
-  const lines = [
-    `${name}: ${cupLetter(state.tier)}-cup (${bandWord(state.tier)}). ${comparative(state.tier)}`,
-    `  Posture: ${facts.posture}. Mobility: ${facts.mobility}. Clothing: ${facts.clothing}.`,
-  ]
-  if (state.fluids.fillPercent >= 50) {
-    lines.push(
-      `  ${state.fluids.fluidType} fullness: ${Math.round(state.fluids.fillPercent)}% — visibly full, sensitive, heavy with it.`,
+  const row = bodyRow(state.tier, state.shape)
+  const m = measurements(state)
+  const sizing = bwhString(state.tier, state.baseline) ?? sizingString(state.tier, state.baseline)
+
+  const lines: string[] = []
+  lines.push(`${name} — ${sizing} (tier ${state.tier}), ${bandWord(state.tier)}.`)
+  lines.push(`Size: ${comparative(state.tier)}`)
+
+  const massBits = [`~${kg(m.dryTotalKg)} kg of breast tissue`]
+  if (m.weightFeel) massBits.push(m.weightFeel)
+  if (m.proportionNote) massBits.push(m.proportionNote)
+  lines.push(`Carried mass: ${massBits.join(' — ')}.`)
+
+  lines.push(`Shape: ${state.shape} — ${row.shape}${row.hang ? ` — ${row.hang}` : ''}.`)
+  lines.push(`Posture: ${row.posture}; mobility: ${row.mobility}; clothing: ${row.clothing}.`)
+
+  if (state.fluids.fillPercent > 0) {
+    const fill = Math.round(state.fluids.fillPercent)
+    const pressure = fluidPressureLabel(fill)
+    let line = `${state.fluids.fluidType} fullness: ${fill}% (~${liters(m.fillMlTotal)} L of ~${liters(m.capacityTotalMl)} L capacity)`
+    if (pressure) line += ` — ${pressure}`
+    if (m.nowTotalKg - m.dryTotalKg >= 0.5)
+      line += `, swollen to ~${kg(m.nowTotalKg)} kg with ${state.fluids.fluidType}`
+    lines.push(`${line}.`)
+  }
+
+  const moodBits: string[] = []
+  if (state.attitude) {
+    moodBits.push(
+      `transformation attitude ${state.attitude} — render her emotional response to her changing body accordingly`,
     )
   }
-  if (state.conditions.length > 0) {
-    const labels = state.conditions.map((c) => (c.note ? `${c.label} (${c.note})` : c.label))
-    lines.push(`  Current conditions: ${labels.join('; ')}.`)
-  }
+  if (state.arousal !== undefined) moodBits.push(`arousal ${Math.round(state.arousal)}/100`)
+  if (moodBits.length > 0) lines.push(`Mood: ${moodBits.join('; ')}.`)
+
   if (state.locked) {
     lines.push(
-      `  SIZE LOCKED: ${name} is exactly ${cupLetter(state.tier)}-cup and stays that way. Assert her exact current size; never round up, never grow her in prose.`,
+      `SIZE LOCKED: ${name} is exactly ${cupLetter(state.tier)}-cup and stays that way. Assert her exact current size; never round up, never grow her in prose.`,
     )
   }
   const directive = growthDirective(name, state)
-  if (directive) lines.push(directive.trimStart())
-  return lines.map((line) => (line.startsWith(name) ? line : `  ${line.trim()}`)).join('\n')
+  if (directive) lines.push(directive)
+
+  return lines.map((line, index) => (index === 0 ? line : `  ${line}`)).join('\n')
 }
 
 /**
@@ -72,6 +100,6 @@ export function buildBeStateBlock(entries: BeStateEntry[]): string {
   if (entries.length === 0) return ''
   const body = entries.map(characterLines).join('\n')
   return `[BODY STATE — canonical and authoritative]
-The following body states are engine-tracked ground truth. Prose must respect them exactly: sizes, posture, mobility and clothing reality. Bust size changes ONLY when a growth directive in this block says it changed — never invent growth, shrinkage, or ambient size drift.
+The following body states are engine-tracked ground truth. Prose must respect them exactly: sizes, mass, posture, mobility and clothing reality. Bust size changes ONLY when a growth directive in this block says it changed — never invent growth, shrinkage, or ambient size drift. Use US bra sizing only; never metric bust measurements.
 ${body}`
 }

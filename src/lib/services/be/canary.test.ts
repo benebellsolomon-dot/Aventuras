@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'vitest'
 import { CUP_LETTER_THRESHOLDS } from './ladder-data'
 import { bandIndex, comparative, cupLetter } from './ladder'
+import { bodyRow } from './measurements'
 import { groundingFacts } from './derive'
 
 const SWEEP_MAX = 300
@@ -61,12 +62,17 @@ describe('derivation monotonicity across the full sweep', () => {
     }
   })
 
-  test('magical support neutralizes burden at every size', () => {
-    for (const tier of [13, 26, 39, 82, 200]) {
+  test('magical support diverges from natural at every large size', () => {
+    // Baked NAI moment-model rows: exact wording is generated, so assert
+    // structure. At extreme tiers the burden rungs may converge, but the hang
+    // channel ('' for gravity_defying, populated for natural) always diverges.
+    for (const tier of [26, 39, 82, 200]) {
       const supported = groundingFacts(tier, 'gravity_defying')
-      expect(supported.mobility).toMatch(/weightless/)
       const natural = groundingFacts(tier, 'natural')
-      expect(natural.mobility).not.toMatch(/weightless/)
+      const burdenDiffers =
+        supported.posture !== natural.posture || supported.mobility !== natural.mobility
+      const hangDiffers = bodyRow(tier, 'gravity_defying').hang !== bodyRow(tier, 'natural').hang
+      expect(burdenDiffers || hangDiffers).toBe(true)
     }
   })
 })

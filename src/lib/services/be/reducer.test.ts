@@ -158,6 +158,35 @@ describe('reduceCharacterBody', () => {
     expect(decay?.character).toBe('Lucy')
   })
 
+  test('soft states apply clamped, before drain events resolve', () => {
+    const state = defaultBodyState(20)
+    const result = reduceCharacterBody(
+      state,
+      [growthEvent({ kind: 'milking', intensity: 1 })],
+      CONFIG,
+      's',
+      'Lucy',
+      { character: 'Lucy', attitude: 'craving', arousal: 450, fluidFill: 90 },
+    )
+
+    expect(result.state.attitude).toBe('craving')
+    expect(result.state.arousal).toBe(100) // clamped
+    // fill set to 90 first, then the milking event drains 40 → 50
+    expect(result.state.fluids.fillPercent).toBe(50)
+    expect(result.log.some((entry) => entry.kind === 'mood')).toBe(true)
+  })
+
+  test('soft states persist across turns without re-proposal', () => {
+    const first = reduceCharacterBody(defaultBodyState(20), [], CONFIG, 's', 'Lucy', {
+      character: 'Lucy',
+      attitude: 'fearful',
+      arousal: 40,
+    })
+    const second = reduceCharacterBody(first.state, [], CONFIG, 's2', 'Lucy')
+    expect(second.state.attitude).toBe('fearful')
+    expect(second.state.arousal).toBe(40)
+  })
+
   test('junk intensity is clamped instead of trusted', () => {
     const result = reduceCharacterBody(
       defaultBodyState(10),
