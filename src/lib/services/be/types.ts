@@ -108,6 +108,7 @@ export type GrowthOutcome =
   | 'fail'
   | 'muzzled'
   | 'cooldown'
+  | 'ineligible'
   | 'none'
 
 /**
@@ -130,6 +131,11 @@ export interface BeStoryConfig {
   sizeCapTier: number | null
   /** Beats between growth-eligible beats. Reference default in constants.ts (D5: re-derive). */
   growthCooldownBeats: number
+  /**
+   * Which growth kinds may land growth in this story (cosmology alignment,
+   * research/41: canon-illegal growth must never roll). Undefined = all.
+   */
+  growthEligibleKinds?: ReadonlyArray<BeEventKind>
 }
 
 export interface ReducerResult {

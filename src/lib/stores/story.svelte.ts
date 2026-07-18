@@ -31,6 +31,7 @@ import {
   beEventsFromResult,
   beSoftStatesFromResult,
   defaultBodyState,
+  parseGrowthEligibleKinds,
   readBodyState,
   reduceCharacterBody,
   sniffTierFromText,
@@ -2842,7 +2843,16 @@ class StoryStore {
       softStateByCharacterId.set(target.id, soft)
     }
 
-    const config = { ...DEFAULT_BE_STORY_CONFIG, enabled: true }
+    // Config from story settings (research/41): the eligible-kinds gate keeps
+    // canon-illegal growth from ever rolling; unset settings keep the defaults.
+    const eligibleKinds = parseGrowthEligibleKinds(
+      this.currentStory?.settings?.beGrowthEligibleKinds,
+    )
+    const config = {
+      ...DEFAULT_BE_STORY_CONFIG,
+      enabled: true,
+      ...(eligibleKinds ? { growthEligibleKinds: eligibleKinds } : {}),
+    }
 
     for (const character of this.characters) {
       if (character.relationship === 'self') continue

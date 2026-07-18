@@ -186,6 +186,15 @@
     onReferenceModeChange={(v) => story.updateStorySettings({ referenceMode: v })}
     onBeModeChange={(v) => story.updateStorySettings({ beMode: v })}
     onBeFluidTypeChange={(v) => story.updateStorySettings({ beFluidType: v })}
+    beGrowthCosmology={storySettings.beGrowthCosmology ?? ''}
+    bePacingFlavor={storySettings.bePacingFlavor ?? ''}
+    beGrowthEligibleKinds={storySettings.beGrowthEligibleKinds ?? []}
+    onBeGrowthCosmologyChange={(v) =>
+      story.updateStorySettings({ beGrowthCosmology: v.trim() ? v : undefined })}
+    onBePacingFlavorChange={(v) =>
+      story.updateStorySettings({ bePacingFlavor: v.trim() ? v : undefined })}
+    onBeGrowthEligibleKindsChange={(v) =>
+      story.updateStorySettings({ beGrowthEligibleKinds: v.length > 0 ? v : undefined })}
     disabledFields={{ pov: true, tense: true, visualProseMode: true }}
     disabledReason="Cannot be changed mid-story. Set during story creation."
   />

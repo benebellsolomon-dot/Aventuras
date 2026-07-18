@@ -181,6 +181,22 @@ export function reduceCharacterBody(
       return
     }
 
+    // Story-cosmology gate (research/41): kinds outside the per-story eligible
+    // set never roll — the story's canon, not the dice, says what drives growth.
+    // Deliberately precedes the lock/cooldown gates: "ineligible" is the more
+    // precise label when both apply (all three return without touching state).
+    if (config.growthEligibleKinds && !config.growthEligibleKinds.includes(event.kind)) {
+      log.push({
+        character: event.character,
+        kind: event.kind,
+        outcome: 'ineligible',
+        delta: 0,
+        tierAfter: tier,
+        note: 'kind not growth-eligible in this story',
+      })
+      return
+    }
+
     // The lock wins over everything, including otherwise-guaranteed triggers (31a §3.6).
     if (state.locked) {
       log.push({

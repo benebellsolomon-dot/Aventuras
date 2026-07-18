@@ -12,7 +12,12 @@
 import { database } from '$lib/services/database'
 import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
-import { buildBeStateBlock, readBodyState, type BeStateEntry } from '$lib/services/be'
+import {
+  buildBeGenreRules,
+  buildBeStateBlock,
+  readBodyState,
+  type BeStateEntry,
+} from '$lib/services/be'
 import type { RenderResult } from './types'
 import type { Character, Location, Item, StoryBeat, Story } from '$lib/types'
 import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
@@ -91,6 +96,8 @@ export class ContextBuilder {
 
     // BE engine: the body-state narrative block (empty string for non-BE stories)
     builder.loadBeStateContext(story, characters)
+    // BE engine: the static genre-rules pack (research/41 precedence contract)
+    builder.loadBeGenreRules(story)
 
     log('forStory complete', {
       storyId,
@@ -197,6 +204,28 @@ export class ContextBuilder {
     } catch (error) {
       log('loadBeStateContext failed', { error })
       this.add({ beStateBlock: '' })
+    }
+  }
+
+  /**
+   * Build the `beGenreRules` context variable: the static BE narration contract
+   * (growth-authorization precedence, render scaffold), with per-story cosmology
+   * and pacing interpolated. Empty string when beMode is off.
+   */
+  private loadBeGenreRules(story: Story): void {
+    try {
+      const settings = story.settings
+      const beGenreRules =
+        settings?.beMode === true
+          ? buildBeGenreRules({
+              growthCosmology: settings.beGrowthCosmology,
+              pacingFlavor: settings.bePacingFlavor,
+            })
+          : ''
+      this.add({ beGenreRules })
+    } catch (error) {
+      log('loadBeGenreRules failed', { error })
+      this.add({ beGenreRules: '' })
     }
   }
 

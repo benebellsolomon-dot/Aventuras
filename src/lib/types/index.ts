@@ -122,6 +122,9 @@ export interface StorySettings {
   customSystemPrompt?: string // Per-story Liquid template override; bypasses pack template when set
   beMode?: boolean // BE engine: classifier event extraction + deterministic body-state reducer + narrative grounding
   beFluidType?: string // BE engine: this story's transformation fluid, used when seeding new body states (default 'milk')
+  beGrowthCosmology?: string // BE engine: what drives growth in this world — threaded into classifier + narrator instructions (research/41)
+  bePacingFlavor?: string // BE engine: free-text pacing note interpolated into the genre rules
+  beGrowthEligibleKinds?: string[] // BE engine: which event kinds may land growth (subset of catalyst/contact/attempt); empty/unset = all
 }
 
 export interface StoryEntry {

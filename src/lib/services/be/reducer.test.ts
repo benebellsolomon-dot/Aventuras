@@ -201,3 +201,68 @@ describe('reduceCharacterBody', () => {
     }
   })
 })
+
+describe('growth-eligible kinds (per-story cosmology)', () => {
+  // Playtest finding (research/41): a story whose canon says "only the catalyst
+  // drives growth" must never land canon-illegal growth from contact rolls.
+  const CATALYST_ONLY: BeStoryConfig = { ...CONFIG, growthEligibleKinds: ['catalyst'] }
+
+  test('ineligible growth kind never rolls: no tier change, no cooldown, outcome ineligible', () => {
+    // Arrange: a seed that WOULD crit at intensity 2 if the roll happened
+    const seed = seedFor((roll) => roll + 2 >= 18)
+    const state = defaultBodyState(10)
+
+    // Act
+    const { state: next, log } = reduceCharacterBody(
+      state,
+      [growthEvent({ kind: 'contact' })],
+      CATALYST_ONLY,
+      seed,
+    )
+
+    // Assert
+    expect(next.tier).toBe(10)
+    expect(next.lastGrowth).toBeUndefined()
+    expect(next.cooldown).toBe(0)
+    expect(log.at(-1)).toMatchObject({ kind: 'contact', outcome: 'ineligible', delta: 0 })
+  })
+
+  test('eligible kind still rolls under a restricted config', () => {
+    const seed = seedFor((roll) => roll + 2 >= 18)
+    const { state: next, log } = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent({ kind: 'catalyst' })],
+      CATALYST_ONLY,
+      seed,
+    )
+    expect(next.tier).toBeGreaterThan(10)
+    expect(log.at(-1)?.outcome).toBe('critical')
+  })
+
+  test('undefined growthEligibleKinds keeps every growth kind eligible (backward compat)', () => {
+    const seed = seedFor((roll) => roll + 2 >= 11 && roll + 2 < 18)
+    const { state: next } = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent({ kind: 'contact' })],
+      CONFIG,
+      seed,
+    )
+    expect(next.tier).toBe(11)
+  })
+
+  test('milking and stabilize are unaffected by the eligibility filter', () => {
+    const state: BodyState = {
+      ...defaultBodyState(10),
+      fluids: { fillPercent: 80, fluidType: 'milk' },
+      pendingGrowth: { delta: 1, source: 'contact' },
+    }
+    const { state: next } = reduceCharacterBody(
+      state,
+      [growthEvent({ kind: 'milking', intensity: 1 }), growthEvent({ kind: 'stabilize' })],
+      CATALYST_ONLY,
+      'any-seed',
+    )
+    expect(next.fluids.fillPercent).toBe(40)
+    expect(next.pendingGrowth).toBeUndefined()
+  })
+})

@@ -13,8 +13,10 @@ import {
   MAX_BE_EVENTS_PER_TURN,
   beEventsFromResult,
   beSoftStatesFromResult,
+  buildBeEventInstructions,
   extendClassificationSchemaWithBeEvents,
 } from './schema'
+import { parseGrowthEligibleKinds } from './constants'
 import type { BodyState } from './types'
 
 describe('classifier schema extension', () => {
@@ -263,5 +265,54 @@ describe('uniformBodyStateTier (the grounding gate)', () => {
   test('unseeded companions do not block grounding of the seeded one', () => {
     expect(uniformBodyStateTier(characters, ['Lucy', 'Mira'])).toBe(45)
     expect(uniformBodyStateTier(characters, ['Mira'])).toBeNull()
+  })
+})
+
+describe('cosmology threading (classifier instructions)', () => {
+  test('without a cosmology the instructions carry no story-cosmology section', () => {
+    expect(buildBeEventInstructions()).not.toContain('Growth Cosmology')
+  })
+
+  test('with a cosmology: includes the text and maps the driving act to catalyst', () => {
+    const text = buildBeEventInstructions('Only internal climax drives growth in this world')
+    expect(text).toContain('Growth Cosmology')
+    expect(text).toContain('Only internal climax drives growth in this world')
+    expect(text).toContain("classify it as kind 'catalyst'")
+  })
+})
+
+describe('[BODY STATE] precedence over lore', () => {
+  test('preamble declares the block outranks world lore on growth', () => {
+    const block = buildBeStateBlock([{ name: 'Lucy', state: defaultBodyState(20) }])
+    expect(block).toContain('THIS BLOCK WINS')
+  })
+})
+
+describe('parseGrowthEligibleKinds', () => {
+  test('filters unknown kinds and keeps valid growth kinds', () => {
+    expect(parseGrowthEligibleKinds(['catalyst', 'wishes', 'contact'])).toEqual([
+      'catalyst',
+      'contact',
+    ])
+  })
+
+  test('empty or missing input means no restriction (undefined)', () => {
+    expect(parseGrowthEligibleKinds([])).toBeUndefined()
+    expect(parseGrowthEligibleKinds(undefined)).toBeUndefined()
+    expect(parseGrowthEligibleKinds(['wishes'])).toBeUndefined()
+  })
+
+  test('tolerates non-array settings garbage without throwing (unvalidated JSON)', () => {
+    for (const garbage of [42, 'catalyst', { length: 2 }, null, true]) {
+      expect(parseGrowthEligibleKinds(garbage as never)).toBeUndefined()
+    }
+  })
+})
+
+describe('buildBeEventInstructions type hardening', () => {
+  test('non-string cosmology falls back to the base instructions without throwing', () => {
+    for (const garbage of [42, {}, [], true]) {
+      expect(buildBeEventInstructions(garbage as never)).not.toContain('Growth Cosmology')
+    }
   })
 })

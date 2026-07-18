@@ -126,6 +126,9 @@ End with a natural opening for action, not a direct question.{% endif %}
 {% if beStateBlock != '' %}
 {{ beStateBlock }}
 {% endif %}
+{% if beGenreRules != '' %}
+{{ beGenreRules }}
+{% endif %}
 
 {% if storyTime != '' %}
 [CURRENT STORY TIME]
@@ -296,6 +299,9 @@ End at a natural narrative beat.{% endif %}
 {% if inlineImageMode %}{{ inlineImageInstructions }}{% endif %}
 {% if beStateBlock != '' %}
 {{ beStateBlock }}
+{% endif %}
+{% if beGenreRules != '' %}
+{{ beGenreRules }}
 {% endif %}
 
 {% if storyTime != '' %}

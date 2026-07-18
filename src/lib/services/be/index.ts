@@ -11,7 +11,10 @@ export {
   DEFAULT_BE_STORY_CONFIG,
   DEFAULT_GROWTH_COOLDOWN_BEATS,
   GROWTH_DELTA_BY_OUTCOME,
+  GROWTH_EVENT_KINDS,
+  parseGrowthEligibleKinds,
 } from './constants'
+export { buildBeGenreRules, type BeGenreRuleOptions } from './genre-rules'
 export {
   bandIndex,
   bandWord,

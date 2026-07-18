@@ -75,10 +75,16 @@ export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.Zod
 
 /**
  * Prompt instruction block for BE event extraction. Appended to the classifier's
- * customVariableInstructions slot (rendered unconditionally by the shipped template).
+ * customVariableInstructions slot (rendered by the shipped template whenever
+ * non-empty — and it is always non-empty in beMode).
+ *
+ * `growthCosmology` (per-story, research/41): teaches the classifier what this
+ * world's growth driver IS, so the driving act maps to kind `catalyst` instead
+ * of being filed as generic `contact` (the Lucy playtest filed the story-canon
+ * catalyst as contact @i3).
  */
-export function buildBeEventInstructions(): string {
-  return `## Body Transformation Events to Extract
+export function buildBeEventInstructions(growthCosmology?: string): string {
+  const base = `## Body Transformation Events to Extract
 This story tracks breast-expansion events mechanically. Additionally fill the top-level \`beEvents\` array:
 - Report each transformation-relevant act in this response: catalyst (magical/alchemical/supernatural growth influence), contact (intimate escalation), attempt (explicit growth attempt), milking (draining), stabilize (settling).
 - \`character\` = the affected female character's exact name. \`intensity\` = 1 (incidental) to 3 (scene-defining).
@@ -89,6 +95,16 @@ Also fill the top-level \`beStates\` array with per-character soft-state reads t
 - \`arousal\`: 0-100 — only when the scene evidences a level.
 - \`fluidFill\`: 0-100 percent of breast capacity — only when the scene establishes fullness (engorgement, expressing, time passing).
 Omit fields without evidence; empty array when nothing changed.`
+
+  // Settings JSON is unvalidated at load — a non-string here must not throw
+  // (this runs in the classification hot path, outside its try/catch).
+  const cosmology = typeof growthCosmology === 'string' ? growthCosmology.trim() : ''
+  if (!cosmology) return base
+  return `${base}
+
+## This Story's Growth Cosmology
+${cosmology}
+When this response contains the driving act described above, classify it as kind 'catalyst' — reserve 'contact' for intimate escalation that is not the driver.`
 }
 
 /**

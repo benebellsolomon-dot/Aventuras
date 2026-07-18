@@ -127,7 +127,7 @@ export class ClassifierService extends BaseAIService {
     // piggyback on the same template slot, so no classifier-template edit is needed.
     const customVariableInstructions = [
       runtimeVars.length > 0 ? this.buildCustomVarInstructions(runtimeVarsByType) : '',
-      beMode ? buildBeEventInstructions() : '',
+      beMode ? buildBeEventInstructions(context.story.settings?.beGrowthCosmology) : '',
     ]
       .filter(Boolean)
       .join('\n\n')

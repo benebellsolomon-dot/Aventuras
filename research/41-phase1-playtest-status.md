@@ -120,6 +120,36 @@ register, not the delta-2 directive's "dramatic surge" — lore wins on register
    the narrator-challenger case (Sonnet 5 / Fable 5) is WEAKENED — GLM adhered once the
    contradiction resolved. Fix the instruction contract before judging the model.
 
+## Shipped in response: the cosmology + precedence package (0.7.6-be.7)
+
+Ben's ruling ("follow your recommendation then implement") → built the same session,
+TDD'd (115 tests green) and adversarially reviewed (3 lenses; all actionable findings
+fixed — toggle race, settings-garbage hardening ×2 — the rest dispositioned below):
+
+1. **[BODY STATE] precedence sentence** in the block preamble ("THIS BLOCK WINS" over
+   lore on growth timing/cause/speed) — reaches every prompt path, including
+   custom-pack and customSystemPrompt stories.
+2. **Genre-rules block** (`be/genre-rules.ts` → `beGenreRules` template var → both
+   narrative templates): growth-authorization precedence, four-phase render scaffold,
+   commit discipline, sensory rotation, metric rule; interpolates the two new
+   per-story fields. Default-pack templates auto-reseed on next launch. *Known
+   limit:* custom packs and customSystemPrompt stories don't render this block (the
+   precedence sentence in #1 still reaches them).
+3. **Classifier cosmology threading**: `buildBeEventInstructions(beGrowthCosmology)` —
+   the story's driving act now maps to kind `catalyst` instead of generic `contact`.
+4. **`growthEligibleKinds` config**: reducer gains the `ineligible` outcome — kinds
+   outside the story's eligible set never roll, so canon-illegal growth can't land.
+   Gate deliberately precedes lock/cooldown. *D5 note:* exclude `ineligible` records
+   from cadence statistics.
+5. **Settings-tab UI** (shown when beMode): Growth Cosmology, Pacing Flavor, and
+   Growth-Eligible Events toggles. Wizard-side fields deferred to full Spec 3.
+
+**To activate for the Lucy story** (Settings → Story, after installing be.7): set
+Growth Cosmology ≈ "Only Ben's climax inside Lucy drives her growth — a little fuller
+each time"; optionally toggle Growth-Eligible Events to Catalyst-only for strict
+canon. With the precedence contract in place, the Growth Catalyst lore entry can stay
+as-is.
+
 ## Early pacing observations (D5 feed)
 
 At tier 47 with intensity-2/3 contact events, it took SEVEN attempts to land one growth
