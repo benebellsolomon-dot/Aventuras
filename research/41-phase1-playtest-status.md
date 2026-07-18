@@ -35,22 +35,23 @@ beEvents/beStates items · dry-turn rate · beLog cadence trajectory for D5.
 Known limit: zod `.default([])` masks whole-field drops as empty arrays — catching those
 needs raw-response logging, out of scope for a read-only phase.
 
-## Live probe status (mid-play snapshot, 01:56 local)
+## Probe verdict — GATE PASS (02:00 local, 10 turns)
 
-- **9/10 turns · 100% parseable · 0 refusals · 0 malformed · 0 dry.** Current
-  `x-ai/grok-4.3` is passing cleanly — no reason yet to swap to GLM-5.2.
-- beEvent kinds so far: milking ×6, contact ×5; classifier grounds attitude/arousal/
-  fluidFill nearly every turn.
+- **10/10 turns · 100% parseable · 0 refusals · 0 malformed · 0 dry. GATE: PASS.**
+- **Classifier ruling per the probe: keep `x-ai/grok-4.3`.** No swap to GLM-5.2 —
+  the C8 concern was Grok-*fast*, and 4.3 held the extended schema perfectly.
+- beEvent kinds: milking ×7, contact ×6; the classifier grounded attitude/arousal/
+  fluidFill on every eventful turn.
 
 ## E14 checklist scoreboard
 
 | Check | Status |
 |---|---|
 | Seed Lucy at ruled tier + waist/hips | ✅ tier 47, 65/80 |
-| Classifier schema probe (≥10 turns, 100%/0/0) | 🟡 9/10, clean so far |
+| Classifier schema probe (≥10 turns, 100%/0/0) | ✅ PASS at 10/10 — grok-4.3 confirmed |
 | `__betier_N__` reaches bridge on inline image | ✅ `__betier_45__` on krea2 prompts (tier 47 → hyper anchor 45, correct per the sizeBandMarker table) |
 | [BODY STATE] metric block honored in prose | 🟡 Ben eyeballs during play (prompt not persisted) |
-| Growth beat end-to-end (event → roll → GROWTH directive) | 🟡 pending a landed roll — 5 attempts so far all partial/fail, tier still 47 |
+| Growth beat end-to-end (event → roll → GROWTH directive) | 🟡 pending a landed roll — 6 attempts all partial/fail, tier still 47 |
 | C7 agentic-path markerless probe | 🟡 only inline-path images so far (all markered); needs one agentic image to confirm the gap |
 | Peak-scene truncation at narrator maxTokens | 🟡 Ben eyeballs (see config notes) |
 
@@ -68,7 +69,7 @@ needs raw-response logging, out of scope for a read-only phase.
 
 ## Early pacing observations (D5 feed)
 
-At tier 47 with intensity-2/3 contact events, five growth attempts produced 3 partial +
+At tier 47 with intensity-2/3 contact events, six growth attempts produced 4 partial +
 2 fail and zero landed tiers; meanwhile the milking loop cycles fill 60→90→0 repeatedly.
 Reads as: cadence is starved at high tier exactly where Phase 2's growth-pressure
 escalator (Spec 1 Task 5) and passive fill (Task 2) intervene — playtest evidence
