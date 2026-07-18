@@ -37,12 +37,15 @@ needs raw-response logging, out of scope for a read-only phase.
 
 ## Probe verdict — GATE PASS (final: 11 turns)
 
-- **11/11 turns · 100% parseable · 0 refusals · 0 malformed · 0 dry. GATE: PASS**
-  (crossed the ≥10 threshold at 02:00 local and stayed clean).
+- **14/14 turns · 100% parseable · 0 refusals · 0 malformed · 0 dry. GATE: PASS**
+  (crossed the ≥10 threshold at 02:00 local and stayed clean through the session).
 - **Classifier ruling per the probe: keep `x-ai/grok-4.3`.** No swap to GLM-5.2 —
   the C8 concern was Grok-*fast*, and 4.3 held the extended schema perfectly.
-- beEvent kinds: milking ×8, contact ×7; outcomes 19 none / 4 partial / 2 fail /
-  1 success; the classifier grounded attitude/arousal/fluidFill on every eventful turn.
+- beEvent kinds: milking ×11, contact ×10; the classifier grounded attitude/arousal/
+  fluidFill on every eventful turn.
+- **Reducer outcome taxonomy nearly fully exercised live**: 25 none / 4 partial /
+  2 fail / 1 success / 2 cooldown / 1 critical — only `muzzled` (lock) unseen, the
+  lock never engaged. Cooldown verified muzzling correctly both times it was armed.
 
 ## E14 checklist scoreboard
 
@@ -52,7 +55,7 @@ needs raw-response logging, out of scope for a read-only phase.
 | Classifier schema probe (≥10 turns, 100%/0/0) | ✅ PASS at 10/10 — grok-4.3 confirmed |
 | `__betier_N__` reaches bridge on inline image | ✅ `__betier_45__` on krea2 prompts (tier 47 → hyper anchor 45, correct per the sizeBandMarker table) |
 | [BODY STATE] metric block honored in prose | 🟡 Ben eyeballs during play (prompt not persisted) |
-| Growth beat end-to-end (event → roll → GROWTH directive) | ✅ engine side: 05:55Z contact → roll 12 @i2 → success → tier 47→48, `lastGrowth {delta 1, tierBefore 47}` staged, cooldown armed at 2. 🟡 prose render of the directive: eyeball the next turn |
+| Growth beat end-to-end (event → roll → GROWTH directive) | ✅ engine side, TWICE: 05:55Z success (roll 12 @i2, 47→48) and 05:58Z **critical** (roll 16 @i3, 48→50); lastGrowth staged/cleared and cooldowns armed/muzzled exactly per pipeline design. ⚠ prose side: see the adherence finding below |
 | C7 agentic-path markerless probe | 🟡 only inline-path images so far (all markered); needs one agentic image to confirm the gap |
 | Peak-scene truncation at narrator maxTokens | 🟡 Ben eyeballs (see config notes) |
 
@@ -67,6 +70,31 @@ needs raw-response logging, out of scope for a read-only phase.
   (structured output on a banned-for-structured model).
 - Narrator 16384 is above the old 8192 but below the ST-era ≥24k recommendation — watch
   long Peak scenes for truncation before raising further.
+
+## ⚠ Finding: narrator growth-directive adherence is weak (the GLM tiebreaker check)
+
+The roadmap's play-time check "narrator honors the [BODY STATE] block" now has data,
+and it points at a miss:
+
+- **Delta-1 directive (05:57Z turn):** prompt carried "grew one increment… narrate as
+  subtle strain and warmth." Prose rendered tissue-tremor/tension language — *arguably*
+  compliant at the demanded subtle register. Verdict: ambiguous.
+- **Delta-2 directive (06:01Z turn): MISS.** Prompt carried the critical's "grew
+  significantly… Dramatic register is earned: render the surge with full weight and
+  spatial consequence." The 2.3k-char response rendered NO surge — only ambient
+  "swollen, milk-slick flesh" state description. DB-verified provenance: `lastGrowth
+  {delta 2, tierBefore 48}` was live at prompt time and cleared by that turn's reduce.
+- Caveat: block-in-prompt isn't persisted, so "directive reached the prompt" is inferred
+  from the state machine, not observed. No reason to doubt it (the block is injected
+  unconditionally in beMode), but noted.
+
+Implications: (1) narrator-challenger evaluation (Sonnet 5 / Fable 5, permissiveness
+unverified) moves from "if drift appears" to "warranted on current evidence" — one miss
+in one dramatic opportunity, so collect 2–3 more landed growths before switching.
+(2) **Phase 2 Task 6 scope amendment candidate:** the drift detectors catch
+*contradictions* but nothing catches *omissions* — consider a growth-render check
+(lastGrowth staged but next prose contains zero growth language → CONTINUITY reminder
+the following turn). Playtest-derived; would have fired here.
 
 ## Early pacing observations (D5 feed)
 
