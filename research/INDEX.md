@@ -22,6 +22,7 @@ are never renumbered (cross-references depend on numbers). ⭐ = load-bearing to
 | [37-implementation-plan.md](37-implementation-plan.md) | **The roadmap + full file-level specs** for the quick-wins batch, si-bridge provider, and C6 pack (Phases 2–4) | ⭐ Active plan |
 | [38-body-math-audit.md](38-body-math-audit.md) | **Body-math audit + corrections** (Ben-triggered): bust was miscalibrated ~35% low vs the Norma anchor → corrected closed-form on her own band; STRICT letter re-anchor (t47=T, X@t64); honest total weight; droop surfaced; canary armor | ✅ Rulings SHIPPED (be.5) |
 | [39-adversarial-math-verification.md](39-adversarial-math-verification.md) | **Adversarial math verification** (Ben-directed, pre-deploy): 3 independent researchers (sizing/medical/geometry) + adversarial refuter; anchor confirmed as a ratio-gauge (Guinness diff primary); 4 shape-handling defects found+fixed; SHIP verdict + documented caveats | ✅ SHIPPED (be.6); the foundation |
+| [40-calibration-dataset-hunt.md](40-calibration-dataset-hunt.md) | **Calibration dataset hunt** (5 streams): mid-curve gap proven structural (clinical papers record SN-N not girth; augmented figures never publish underbust); 1″/letter CONFIRMED standard-conformant; droop descent-rate VALIDATED vs 12 clinical pairs; density flagged for ruling | No curve change; density ruling open |
 
 ## Task → read this
 
