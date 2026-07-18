@@ -35,13 +35,14 @@ beEvents/beStates items · dry-turn rate · beLog cadence trajectory for D5.
 Known limit: zod `.default([])` masks whole-field drops as empty arrays — catching those
 needs raw-response logging, out of scope for a read-only phase.
 
-## Probe verdict — GATE PASS (02:00 local, 10 turns)
+## Probe verdict — GATE PASS (final: 11 turns)
 
-- **10/10 turns · 100% parseable · 0 refusals · 0 malformed · 0 dry. GATE: PASS.**
+- **11/11 turns · 100% parseable · 0 refusals · 0 malformed · 0 dry. GATE: PASS**
+  (crossed the ≥10 threshold at 02:00 local and stayed clean).
 - **Classifier ruling per the probe: keep `x-ai/grok-4.3`.** No swap to GLM-5.2 —
   the C8 concern was Grok-*fast*, and 4.3 held the extended schema perfectly.
-- beEvent kinds: milking ×7, contact ×6; the classifier grounded attitude/arousal/
-  fluidFill on every eventful turn.
+- beEvent kinds: milking ×8, contact ×7; outcomes 19 none / 4 partial / 2 fail /
+  1 success; the classifier grounded attitude/arousal/fluidFill on every eventful turn.
 
 ## E14 checklist scoreboard
 
@@ -51,7 +52,7 @@ needs raw-response logging, out of scope for a read-only phase.
 | Classifier schema probe (≥10 turns, 100%/0/0) | ✅ PASS at 10/10 — grok-4.3 confirmed |
 | `__betier_N__` reaches bridge on inline image | ✅ `__betier_45__` on krea2 prompts (tier 47 → hyper anchor 45, correct per the sizeBandMarker table) |
 | [BODY STATE] metric block honored in prose | 🟡 Ben eyeballs during play (prompt not persisted) |
-| Growth beat end-to-end (event → roll → GROWTH directive) | 🟡 pending a landed roll — 6 attempts all partial/fail, tier still 47 |
+| Growth beat end-to-end (event → roll → GROWTH directive) | ✅ engine side: 05:55Z contact → roll 12 @i2 → success → tier 47→48, `lastGrowth {delta 1, tierBefore 47}` staged, cooldown armed at 2. 🟡 prose render of the directive: eyeball the next turn |
 | C7 agentic-path markerless probe | 🟡 only inline-path images so far (all markered); needs one agentic image to confirm the gap |
 | Peak-scene truncation at narrator maxTokens | 🟡 Ben eyeballs (see config notes) |
 
@@ -69,8 +70,10 @@ needs raw-response logging, out of scope for a read-only phase.
 
 ## Early pacing observations (D5 feed)
 
-At tier 47 with intensity-2/3 contact events, six growth attempts produced 4 partial +
-2 fail and zero landed tiers; meanwhile the milking loop cycles fill 60→90→0 repeatedly.
-Reads as: cadence is starved at high tier exactly where Phase 2's growth-pressure
-escalator (Spec 1 Task 5) and passive fill (Task 2) intervene — playtest evidence
-supports building the quick-wins batch in spec order, pressure escalator high priority.
+At tier 47 with intensity-2/3 contact events, it took SEVEN attempts to land one growth
+(1 success / 4 partial / 2 fail — roll 12 finally landing at 05:55Z, ~20 min of continuous
+escalation); meanwhile the milking loop cycles fill 60→90→0 repeatedly. Under Phase 2's
+escalator the six dry attempts would have banked ~72 pressure — a pity fire just before
+the natural success. Reads as: cadence is starved at high tier exactly where the
+growth-pressure escalator (Spec 1 Task 5) and passive fill (Task 2) intervene — playtest
+evidence supports building the quick-wins batch with the pressure escalator first.
