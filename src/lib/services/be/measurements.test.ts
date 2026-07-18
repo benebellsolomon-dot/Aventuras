@@ -90,9 +90,36 @@ describe('build inference + band (research/38 C3b)', () => {
 
   test('band = waist + build offset (the documented band trap, made visible)', () => {
     expect(bandCm({ waistCm: 61, build: 'average' })).toBe(66)
-    expect(bandCm({ waistCm: 61 })).toBe(65) // no explicit build → 61 cm waist infers slim
+    expect(bandCm({ waistCm: 61 })).toBeCloseTo(64.7, 0) // inferred: smooth curve near slim
     expect(bandCm(undefined)).toBe(66) // reference frame: waist 61, average
     expect(bandCm({ waistCm: 65, build: 'curvy' })).toBe(73)
+  })
+
+  test('inferred band/weight move smoothly with waist — no threshold cliffs (research/39 finding 2)', () => {
+    // The old step inference jumped +4 cm band and +4 kg weight at waist 72→73.
+    for (let waist = 60; waist <= 84; waist++) {
+      const bandStep = bandCm({ waistCm: waist + 1 }) - bandCm({ waistCm: waist })
+      expect(bandStep).toBeGreaterThanOrEqual(1) // waist itself grows 1 cm
+      expect(bandStep).toBeLessThanOrEqual(2.5) // offset drift stays gentle
+      const totalA = measurements({ ...defaultBodyState(20), baseline: { waistCm: waist } })
+      const totalB = measurements({ ...defaultBodyState(20), baseline: { waistCm: waist + 1 } })
+      expect(Math.abs(totalB.totalBodyWeightKg - totalA.totalBodyWeightKg)).toBeLessThanOrEqual(1.5)
+    }
+  })
+
+  test('insane anatomy inputs fall back instead of leaking (research/39 finding 3)', () => {
+    expect(bandCm({ waistCm: Infinity })).toBe(66)
+    expect(bandCm({ waistCm: -4 })).toBe(66)
+    const infWeight = measurements({
+      ...defaultBodyState(13),
+      baseline: { bodyWeightKg: Infinity },
+    })
+    expect(infWeight.frameKg).toBe(57) // falls back to the estimate
+    const infWaist = {
+      ...defaultBodyState(13),
+      baseline: { waistCm: Infinity, hipsCm: 90 },
+    }
+    expect(bwhCmString(infWaist)).toMatch(/^bust ~\d+ cm$/)
   })
 })
 

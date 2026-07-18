@@ -24,8 +24,12 @@ import {
   bustCmFor,
   capacityMlPerSide,
   dryKgPerSide,
+  frameEstimateKg,
   nowKgPerSide,
   resolveBuild,
+  saneHipsCm,
+  saneWaistCm,
+  saneWeightKg,
 } from './curves'
 import { cupLetter } from './ladder'
 import type { BodyShape, BodyState } from './types'
@@ -147,8 +151,8 @@ export function droopCm(tier: number, shape: BodyShape, fillPercent = 0): number
  */
 export function bwhCmString(state: BodyState): string {
   const bust = Math.round(bustCm(state.tier, state.shape, state.fluids.fillPercent, state.baseline))
-  const waist = state.baseline?.waistCm
-  const hips = state.baseline?.hipsCm
+  const waist = saneWaistCm(state.baseline?.waistCm)
+  const hips = saneHipsCm(state.baseline?.hipsCm)
   if (waist && hips) return `${bust}-${Math.round(waist)}-${Math.round(hips)} cm`
   return `bust ~${bust} cm`
 }
@@ -179,10 +183,7 @@ export function measurements(state: BodyState): BodyMeasurements {
   const nowTotal = 2 * nowPerSide
   const capacityTotal = 2 * capacityMlPerSide(state.tier)
   const build = resolveBuild(state.baseline)
-  const frameRaw =
-    state.baseline?.bodyWeightKg && state.baseline.bodyWeightKg > 0
-      ? state.baseline.bodyWeightKg
-      : estimatedBodyWeightKg(state.baseline?.heightCm, build)
+  const frameRaw = saneWeightKg(state.baseline?.bodyWeightKg) ?? frameEstimateKg(state.baseline)
   // C3: the frame estimate already contains a typical bust — subtract it so the
   // real tissue isn't double-counted into the total/proportion.
   const frameKg = Math.max(20, frameRaw - BASELINE_BREAST_KG)

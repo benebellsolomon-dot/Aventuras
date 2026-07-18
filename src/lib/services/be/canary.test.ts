@@ -58,9 +58,28 @@ describe('derivation monotonicity across the full sweep', () => {
     }
   })
 
-  test('bust diff grows strictly with tier (no saturation plateau — research/38 C1)', () => {
-    for (let tier = 1; tier <= SWEEP_MAX; tier++) {
-      expect(bustDiffCm(tier, 'natural', 0)).toBeGreaterThan(bustDiffCm(tier - 1, 'natural', 0))
+  test('bust diff grows strictly with tier for EVERY shape (geometry-audit defect 1: the gravity_defying dip)', () => {
+    for (const shape of ['natural', 'firm', 'gravity_defying'] as const) {
+      for (let tier = 1; tier <= SWEEP_MAX; tier++) {
+        expect(bustDiffCm(tier, shape, 0)).toBeGreaterThan(bustDiffCm(tier - 1, shape, 0))
+      }
+    }
+  })
+
+  test('standing-tape shape order holds at every tier: gravity_defying > firm > natural (defects 2-3)', () => {
+    for (let tier = 0; tier <= SWEEP_MAX; tier += 3) {
+      const natural = bustDiffCm(tier, 'natural', 0)
+      const firm = bustDiffCm(tier, 'firm', 0)
+      const gd = bustDiffCm(tier, 'gravity_defying', 0)
+      expect(gd).toBeGreaterThan(firm)
+      expect(firm).toBeGreaterThan(natural)
+    }
+  })
+
+  test('fill widens the diff monotonically at every tier (defect 5: no lost engorgement across the blend)', () => {
+    for (let tier = 0; tier <= 60; tier += 2) {
+      expect(bustDiffCm(tier, 'natural', 50)).toBeGreaterThan(bustDiffCm(tier, 'natural', 0))
+      expect(bustDiffCm(tier, 'natural', 100)).toBeGreaterThan(bustDiffCm(tier, 'natural', 50))
     }
   })
 

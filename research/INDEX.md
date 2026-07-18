@@ -20,7 +20,8 @@ are never renumbered (cross-references depend on numbers). ⭐ = load-bearing to
 | [35-d4-prose-body-math.md](35-d4-prose-body-math.md) | **D4 research**: body-math depth for honest prose — depth (b), baked at build time from the NAI spine | Enacted (metric build) |
 | [36-cross-era-feature-gap-analysis.md](36-cross-era-feature-gap-analysis.md) | **Cross-era gap analysis** (3-agent sweep of NAI/ST/bundles+bridge vs the built engine): quick-win list, big-subsystem rulings, the bridge A1111-shim finding, C6 mining list, inventory register | Verdict delivered |
 | [37-implementation-plan.md](37-implementation-plan.md) | **The roadmap + full file-level specs** for the quick-wins batch, si-bridge provider, and C6 pack (Phases 2–4) | ⭐ Active plan |
-| [38-body-math-audit.md](38-body-math-audit.md) | **Body-math audit + corrections** (Ben-triggered): bust was miscalibrated ~35% low vs the Norma anchor → corrected closed-form on her own band; STRICT letter re-anchor (t47=T, X@t64); honest total weight; droop surfaced; canary armor | ✅ Rulings SHIPPED (be.5); Phase 2 unblocked |
+| [38-body-math-audit.md](38-body-math-audit.md) | **Body-math audit + corrections** (Ben-triggered): bust was miscalibrated ~35% low vs the Norma anchor → corrected closed-form on her own band; STRICT letter re-anchor (t47=T, X@t64); honest total weight; droop surfaced; canary armor | ✅ Rulings SHIPPED (be.5) |
+| [39-adversarial-math-verification.md](39-adversarial-math-verification.md) | **Adversarial math verification** (Ben-directed, pre-deploy): 3 independent researchers (sizing/medical/geometry) + adversarial refuter; anchor confirmed as a ratio-gauge (Guinness diff primary); 4 shape-handling defects found+fixed; SHIP verdict + documented caveats | ✅ SHIPPED (be.6); the foundation |
 
 ## Task → read this
 
