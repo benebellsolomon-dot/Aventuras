@@ -71,30 +71,54 @@ needs raw-response logging, out of scope for a read-only phase.
 - Narrator 16384 is above the old 8192 but below the ST-era ≥24k recommendation — watch
   long Peak scenes for truncation before raising further.
 
-## ⚠ Finding: narrator growth-directive adherence is weak (the GLM tiebreaker check)
+## ⚠ Finding (root-caused): lore cosmology outranks the [BODY STATE] growth directive
 
-The roadmap's play-time check "narrator honors the [BODY STATE] block" now has data,
-and it points at a miss:
+The play-time check "narrator honors the [BODY STATE] block" produced the session's
+best finding — initially read as a raw adherence failure, then root-caused live:
 
-- **Delta-1 directive (05:57Z turn):** prompt carried "grew one increment… narrate as
-  subtle strain and warmth." Prose rendered tissue-tremor/tension language — *arguably*
-  compliant at the demanded subtle register. Verdict: ambiguous.
-- **Delta-2 directive (06:01Z turn): MISS.** Prompt carried the critical's "grew
-  significantly… Dramatic register is earned: render the surge with full weight and
-  spatial consequence." The 2.3k-char response rendered NO surge — only ambient
-  "swollen, milk-slick flesh" state description. DB-verified provenance: `lastGrowth
-  {delta 2, tierBefore 48}` was live at prompt time and cleared by that turn's reduce.
-- Caveat: block-in-prompt isn't persisted, so "directive reached the prompt" is inferred
-  from the state machine, not observed. No reason to doubt it (the block is injected
-  unconditionally in beMode), but noted.
+**The evidence sequence.** Four delta-2 criticals landed during the session (47→48→50→
+52→54). The render turns split cleanly:
 
-Implications: (1) narrator-challenger evaluation (Sonnet 5 / Fable 5, permissiveness
-unverified) moves from "if drift appears" to "warranted on current evidence" — one miss
-in one dramatic opportunity, so collect 2–3 more landed growths before switching.
-(2) **Phase 2 Task 6 scope amendment candidate:** the drift detectors catch
-*contradictions* but nothing catches *omissions* — consider a growth-render check
-(lastGrowth staged but next prose contains zero growth language → CONTINUITY reminder
-the following turn). Playtest-derived; would have fired here.
+- **06:01Z (50-tier directive): TOTAL MISS** — 2.3k chars, zero growth prose, only
+  ambient "swollen" description. This was PRE-climax.
+- **05:57Z (delta-1): ambiguous** — tissue-tremor language, maybe compliant-at-subtle.
+  Also pre-climax.
+- **06:12Z + 06:14Z (52- and 54-tier directives): CLEAR RENDERS** — "*Growing*… flesh
+  pushing against your hand", "visibly broader… stretch marks appearing in real time",
+  "tissue has thickened, restructured itself… new territory claimed centimeter by
+  centimeter". Both POST-climax.
+
+**Root cause.** The story's always-injected lore entry "Lucy — Growth Catalyst (BE
+mechanic)" rules: *"Only the internal-climax catalyst drives growth — not arousal
+alone, not milk volume"* and *"her breasts slowly expand — a little fuller each time,
+never instant."* The engine, meanwhile, rolls growth on `contact` events. When a
+pre-climax contact crit staged a growth directive, the directive contradicted story
+canon — and the narrator (GLM-5.2) resolved the conflict in canon's favor and rendered
+nothing. The moment the canon catalyst actually occurred (06:08Z climax scene — which
+the classifier filed as `contact @i3`, not `catalyst`), the very next two directives
+rendered fully. GLM's adherence is fine **when instructions don't conflict**; the block
+loses precedence fights with always-on lore.
+
+**Register note:** even the successful renders came at the lore's "slow, tectonic"
+register, not the delta-2 directive's "dramatic surge" — lore wins on register too.
+
+**Implications (feed Phase 2/3 specs):**
+1. **Spec 3 `beGrowthCosmology` is load-bearing, not flavor** — and it must thread into
+   the CLASSIFIER instructions too (`buildBeEventInstructions`), so this story's
+   climax-catalyst maps to kind `catalyst` instead of `contact`. Amendment candidate:
+   per-story growth-eligible event kinds in `BeStoryConfig` (here: catalyst-only), so
+   the reducer never lands canon-illegal growth in the first place.
+2. **Spec 3 Task 5 genre-rules pack needs an explicit precedence clause**: the [BODY
+   STATE] block is the sole growth authority; lore describes mechanism/flavor, never
+   timing or magnitude. (The imported-rules retirement in Task 6 is the same class of
+   fix; this fresh Lucy story has only 3 lore entries, no legacy [BE] rules.)
+3. **Zero-code unblock available now (Ben's canon, Ben's call):** edit the Growth
+   Catalyst lore entry to defer timing to the engine (drop "Only the internal-climax
+   catalyst drives growth" and "never instant", or append "the [BODY STATE] block
+   announces when growth lands; render it when it says so").
+4. Task 6 omission detector still worthwhile (would have flagged the 06:01 miss), but
+   the narrator-challenger case (Sonnet 5 / Fable 5) is WEAKENED — GLM adhered once the
+   contradiction resolved. Fix the instruction contract before judging the model.
 
 ## Early pacing observations (D5 feed)
 
