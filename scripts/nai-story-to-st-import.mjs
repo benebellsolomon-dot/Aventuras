@@ -62,13 +62,15 @@ function toChatJsonl(story, doc) {
   const lines = [JSON.stringify(header)]
   let users = 0
   let narrations = 0
-  const sections = doc.sections instanceof Map ? doc.sections : new Map(Object.entries(doc.sections))
+  const sections =
+    doc.sections instanceof Map ? doc.sections : new Map(Object.entries(doc.sections))
   for (const id of doc.order) {
     const section = sections.get(id) ?? sections.get(String(id))
     const text = (section?.text ?? '').trimEnd()
     if (!text.trim()) continue
     const isUser = sectionIsUserTyped(section)
-    isUser ? users++ : narrations++
+    if (isUser) users++
+    else narrations++
     lines.push(JSON.stringify({ is_user: isUser, is_system: false, mes: text }))
   }
   return { jsonl: lines.join('\n') + '\n', users, narrations }

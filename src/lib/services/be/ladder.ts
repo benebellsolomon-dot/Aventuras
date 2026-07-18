@@ -1,31 +1,23 @@
 /**
  * BE engine — the tier ladder: pure derivations off the canonical tier scalar.
  *
- * Everything here is a lookup into the generated NAI v0.4.7 tables (ladder-data.ts).
- * One canonical scalar, everything else a pure tested function of it (31a lesson 1).
- * The letter table is bounded and saturates into 'ZZ+' past its last rung — the D1
- * ruling's "bounded derived letter table, named descriptors past Z".
+ * Comparatives and band words are lookups into the generated NAI v0.4.7 tables
+ * (ladder-data.ts). Cup letters are DERIVED from the corrected bust-diff
+ * closed-form (research/38 C4: strict re-anchor, 1 inch of reference-frame
+ * bust−band per letter — tier 47 ≈ T-cup, true X-cup ≈ tier 65), saturating
+ * into 'ZZ'/'ZZ+' at the top. One canonical scalar, everything else a pure
+ * tested function of it (31a lesson 1).
  */
 
-import {
-  BAND_WORD_THRESHOLDS,
-  COMPARATIVE_BANDS,
-  CUP_LETTER_THRESHOLDS,
-  LETTER_TO_TIER,
-} from './ladder-data'
+import { BAND_WORD_THRESHOLDS, COMPARATIVE_BANDS } from './ladder-data'
+import { letterForTier, letterTierAnchors } from './curves'
 
 const clampTier = (tier: number): number =>
   Number.isFinite(tier) ? Math.max(0, Math.floor(tier)) : 0
 
-/** Derived cup letter (bounded table; saturates at the top rung). */
+/** Derived cup letter (corrected-math ladder; saturates at the top). */
 export function cupLetter(tier: number): string {
-  const t = clampTier(tier)
-  let cup = CUP_LETTER_THRESHOLDS[0].cup
-  for (const row of CUP_LETTER_THRESHOLDS) {
-    if (t >= row.minTier) cup = row.cup
-    else break
-  }
-  return cup
+  return letterForTier(clampTier(tier))
 }
 
 /** Derived size-band word (NAI tierToCupTag convention — see the ladder-data calibration note). */
@@ -58,15 +50,25 @@ export function imageSizePhrase(tier: number): string {
   return bandWord(tier)
 }
 
-/** Reverse map for card seeding: cup letter → canonical tier anchor. Null when unknown. */
+/**
+ * Reverse map for card seeding: cup letter → first tier reaching it (derived
+ * anchors). Doubled letters outside the canonical ladder (FF, GG, …) resolve to
+ * their base letter's anchor. Null when unknown.
+ */
 export function tierForCupLetter(letter: string): number | null {
   const key = String(letter || '')
     .trim()
     .toUpperCase()
     .replace(/[-\s]?CUPS?$/, '')
   if (!key) return null
-  const tier = LETTER_TO_TIER[key]
-  return typeof tier === 'number' && Number.isFinite(tier) ? tier : null
+  const anchors = letterTierAnchors()
+  if (key in anchors) return anchors[key]
+  // Legacy doubled letters (FF/GG/HH/…): use the base letter's anchor.
+  if (key.length >= 2 && /^([A-Z])\1+$/.test(key)) {
+    const base = key[0]
+    if (base in anchors) return anchors[base]
+  }
+  return null
 }
 
 /** Index of the tier's band among the band thresholds (monotonicity canary support). */

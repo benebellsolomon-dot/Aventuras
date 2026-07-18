@@ -28,7 +28,8 @@ const kreaBridgeStyleTemplate: PromptTemplate = {
   id: 'image-style-krea-bridge',
   name: 'Krea (SI Bridge)',
   category: 'image-style',
-  description: 'Natural-language style block for the SI-bridge Krea 2 workflow (LLM-class text encoder)',
+  description:
+    'Natural-language style block for the SI-bridge Krea 2 workflow (LLM-class text encoder)',
   content: `High-quality detailed anime illustration with clean expressive linework, rich colors, refined shading, and cinematic lighting. Crisp focus and polished detail throughout. Every depicted character is a mature adult in their twenties or older.`,
 }
 

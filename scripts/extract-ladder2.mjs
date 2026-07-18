@@ -14,7 +14,26 @@ const noop = new Proxy(function () {}, {
   apply: () => noop,
   construct: () => noop,
 })
-const base = { console: { log: () => {}, warn: () => {}, error: () => {} }, Math, JSON, Number, String, Object, Array, Boolean, RegExp, Date, Symbol, parseInt, parseFloat, isFinite, isNaN, Infinity, NaN, undefined }
+const base = {
+  console: { log: () => {}, warn: () => {}, error: () => {} },
+  Math,
+  JSON,
+  Number,
+  String,
+  Object,
+  Array,
+  Boolean,
+  RegExp,
+  Date,
+  Symbol,
+  parseInt,
+  parseFloat,
+  isFinite,
+  isNaN,
+  Infinity,
+  NaN,
+  undefined,
+}
 const sandbox = new Proxy(base, {
   has: () => true,
   get: (t, p) => (p in t ? t[p] : p === Symbol.unscopables ? undefined : noop),
@@ -123,29 +142,31 @@ if (JSON.stringify(tensionRows) !== JSON.stringify(tensionAt(47))) {
   throw new Error('skin_tension rungs are tier-dependent — needs a 2-D bake')
 }
 
-// 4b) Bust circumference curves per shape, empty and full (cm, 0.1 precision).
-//     Runtime interpolates on fill between the two.
-const bustCurves = {}
+// 4b) Droop (hang) curves per shape, empty and full (cm, 0.1 precision) — research/38 C2.
+//     The bust channel is NOT baked anymore: bust derives at runtime from the corrected
+//     projection closed-form (research/38 C1; curves.ts). Droop stays spine-verbatim —
+//     the hang partition is the honest-direction channel.
+const droopCurves = {}
 for (const shape of SHAPES) {
   const empty = []
   const full = []
   for (let t = 0; t <= MAX_TIER; t++) {
-    empty.push(Math.round(Number(snapAt(t, shape).bust_cm) * 10) / 10)
-    full.push(Math.round(Number(snapAt(t, shape, 100, true).bust_cm) * 10) / 10)
+    empty.push(Math.round(Number(snapAt(t, shape).droop_cm) * 10) / 10)
+    full.push(Math.round(Number(snapAt(t, shape, 100, true).droop_cm) * 10) / 10)
   }
-  bustCurves[shape] = { empty, full }
+  droopCurves[shape] = { empty, full }
 }
 
 // 5) Golden fixtures for the canary tests (natural, fill 0, reference frame).
+//    Letter + bustCm dropped (both runtime-derived per research/38); droop added.
 const golden = [13, 31, 47].map((t) => {
   const s = snapAt(t, 'natural')
   return {
     tier: t,
-    letter: String(s.tier_letter),
     dryTotalKg: Number(s.weight_empty_total_kg),
     capacityTotalMl: Number(s.capacity_total_ml),
     bodyPct: Number(s.breast_mass_body_pct),
-    bustCm: Number(s.bust_cm),
+    droopCm: Number(s.droop_cm),
   }
 })
 
@@ -195,18 +216,31 @@ export const PROPORTION_THRESHOLDS: ReadonlyArray<{ readonly minPct: number; rea
 /** Fluid-pressure (skin tension) ladder keyed on fill percent — verified tier-independent. */
 export const SKIN_TENSION_THRESHOLDS: ReadonlyArray<{ readonly minFillPercent: number; readonly text: string }> = ${JSON.stringify(tensionRows, null, 2)}
 
-/** Bust circumference (cm) per tier, per shape, at empty and 100% fill — index = tier, saturating at the last entry. */
-export const BUST_CM_CURVES: Readonly<
+/** Droop / hang depth (cm) per tier, per shape, at empty and 100% fill — index = tier, saturating at the last entry. */
+export const DROOP_CM_CURVES: Readonly<
   Record<'natural' | 'firm' | 'gravity_defying', { readonly empty: ReadonlyArray<number>; readonly full: ReadonlyArray<number> }>
-> = ${JSON.stringify(bustCurves)}
+> = ${JSON.stringify(droopCurves)}
 
 /** Golden snapshot fixtures at anchor tiers (natural, empty, reference frame) for canaries. */
 export const GOLDEN_MEASUREMENTS = ${JSON.stringify(golden, null, 2)} as const
 `
 
 const existing = readFileSync(OUT, 'utf8')
-if (existing.includes('MEASUREMENT_CONSTANTS')) throw new Error('v2 tables already present — remove before regenerating')
+if (existing.includes('MEASUREMENT_CONSTANTS'))
+  throw new Error('v2 tables already present — remove before regenerating')
 writeFileSync(OUT, existing + gen)
-console.log('rows:', SHAPES.map((s) => `${s}=${bodyRowsByShape[s].length}`).join(' '), '| weight:', weightRows.length, '| proportion:', proportionRows.length, '| tension:', tensionRows.length)
+console.log(
+  'rows:',
+  SHAPES.map((s) => `${s}=${bodyRowsByShape[s].length}`).join(' '),
+  '| weight:',
+  weightRows.length,
+  '| proportion:',
+  proportionRows.length,
+  '| tension:',
+  tensionRows.length,
+)
 console.log('golden:', JSON.stringify(golden))
-console.log('t47 natural:', JSON.stringify(bodyRowsByShape.natural.filter((r) => r.minTier <= 47).slice(-1)[0]))
+console.log(
+  't47 natural:',
+  JSON.stringify(bodyRowsByShape.natural.filter((r) => r.minTier <= 47).slice(-1)[0]),
+)

@@ -46,6 +46,7 @@ export default [
       'node_modules/',
       'src-tauri/',
       '.release-pre3-check/',
+      'research/', // archived BE research corpus + bundles — reference material, never lint/reformat
     ],
   },
   {

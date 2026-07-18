@@ -24,10 +24,13 @@ export {
 } from './ladder'
 export { groundingFacts } from './derive'
 export {
+  bandCm,
   bodyRow,
   bustCm,
+  bustDiffCm,
   bwhCmString,
   capacityMlPerSide,
+  droopCm,
   dryKgPerSide,
   estimatedBodyWeightKg,
   fluidPressureLabel,
@@ -35,6 +38,7 @@ export {
   measurements,
   nowKgPerSide,
   proportionNote,
+  resolveBuild,
   sizingString,
   weightFeel,
 } from './measurements'

@@ -83,7 +83,10 @@
     await persist({ ...bodyState, attitude })
   }
 
-  async function setBaselineField(field: 'waistCm' | 'hipsCm' | 'bodyWeightKg', raw: string) {
+  async function setBaselineField(
+    field: 'waistCm' | 'hipsCm' | 'bodyWeightKg' | 'heightCm',
+    raw: string,
+  ) {
     if (!bodyState) return
     const value = Number(raw)
     const baseline = { ...(bodyState.baseline ?? {}) }
@@ -91,6 +94,16 @@
     else baseline[field] = value
     await persist({ ...bodyState, baseline })
   }
+
+  async function setBuildBaseline(value: string) {
+    if (!bodyState) return
+    const baseline = { ...(bodyState.baseline ?? {}) }
+    if (!value) delete baseline.build
+    else baseline.build = value
+    await persist({ ...bodyState, baseline })
+  }
+
+  const BUILDS = ['petite', 'slim', 'average', 'curvy', 'athletic', 'full']
 
   async function seedState() {
     const sniffed = sniffTierFromText(
@@ -148,12 +161,15 @@
       {bandWord(bodyState.tier)} — {comparative(bodyState.tier)}
     </p>
     <p class="text-muted-foreground/80 text-xs">
-      {bwhCmString(bodyState)} · ~{kg(m.dryTotalKg)} kg tissue{m.weightFeel
-        ? ` — ${m.weightFeel}`
-        : ''}{m.proportionNote ? ` · ${m.proportionNote}` : ''}
+      {bwhCmString(bodyState)} · ~{kg(m.dryTotalKg)} kg tissue · ~{Math.round(m.totalBodyWeightKg)} kg
+      total{m.weightFeel ? ` — ${m.weightFeel}` : ''}{m.proportionNote
+        ? ` · ${m.proportionNote}`
+        : ''}
     </p>
     <p class="text-muted-foreground/80 text-xs">
-      {bodyState.shape} — {row.shape}{row.hang ? ` — ${row.hang}` : ''}
+      {bodyState.shape} — {row.shape}{row.hang
+        ? ` — ${row.hang} (~${Math.round(m.droopCm)} cm)`
+        : ''}
     </p>
     <p class="text-muted-foreground/80 text-xs">
       {row.posture} · {row.mobility} · {row.clothing}
@@ -204,8 +220,8 @@
       baseline measurements
     </button>
     {#if baselineOpen}
-      <div class="grid grid-cols-3 gap-1">
-        {#each [{ field: 'waistCm', label: 'waist (cm)' }, { field: 'hipsCm', label: 'hips (cm)' }, { field: 'bodyWeightKg', label: 'weight (kg)' }] as spec (spec.field)}
+      <div class="grid grid-cols-2 gap-1">
+        {#each [{ field: 'waistCm', label: 'waist (cm)' }, { field: 'hipsCm', label: 'hips (cm)' }, { field: 'heightCm', label: 'height (cm)' }, { field: 'bodyWeightKg', label: 'frame weight (kg)' }] as spec (spec.field)}
           <label class="text-muted-foreground grid gap-0.5 text-[10px]">
             {spec.label}
             <input
@@ -218,8 +234,22 @@
           </label>
         {/each}
       </div>
+      <label class="text-muted-foreground flex items-center gap-2 text-[10px]">
+        build
+        <select
+          class="border-muted bg-popover rounded border px-1 py-0.5 text-xs"
+          value={bodyState.baseline?.build ?? ''}
+          onchange={(e) => setBuildBaseline(e.currentTarget.value)}
+        >
+          <option value="">auto ({m.buildResolved})</option>
+          {#each BUILDS as build (build)}
+            <option value={build}>{build}</option>
+          {/each}
+        </select>
+      </label>
       <p class="text-muted-foreground/70 text-[10px]">
-        Bust is derived automatically from her current size and fill.
+        Bust and total weight are derived automatically from her current size, fill, band (waist +
+        build), and frame.
       </p>
     {/if}
   </div>

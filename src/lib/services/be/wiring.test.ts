@@ -122,15 +122,16 @@ describe('buildBeStateBlock', () => {
     expect(block).toContain('never invent growth')
   })
 
-  test('metric measurements render with auto-derived bust', () => {
+  test('metric measurements render with auto-derived bust on her own band', () => {
     const block = buildBeStateBlock([
       {
         name: 'Lucy',
-        state: at(47, { baseline: { waistCm: 81, hipsCm: 94 } }),
+        state: at(47, { baseline: { waistCm: 81, hipsCm: 94, build: 'average' } }),
       },
     ])
-    expect(block).toContain('Lucy — X-cup (tier 47)')
-    expect(block).toContain('Measurements: 102-81-94 cm')
+    expect(block).toContain('Lucy — T-cup (tier 47)')
+    expect(block).toContain('Measurements: 137-81-94 cm')
+    expect(block).toContain('Body weight: ~71 kg total')
     expect(block).toContain('All measurements are metric')
   })
 

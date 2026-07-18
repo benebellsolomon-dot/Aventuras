@@ -1,23 +1,44 @@
 /**
- * BE engine — measurement channels (D4 depth-(b), research/35 §3).
+ * BE engine — measurement channels (D4 depth-(b), research/35 §3; corrected per
+ * research/38).
  *
- * Two 1-D curves implemented from the exact NAI constants; every label is a
- * lookup into tables baked by driving the validated v0.4.7 spine at build time
- * (ladder-data.ts). Per the corpus's own sizing rule, prose never sees bust
- * circumference in cm — sizes surface as the US sizing string ("38X") plus
- * banded mass/capacity numbers.
+ * Mass/capacity ride the validated NAI quadratic (curves.ts). Bust is the
+ * corrected runtime closed-form on the character's OWN band (research/38 C1) —
+ * all measurements are metric (Ben's ruling). Labels are lookups into tables
+ * baked from the v0.4.7 spine; droop is the baked hang channel (C2). Body
+ * weight is displayed as an honest total: frame (minus the baseline-breast
+ * double-count) + tissue + fluid (C3).
  */
 
 import {
   BODY_ROWS_BY_SHAPE,
-  BUST_CM_CURVES,
+  DROOP_CM_CURVES,
   MEASUREMENT_CONSTANTS,
   PROPORTION_THRESHOLDS,
   SKIN_TENSION_THRESHOLDS,
   WEIGHT_FEEL_THRESHOLDS,
 } from './ladder-data'
+import {
+  BASELINE_BREAST_KG,
+  bandCm,
+  bustCmFor,
+  capacityMlPerSide,
+  dryKgPerSide,
+  nowKgPerSide,
+  resolveBuild,
+} from './curves'
 import { cupLetter } from './ladder'
 import type { BodyShape, BodyState } from './types'
+
+export {
+  bandCm,
+  bustProjectionCm,
+  bustDiffCm,
+  capacityMlPerSide,
+  dryKgPerSide,
+  nowKgPerSide,
+  resolveBuild,
+} from './curves'
 
 const K = MEASUREMENT_CONSTANTS
 
@@ -27,24 +48,7 @@ const clampTier = (tier: number): number =>
 const clampPercent = (value: number): number =>
   Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0
 
-/** Dry tissue mass per side (kg) — the NAI base-weight quadratic at reference frame. */
-export function dryKgPerSide(tier: number): number {
-  const t = clampTier(tier)
-  return K.baseWeightConst + K.baseWeightLinear * t + K.baseWeightQuad * t * t
-}
-
-/** Fluid capacity per side (ml) — tissue volume × the NAI milk fraction. */
-export function capacityMlPerSide(tier: number): number {
-  return (dryKgPerSide(tier) / K.tissueDensityKgPerCm3) * K.milkFraction
-}
-
-/** Current mass per side (kg) at a fill level (fluid at milk density). */
-export function nowKgPerSide(tier: number, fillPercent: number): number {
-  const fillMl = capacityMlPerSide(tier) * (clampPercent(fillPercent) / 100)
-  return dryKgPerSide(tier) + (fillMl * K.milkDensity) / 1000
-}
-
-/** The NAI body-weight estimate from height + build (reference default when unset). */
+/** The NAI frame-weight estimate from height + build (reference default when unset). */
 export function estimatedBodyWeightKg(heightCm?: number, build?: string): number {
   const h =
     Number.isFinite(heightCm) && (heightCm as number) >= 100 ? (heightCm as number) : K.refHeightCm
@@ -110,29 +114,39 @@ export function bodyRow(tier: number, shape: BodyShape): BodyRow {
   }
 }
 
-/** Cup sizing label — derived, letter-only ("X-cup"). */
+/** Cup sizing label — derived, letter-only ("T-cup"). */
 export function sizingString(tier: number): string {
   return `${cupLetter(tier)}-cup`
 }
 
 /**
- * Bust circumference (cm) — AUTOMATIC: interpolated on fill between the baked
- * empty/full spine curves for (tier, shape); recomputes as tier grows. Reference
- * frame; saturates at the curve's last tier.
+ * Bust circumference (cm) — AUTOMATIC (research/38 C1): the corrected closed-form
+ * on the character's own band (waist + build offset; reference band when no
+ * baseline). Recomputes as tier grows and widens with fill.
  */
-export function bustCm(tier: number, shape: BodyShape, fillPercent = 0): number {
-  const curves = BUST_CM_CURVES[shape] ?? BUST_CM_CURVES.natural
+export function bustCm(
+  tier: number,
+  shape: BodyShape,
+  fillPercent = 0,
+  baseline?: BodyState['baseline'],
+): number {
+  return bustCmFor(tier, shape, fillPercent, baseline)
+}
+
+/** Droop / hang depth (cm) — the baked spine hang channel, fill-interpolated (C2). */
+export function droopCm(tier: number, shape: BodyShape, fillPercent = 0): number {
+  const curves = DROOP_CM_CURVES[shape] ?? DROOP_CM_CURVES.natural
   const t = Math.min(clampTier(tier), curves.empty.length - 1)
   const fill = clampPercent(fillPercent) / 100
   return curves.empty[t] + (curves.full[t] - curves.empty[t]) * fill
 }
 
 /**
- * Metric BWH string: bust is always auto-derived; waist/hips appear when the
- * baseline carries them ("102-81-94 cm"), otherwise bust alone ("bust ~102 cm").
+ * Metric BWH string: bust is always auto-derived on her own band; waist/hips
+ * appear when the baseline carries them ("140-81-94 cm"), otherwise bust alone.
  */
 export function bwhCmString(state: BodyState): string {
-  const bust = Math.round(bustCm(state.tier, state.shape, state.fluids.fillPercent))
+  const bust = Math.round(bustCm(state.tier, state.shape, state.fluids.fillPercent, state.baseline))
   const waist = state.baseline?.waistCm
   const hips = state.baseline?.hipsCm
   if (waist && hips) return `${bust}-${Math.round(waist)}-${Math.round(hips)} cm`
@@ -141,11 +155,17 @@ export function bwhCmString(state: BodyState): string {
 
 export interface BodyMeasurements {
   bustCm: number
+  bandCm: number
+  droopCm: number
   dryTotalKg: number
   nowTotalKg: number
   capacityTotalMl: number
   fillMlTotal: number
-  bodyWeightKg: number
+  /** Frame weight (explicit baseline or estimate), minus the baseline-breast double-count. */
+  frameKg: number
+  /** Honest total: frame + current breast mass incl. fluid (research/38 C3). */
+  totalBodyWeightKg: number
+  buildResolved: string
   breastMassPct: number
   weightFeel: string
   proportionNote: string
@@ -158,20 +178,27 @@ export function measurements(state: BodyState): BodyMeasurements {
   const nowPerSide = nowKgPerSide(state.tier, fill)
   const nowTotal = 2 * nowPerSide
   const capacityTotal = 2 * capacityMlPerSide(state.tier)
-  const bodyWeightKg =
+  const build = resolveBuild(state.baseline)
+  const frameRaw =
     state.baseline?.bodyWeightKg && state.baseline.bodyWeightKg > 0
       ? state.baseline.bodyWeightKg
-      : estimatedBodyWeightKg(state.baseline?.heightCm, state.baseline?.build)
-  // NAI convention (golden-pinned): breast mass as a share of TOTAL weight
-  // including the breasts themselves.
-  const pct = bodyWeightKg > 0 ? (nowTotal / (bodyWeightKg + nowTotal)) * 100 : 0
+      : estimatedBodyWeightKg(state.baseline?.heightCm, build)
+  // C3: the frame estimate already contains a typical bust — subtract it so the
+  // real tissue isn't double-counted into the total/proportion.
+  const frameKg = Math.max(20, frameRaw - BASELINE_BREAST_KG)
+  const totalBodyWeightKg = frameKg + nowTotal
+  const pct = frameKg > 0 ? (nowTotal / totalBodyWeightKg) * 100 : 0
   return {
-    bustCm: bustCm(state.tier, state.shape, fill),
+    bustCm: bustCm(state.tier, state.shape, fill, state.baseline),
+    bandCm: bandCm(state.baseline),
+    droopCm: droopCm(state.tier, state.shape, fill),
     dryTotalKg: dryTotal,
     nowTotalKg: nowTotal,
     capacityTotalMl: capacityTotal,
     fillMlTotal: capacityTotal * (fill / 100),
-    bodyWeightKg,
+    frameKg,
+    totalBodyWeightKg,
+    buildResolved: build,
     breastMassPct: pct,
     weightFeel: weightFeel(nowPerSide),
     proportionNote: proportionNote(pct),

@@ -2,12 +2,15 @@ import { describe, expect, test } from 'vitest'
 import { bandWord, comparative, cupLetter, imageSizePhrase, tierForCupLetter } from './ladder'
 
 describe('cupLetter', () => {
-  test('pins the validated NAI anchors', () => {
-    // Goldens from the v0.4.7 extraction (research/34): t0=C, t13=G, t50=Z, t82=ZZ+.
+  test('pins the corrected-math anchors (research/38 C4: 1 inch of diff per letter)', () => {
+    // Derived from the corrected bust-diff closed-form at the reference frame:
+    // t0≈2.8" → C (dome region matches the old ladder), t47≈20" → T,
+    // true X-cup arrives ~tier 64, ZZ+ from ~tier 98.
     expect(cupLetter(0)).toBe('C')
-    expect(cupLetter(13)).toBe('G')
-    expect(cupLetter(50)).toBe('Z')
-    expect(cupLetter(82)).toBe('ZZ+')
+    expect(cupLetter(4)).toBe('DD')
+    expect(cupLetter(47)).toBe('T')
+    expect(cupLetter(64)).toBe('X')
+    expect(cupLetter(120)).toBe('ZZ+')
   })
 
   test('saturates at the top rung instead of running off the table', () => {

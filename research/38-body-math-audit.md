@@ -129,6 +129,49 @@ baseline was the right call. `waist_cm`/`hips_cm` outputs from the spine are ves
 - No DB migration — curves are code; state (`tier`, baselines) is untouched. One bake + one
   version bump.
 
-## §6 Rulings
+## §6 Rulings (Ben, 2026-07-17)
 
-*(pending Ben)*
+1. **C1 ADOPTED** — recalibrate forward projection to the real anchors:
+   `proj(V) = 30·(V/19000)^(1/3)` above the blend window, validated dome untouched below.
+2. **C4: STRICT LETTER RE-ANCHOR** — letters derive from corrected bust−band at 1″/letter
+   (canonical ladder A,B,C,D,DD,E,F,G,H,J,K…Z, reference frame). **Correction recorded:** the
+   first presentation of this option claimed re-anchoring moves X to ~tier 38–40 — that was
+   WRONG (direction error); honest math moves X UP. Re-asked with true numbers; Ben confirmed
+   strict re-anchor knowing the consequence: **tier 47 = T-cup; true X-cup ≈ tier 65
+   (~26 kg)**; Lucy stays tier 47 and becomes a T-cup (her "38X" descriptor text is legacy
+   authored sizing; the seed sniffer will now map "X" → ~65, so seeding-from-description and
+   the panel tier should be reconciled at play time).
+3. **C3 + C3b ADOPTED** — display total = frame + tissue + fluid; subtract
+   `BASELINE_BREAST_KG` from the frame estimate; infer build from waist/hips vs height when a
+   baseline is stored.
+4. **C2 ADOPTED** — droop/hang cm surfaced in block + panel.
+5. **C5 ADOPTED** — cross-channel canary test.
+6. **Deferred** — sensitivity/bounce/cleavage/areola bake stays in Phase 2 Task 8.
+
+**Implementation note:** bust becomes a runtime closed-form (band(waist,build) +
+2·proj(V)·spread(shape), V including fill volume) — the baked `BUST_CM_CURVES` are retired;
+letters become a derived ladder from the same closed-form at the reference frame; droop stays
+a baked spine channel (its hang partition is the honest-direction channel).
+
+## §7 Implementation (2026-07-18 — all rulings SHIPPED, version 0.7.6-be.5)
+
+- New `src/lib/services/be/curves.ts`: the corrected closed-forms (mass/volume spine, corrected
+  projection w/ dome+anchor blend, band(waist,build), build inference, derived letter ladder +
+  anchors). Norma anchor golden-pinned: `109 + bustDiffCm(82) ≈ 178` ✓.
+- `measurements.ts` rides curves: `bustCm(tier, shape, fill, baseline)` on HER band; `droopCm`
+  (baked spine channel, fill-interpolated); honest weight (`frameKg` = estimate − 1 kg
+  baseline-breast, `totalBodyWeightKg` = frame + tissue + fluid); `resolveBuild` C3b bands.
+- `ladder.ts`: letters derive from the corrected diff (C@t0, DD@t4, **T@t47, X first at t64**,
+  ZZ@~t76+, ZZ+@~t98); `tierForCupLetter` uses derived anchors (doubled legacy letters alias to
+  their base). Band words / comparatives / image grounding UNCHANGED (image contract intact).
+- Regenerated `ladder-data.ts` (extract scripts updated): letter tables + BUST_CM_CURVES out,
+  `DROOP_CM_CURVES` in, goldens re-pinned (mass/capacity/bodyPct/droop).
+- Context block: `Body weight: ~71 kg total (~57 kg frame + ~14 kg breast).` line + hang cm on
+  the shape line. Panel: total weight, hang cm, height + build baseline fields (build shows the
+  inferred value when unset).
+- Canary (C5): letter monotonicity, no-saturation sweep, "outweighs her torso" mass check,
+  head-volume bounds, the Norma pin. `research/` excluded from lint (archive, never reformat).
+- 95/95 tests, svelte-check 0 errors, lint 0 errors.
+- **Play-time note:** Lucy's descriptor text still says "38X" — the sniffer now maps X → ~t64,
+  so seed-from-description would land her at true-X mass (~24 kg). Per the ruling she stays
+  tier 47 = T-cup; set the panel tier directly, and the descriptor text gets rewritten in C6.

@@ -1,17 +1,20 @@
 import { describe, expect, test } from 'vitest'
 import { GOLDEN_MEASUREMENTS, BODY_ROWS_BY_SHAPE } from './ladder-data'
-import { cupLetter } from './ladder'
 import {
+  bandCm,
   bodyRow,
   bustCm,
+  bustDiffCm,
   bwhCmString,
   capacityMlPerSide,
+  droopCm,
   dryKgPerSide,
   estimatedBodyWeightKg,
   fluidPressureLabel,
   imageStateCues,
   measurements,
   nowKgPerSide,
+  resolveBuild,
   sizingString,
   weightFeel,
 } from './measurements'
@@ -20,18 +23,37 @@ import type { BodyState } from './types'
 
 describe('curves reproduce the baked golden snapshots (the spine, at rung resolution)', () => {
   test.each([...GOLDEN_MEASUREMENTS])('tier %#', (golden) => {
-    expect(cupLetter(golden.tier)).toBe(golden.letter)
     expect(2 * dryKgPerSide(golden.tier)).toBeCloseTo(golden.dryTotalKg, 1)
     expect(2 * capacityMlPerSide(golden.tier)).toBeCloseTo(golden.capacityTotalMl, 0)
-    expect(bustCm(golden.tier, 'natural', 0)).toBeCloseTo(golden.bustCm, 0)
+    expect(droopCm(golden.tier, 'natural', 0)).toBeCloseTo(golden.droopCm, 1)
     const state = defaultBodyState(golden.tier)
+    // Frame now subtracts the baseline-breast double-count (research/38 C3), so
+    // the pct sits slightly above the spine's golden — within half a point.
     expect(measurements(state).breastMassPct).toBeCloseTo(golden.bodyPct, 0)
   })
 
-  test('bust circumference grows with tier and with fill (automatic recomputation)', () => {
+  test('corrected bust anchors (research/38 C1: dome preserved, big end re-anchored)', () => {
+    // Reference band 66 cm. Dome region unchanged vs the spine (t13 was 87.94);
+    // the anchored region reads honestly larger (spine t47 was 101.7).
+    expect(bustCm(13, 'natural', 0)).toBeCloseTo(87.9, 0)
+    expect(bustCm(31, 'natural', 0)).toBeCloseTo(107.1, 0)
+    expect(bustCm(47, 'natural', 0)).toBeCloseTo(116.8, 0)
+  })
+
+  test('the Norma Stitz anchor: measured 178 cm bust reproduces on her band', () => {
+    expect(109 + bustDiffCm(82, 'natural', 0)).toBeCloseTo(178, 0)
+  })
+
+  test('bust circumference grows with tier and with fill, and never saturates', () => {
     expect(bustCm(20, 'natural')).toBeGreaterThan(bustCm(10, 'natural'))
     expect(bustCm(47, 'natural', 100)).toBeGreaterThan(bustCm(47, 'natural', 0))
-    expect(bustCm(5000, 'natural')).toBe(bustCm(300, 'natural')) // saturates
+    expect(bustCm(400, 'natural')).toBeGreaterThan(bustCm(300, 'natural')) // D1: unbounded
+  })
+
+  test('bust rides the character band: bigger waist/build → bigger absolute bust', () => {
+    const ref = bustCm(47, 'natural', 0)
+    expect(bustCm(47, 'natural', 0, { waistCm: 81, build: 'average' })).toBeCloseTo(ref + 20, 0)
+    expect(bustCm(47, 'natural', 0, { waistCm: 61, build: 'curvy' })).toBeCloseTo(ref + 3, 0)
   })
 
   test('curves are strictly monotonic in tier', () => {
@@ -46,10 +68,45 @@ describe('curves reproduce the baked golden snapshots (the spine, at rung resolu
     expect(nowKgPerSide(47, 0)).toBeCloseTo(dryKgPerSide(47), 5)
   })
 
-  test('reference body weight matches the NAI estimate', () => {
+  test('reference frame weight matches the NAI estimate', () => {
     expect(estimatedBodyWeightKg(165, 'average')).toBe(58)
     expect(estimatedBodyWeightKg(undefined, undefined)).toBe(58)
     expect(estimatedBodyWeightKg(165, 'petite')).toBeLessThan(58)
+  })
+})
+
+describe('build inference + band (research/38 C3b)', () => {
+  test('explicit build wins; otherwise waist/height bands infer it', () => {
+    expect(resolveBuild({ waistCm: 85, build: 'petite' })).toBe('petite')
+    expect(resolveBuild({ waistCm: 58 })).toBe('petite')
+    expect(resolveBuild({ waistCm: 85 })).toBe('full')
+    expect(resolveBuild({})).toBe('average')
+  })
+
+  test('wide hips bump the inferred build one step toward curvy', () => {
+    expect(resolveBuild({ waistCm: 65 })).toBe('slim')
+    expect(resolveBuild({ waistCm: 65, hipsCm: 92 })).toBe('average')
+  })
+
+  test('band = waist + build offset (the documented band trap, made visible)', () => {
+    expect(bandCm({ waistCm: 61, build: 'average' })).toBe(66)
+    expect(bandCm({ waistCm: 61 })).toBe(65) // no explicit build → 61 cm waist infers slim
+    expect(bandCm(undefined)).toBe(66) // reference frame: waist 61, average
+    expect(bandCm({ waistCm: 65, build: 'curvy' })).toBe(73)
+  })
+})
+
+describe('honest body weight (research/38 C3)', () => {
+  test('total = frame (minus baseline-breast double-count) + current breast mass', () => {
+    const m = measurements(defaultBodyState(47))
+    expect(m.frameKg).toBe(57)
+    expect(m.totalBodyWeightKg).toBeCloseTo(57 + m.nowTotalKg, 5)
+    expect(m.totalBodyWeightKg).toBeCloseTo(71.4, 0)
+  })
+
+  test('an explicit frame weight overrides the estimate', () => {
+    const state = { ...defaultBodyState(13), baseline: { bodyWeightKg: 70 } }
+    expect(measurements(state).frameKg).toBe(69)
   })
 })
 
@@ -79,10 +136,11 @@ describe('body rows (baked NAI moment-model rungs)', () => {
     }
   })
 
-  test('natural hangs at large tiers; shapes diverge', () => {
+  test('natural hangs at large tiers; shapes diverge; droop tracks the hang channel', () => {
     expect(bodyRow(47, 'natural').hang).toBeTruthy()
     expect(bodyRow(47, 'gravity_defying').hang).toBe('')
     expect(bodyRow(47, 'natural').posture).not.toBe(bodyRow(47, 'gravity_defying').posture)
+    expect(droopCm(47, 'natural', 0)).toBeGreaterThan(droopCm(47, 'gravity_defying', 0))
   })
 
   test('every field is non-empty for posture/mobility/clothing across the sweep', () => {
@@ -97,24 +155,27 @@ describe('body rows (baked NAI moment-model rungs)', () => {
   })
 })
 
-describe('sizing strings (metric convention)', () => {
-  test('cup label is letter-only; measurements are cm', () => {
-    expect(sizingString(47)).toBe('X-cup')
+describe('sizing strings (metric convention, corrected letters)', () => {
+  test('cup label is letter-only; tier 47 is a T-cup under the honest ladder', () => {
+    expect(sizingString(47)).toBe('T-cup')
   })
 
-  test('BWH renders bust-waist-hips in cm; bust alone when anatomy is unset', () => {
-    const full = { ...defaultBodyState(47), baseline: { waistCm: 81, hipsCm: 94 } }
-    expect(bwhCmString(full)).toBe('102-81-94 cm')
-    expect(bwhCmString(defaultBodyState(47))).toBe('bust ~102 cm')
+  test('BWH renders bust-waist-hips in cm on her own band; bust alone when anatomy unset', () => {
+    const full = {
+      ...defaultBodyState(47),
+      baseline: { waistCm: 81, hipsCm: 94, build: 'average' },
+    }
+    expect(bwhCmString(full)).toBe('137-81-94 cm')
+    expect(bwhCmString(defaultBodyState(47))).toBe('bust ~117 cm')
   })
 
   test('BWH bust tracks fill (engorgement widens the measurement)', () => {
     const engorged = {
       ...defaultBodyState(47),
-      baseline: { waistCm: 81, hipsCm: 94 },
+      baseline: { waistCm: 81, hipsCm: 94, build: 'average' },
       fluids: { fillPercent: 100, fluidType: 'milk' },
     }
-    expect(bwhCmString(engorged)).toBe('106-81-94 cm')
+    expect(bwhCmString(engorged)).toBe('143-81-94 cm')
   })
 })
 

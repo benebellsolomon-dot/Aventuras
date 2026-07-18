@@ -60,8 +60,12 @@ function characterLines(entry: BeStateEntry): string {
   if (m.weightFeel) massBits.push(m.weightFeel)
   if (m.proportionNote) massBits.push(m.proportionNote)
   lines.push(`Carried mass: ${massBits.join(' — ')}.`)
+  lines.push(
+    `Body weight: ~${Math.round(m.totalBodyWeightKg)} kg total (~${Math.round(m.frameKg)} kg frame + ~${kg(m.nowTotalKg)} kg breast).`,
+  )
 
-  lines.push(`Shape: ${state.shape} — ${row.shape}${row.hang ? ` — ${row.hang}` : ''}.`)
+  const hangCm = row.hang && m.droopCm >= 5 ? ` (~${Math.round(m.droopCm)} cm of hang)` : ''
+  lines.push(`Shape: ${state.shape} — ${row.shape}${row.hang ? ` — ${row.hang}${hangCm}` : ''}.`)
   lines.push(`Posture: ${row.posture}; mobility: ${row.mobility}; clothing: ${row.clothing}.`)
 
   if (state.fluids.fillPercent > 0) {
