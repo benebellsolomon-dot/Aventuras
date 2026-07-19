@@ -428,8 +428,11 @@ describe('buildStructuredImageSpec', () => {
     const char = spec!.characters[0]
     expect(char.tier_index).toBe(24)
     expect(char.breast_shape).toBe('firm')
+    // identity_tags are the bridge's real identity channel — the excerpt only
+    // feeds skin-tone inference (source-verified).
+    expect(char.identity_tags).toEqual(['long silver hair', 'blue eyes'])
+    expect(char.build).toBe('slim')
     expect(char.appearance_excerpt).toContain('long silver hair')
-    expect(char.appearance_excerpt).toContain('blue eyes')
     expect(spec!.register).toBe('color')
     expect(spec!.style_preset).toBe('semireal')
     expect(spec!.intimacy).toBe('clean')
@@ -445,9 +448,38 @@ describe('buildStructuredImageSpec', () => {
       sceneText: 'standing by the window, huge breasts, warm smile',
       narrativeText: '',
     })
-    expect(spec!.scene_tags).toContain('standing by the window')
-    expect(spec!.scene_tags).toContain('warm smile')
+    expect(spec!.scene_tags!.join(' ')).toMatch(/standing by the window/)
+    expect(spec!.scene_tags!.join(' ')).toMatch(/warm smile/)
     expect(spec!.scene_tags!.join(' ')).not.toMatch(/huge breasts/i)
+  })
+
+  test('scene prose splits on sentences only — clauses survive intact', () => {
+    const lucy = statefulCharacter('Lucy', { tier: 24 })
+    const spec = buildStructuredImageSpec({
+      presentCharacters: [lucy],
+      tagCharacterNames: ['Lucy'],
+      sceneText:
+        'Lucy leaning on the counter, mug in hand, smiling softly. Morning light through the window.',
+      narrativeText: '',
+    })
+    expect(spec!.scene_tags).toContain('Lucy leaning on the counter, mug in hand, smiling softly')
+    expect(spec!.scene_tags).toContain('Morning light through the window')
+  })
+
+  test('canonical clothing rides scene_tags per subject', () => {
+    const lucy = statefulCharacter(
+      'Lucy',
+      { tier: 24 },
+      { hair: 'long silver hair', clothing: 'an oversized cream sweater' },
+    )
+    const spec = buildStructuredImageSpec({
+      presentCharacters: [lucy],
+      tagCharacterNames: ['Lucy'],
+      sceneText: 'reading by the fire',
+      narrativeText: '',
+    })
+    expect(spec!.scene_tags![0]).toBe('Lucy wearing an oversized cream sweater')
+    expect(spec!.characters[0].identity_tags).not.toContain('an oversized cream sweater')
   })
 
   test('lastGrowth emits a SPEC-level be_moments cluster scaled by delta', () => {

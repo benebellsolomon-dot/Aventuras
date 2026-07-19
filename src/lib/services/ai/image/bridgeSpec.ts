@@ -33,9 +33,46 @@ export interface BridgeSpecSubject {
     hair?: string
     eyes?: string
     build?: string
+    clothing?: string
     distinguishing?: string
   } | null
   metadata: Record<string, unknown> | null
+}
+
+/**
+ * Identity travels as VERBATIM identity_tags — the bridge consumes
+ * appearance_excerpt ONLY for skin-tone inference (compose_identity_tags,
+ * source-verified 2026-07-19), so free text alone silently dropped hair/eyes/
+ * face/build. The excerpt stays as the skin-tone fallback.
+ */
+export function identityTagsFromDescriptors(
+  d: BridgeSpecSubject['visualDescriptors'],
+): string[] | undefined {
+  if (!d) return undefined
+  const tags = [d.face, d.hair, d.eyes, d.distinguishing]
+    .map((part) => (part ?? '').trim())
+    .filter((part) => part.length > 0)
+  return tags.length > 0 ? tags : undefined
+}
+
+// Bridge build vocabulary: petite/slim/average/curvy/athletic/full.
+const BUILD_KEYWORDS: ReadonlyArray<readonly [string, RegExp]> = [
+  ['petite', /\b(?:petite|tiny|diminutive)\b/i],
+  ['slim', /\b(?:slim|slender|willowy|lithe|thin)\b/i],
+  ['athletic', /\b(?:athletic|toned|muscular|fit)\b/i],
+  ['curvy', /\b(?:curvy|voluptuous|hourglass|buxom)\b/i],
+  ['full', /\b(?:full[- ]figured|plump|soft|chubby|plush)\b/i],
+  ['average', /\baverage\b/i],
+]
+
+/** Map a free-text build descriptor onto the bridge's build vocabulary; undefined on no match. */
+export function mapBridgeBuild(build: string | undefined): string | undefined {
+  const s = (build ?? '').trim()
+  if (!s) return undefined
+  for (const [key, pattern] of BUILD_KEYWORDS) {
+    if (pattern.test(s)) return key
+  }
+  return undefined
 }
 
 export interface BridgeSpecBuildInput {
@@ -92,8 +129,11 @@ function sceneTags(sceneText: string): string[] {
   const stripped = String(sceneText || '').replace(BAND_WORD_PATTERN, '')
   const seen = new Set<string>()
   const tags: string[] = []
-  for (const piece of stripped.split(/[,.;\n]+/)) {
-    const tag = piece.trim()
+  // Sentence boundaries ONLY — splitting on commas shredded the model's scene
+  // direction into disordered fragments (clauses like "leaning on the counter,
+  // mug in hand" must survive intact).
+  for (const piece of stripped.split(/[.;\n]+/)) {
+    const tag = piece.replace(/\s*,\s*,+/g, ', ').replace(/^[\s,]+|[\s,]+$/g, '')
     if (!tag) continue
     const key = tag.toLowerCase()
     if (seen.has(key)) continue
@@ -120,6 +160,7 @@ export function buildStructuredImageSpec(
   // such field — character-level entries are silently swallowed by extra="allow",
   // and the spec-level field is also the sub-tier-22 Illustrious routing trigger).
   const beMoments: string[] = []
+  const clothingTags: string[] = []
   const seenNames = new Set<string>()
   for (const name of tagCharacterNames) {
     const key = name.toLowerCase()
@@ -132,11 +173,17 @@ export function buildStructuredImageSpec(
     characters.push({
       tier_index: bridgeTierIndex(state.tier),
       breast_shape: state.shape,
+      build: mapBridgeBuild(subject.visualDescriptors?.build),
+      identity_tags: identityTagsFromDescriptors(subject.visualDescriptors),
       appearance_excerpt: appearanceExcerpt(subject),
     })
     for (const moment of growthMoments(state)) {
       if (!beMoments.includes(moment)) beMoments.push(moment)
     }
+    // Canonical outfit rides the scene (identity_tags stay outfit-free — the
+    // appearance hash excludes clothing so sets don't thrash per-scene).
+    const clothing = subject.visualDescriptors?.clothing?.trim()
+    if (clothing) clothingTags.push(`${subject.name} wearing ${clothing}`)
   }
 
   if (characters.length === 0) return null
@@ -160,7 +207,7 @@ export function buildStructuredImageSpec(
     style_preset: 'semireal',
     intimacy,
     characters,
-    scene_tags: sceneTags(sceneText),
+    scene_tags: [...clothingTags, ...sceneTags(sceneText)],
     // Scene text only — the narrative beat routinely names locations the
     // image is not set in (a wrong curated key is worse than none).
     location: inferBridgeLocation(sceneText),

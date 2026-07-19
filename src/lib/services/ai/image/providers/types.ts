@@ -46,7 +46,10 @@ export interface BridgeSpecCharacter {
   hair_style?: string
   eye_color?: string
   skin_tone?: string
+  /** Only feeds bridge-side SKIN-TONE inference — not a general identity channel. */
   appearance_excerpt?: string
+  /** Verbatim identity tags — the bridge's strongest identity channel (overrides flat fields). */
+  identity_tags?: string[]
 }
 
 /**

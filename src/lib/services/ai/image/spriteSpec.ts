@@ -11,6 +11,7 @@
  */
 
 import type { StructuredImageSpecInput } from './providers/types'
+import { identityTagsFromDescriptors, mapBridgeBuild } from './bridgeSpec'
 import { bandRepresentativeTier, bandWord, type SpriteExpression } from '$lib/services/be'
 
 export interface SpriteCellInput {
@@ -20,6 +21,7 @@ export interface SpriteCellInput {
     hair?: string
     eyes?: string
     build?: string
+    clothing?: string
     distinguishing?: string
   } | null
   bandIndex: number
@@ -84,14 +86,23 @@ export function buildSpriteSpec(input: SpriteCellInput): StructuredImageSpecInpu
     characters: [
       {
         tier_index: bandRepresentativeTier(input.bandIndex),
+        build: mapBridgeBuild(input.visualDescriptors?.build),
+        identity_tags: identityTagsFromDescriptors(input.visualDescriptors),
         appearance_excerpt: identityExcerpt(input.visualDescriptors),
       },
     ],
-    scene_tags: [...SPRITE_FRAMING_TAGS],
+    scene_tags: [...clothingSceneTags(input), ...SPRITE_FRAMING_TAGS],
   }
   if (beMoments.length > 0) spec.be_moments = beMoments
   if (extraTags.length > 0) spec.extra_tags = extraTags
   return spec
+}
+
+// Canonical outfit on every cell — the appearance hash excludes clothing, so
+// the outfit is set-stable by design; burst cells tear it via be_moments.
+function clothingSceneTags(input: SpriteCellInput): string[] {
+  const clothing = input.visualDescriptors?.clothing?.trim()
+  return clothing ? [`wearing ${clothing}`] : []
 }
 
 /**
@@ -141,5 +152,6 @@ export function buildSpritePrompt(input: SpriteCellInput): string {
   if (input.engorged) parts.push(engorgedCue(input.fluidType))
   const appearance = identityExcerpt(input.visualDescriptors)
   if (appearance) parts.push(appearance)
+  parts.push(...clothingSceneTags(input))
   return parts.join(', ')
 }

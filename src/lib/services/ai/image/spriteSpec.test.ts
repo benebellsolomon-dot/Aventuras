@@ -25,7 +25,16 @@ describe('buildSpriteSpec', () => {
     expect(spec.intimacy).toBe('clean')
     expect(spec.scene_tags).toEqual(expect.arrayContaining(['solo', 'full body', 'standing']))
     expect(spec.scene_tags!.join(',')).toMatch(/white background/)
+    expect(spec.characters[0].identity_tags).toEqual(['long silver hair', 'blue eyes'])
+    expect(spec.characters[0].build).toBe('slim')
     expect(spec.characters[0].appearance_excerpt).toContain('long silver hair')
+  })
+
+  test('canonical clothing rides sprite scene_tags', () => {
+    const spec = buildSpriteSpec(
+      cell({ visualDescriptors: { hair: 'silver hair', clothing: 'a summer dress' } }),
+    )
+    expect(spec.scene_tags![0]).toBe('wearing a summer dress')
   })
 
   test('expression clusters map to be_moments', () => {
