@@ -337,7 +337,10 @@ export class InlineImageGenerationService {
       // Emit ready event
       emitImageReady(imageId, entryId, true)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      // Tauri's HTTP plugin throws plain strings on network failures
+      // (connection refused etc.) — preserve them instead of "Unknown error".
+      const errorMessage =
+        error instanceof Error ? error.message : error ? String(error) : 'Unknown error'
       log('Inline image generation failed', { imageId, error: errorMessage })
 
       // Update record with error. A failed write must not swallow the UI

@@ -242,7 +242,10 @@ export class InlineImageTracker {
       log('Image generated successfully (in memory)')
       return { base64: result.base64 }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      // Tauri's HTTP plugin throws plain strings on network failures
+      // (connection refused etc.) — preserve them instead of "Unknown error".
+      const errorMessage =
+        error instanceof Error ? error.message : error ? String(error) : 'Unknown error'
       log('Image generation failed', { error: errorMessage })
       return { base64: null, error: errorMessage }
     }
