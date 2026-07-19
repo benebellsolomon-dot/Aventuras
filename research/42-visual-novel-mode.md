@@ -35,13 +35,42 @@ This doc is the synthesis; it is self-contained.
 
 ## 1. Landscape lessons (what to copy, what to avoid)
 
-**pixelsaga** resisted direct verification (Perchance 403s automated fetches; no
-archive snapshot; no reviews). Triangulated from Perchance's own plugin docs: it
-rides `ai-text-plugin` (stateless — author re-injects context per call; documents
-"Multi-Choice Text Adventure" as the expected shape) + `text-to-image-plugin` (seed
-reuse ≈ "very similar", no LoRA/img2img — **no native consistency answer**), inside a
-shared VN chrome template (backlog/gallery/save-load/text-speed). Aventuras already
-exceeds this stack on every axis except the VN chrome itself.
+**pixelsaga — now fully verified** (Ben provided the complete generator source
+2026-07-19; mechanics distilled in `bundles/pixelsaga/MECHANICS.md`). The load-bearing
+observations, superseding the earlier triangulation:
+
+1. **Speaker attribution is solved with a structured narrator format** — the single
+   LLM call emits `[SCENE: names]` / `[MENTIONS: names]` / `OUTFIT[Name]: …` /
+   alternating `NARR:` + `DIALOG[Name]:` blocks / `>>> choice` lines, regex-parsed
+   into typed segments. This is a working, proven template for our
+   `VN_DIALOGUE_INSTRUCTIONS` — the piece we'd flagged as zero-precedent.
+2. **Transparency is plugin-side matting** — sprites are generated with
+   `removeBackground: true`. Background removal as a generation-service feature is
+   the industry-normal answer; this strengthens Open Decision #1 option (a) (a
+   matting node on the bridge) as the standard path.
+3. **A state-keyed sprite cache is exactly their architecture too** — three undress
+   stages pre-generated per character by a background queue, a regex state-matcher
+   picking the cache key from the narrator's OUTFIT text, instant swap on hit /
+   async generate on miss, wholesale invalidation on appearance edit. Our banded
+   sprite-set design is the same machine with a better key (deterministic
+   `bandIndex(tier)` from the engine instead of regexing prose).
+4. **Display loop worth copying**: ADV click-through — one segment at a time with a
+   nameplate box, segments finalized incrementally DURING streaming (the partial
+   last segment held back; auto-advance if the reader has caught up), choices only
+   after finalization. Plus `speaking` (scale+glow) / `dimmed` (darkened) sprite
+   classes re-applied per dialogue segment, and in-slot spinner standees for
+   still-generating characters.
+5. **Their consistency ceiling is low**: character identity rides nothing but
+   verbatim reuse of a structured prompt assembled from a JSON bio (no img2img, no
+   seed pinning, no LoRA). Notably for BE: every female character carries a static
+   rolled `bustSize` injected into every sprite prompt — a frozen version of what
+   our engine makes dynamic. Aventuras with FaceID anchors + the tier ladder
+   exceeds this on every axis.
+6. Their presence tracking makes the NARRATOR declare `[SCENE:]` inline; Aventuras'
+   separate classifier (persisted per-entry) is architecturally cleaner and already
+   built. Same for their token-count summary compaction (we have chapters/memory),
+   lore drawer (lorebook), and story-priority appearance extraction (classifier
+   visualDescriptors).
 
 **SillyTavern VN mode** (Ben's prior era) is the reference implementation and its
 failure modes are our design checklist:
@@ -92,11 +121,13 @@ sprites, never fresh unanchored generations.
 
 **Must build new:**
 - The VN panel components (background/sprite-stage/textbox/nameplate layers).
-- **Speaker attribution** — the one zero-precedent LLM-format piece. Prose has NO
-  structured dialogue markup (the colored spans are visualProseMode free-form, model's
-  choice, not a speaker map). v1 ships plain narration in the textbox; v2 adds a
-  `VN_DIALOGUE_INSTRUCTIONS` block (same pattern as INLINE_IMAGE_INSTRUCTIONS)
-  requesting speaker-tagged output, + a tolerant parser.
+- **Speaker attribution** — prose has NO structured dialogue markup today (the
+  colored spans are visualProseMode free-form, model's choice, not a speaker map).
+  v1 ships plain narration in the textbox; v2 adds a `VN_DIALOGUE_INSTRUCTIONS`
+  block (same pattern as INLINE_IMAGE_INSTRUCTIONS) + a tolerant parser —
+  **template now proven**: pixelsaga's `NARR:` / `DIALOG[Name]:` grammar (§1),
+  adapted so the plain feed view can strip the tags and the drift detectors still
+  see the character names (DIALOG[Lucy] preserves attribution windows).
 - `vnMode` toggle: per-story StorySettings flag (the beMode 8-file wiring template) or
   even simpler, a per-UI view toggle (recommended: **view toggle**, composes with both
   story modes and needs no generation fork).
@@ -144,7 +175,7 @@ No generic AI-VN has a deterministic body engine driving its sprites. Ours does:
 | Phase | Content | Effort | Depends on |
 |---|---|---|---|
 | **v0** | Spec 2 si-bridge native provider (already planned as research/37 Phase 4) — unlocks illustrious tier ladder, FaceID, regional, /animate | M-L | bridge reachable |
-| **v1** | VN panel MVP: activePanel screen, sharp bg, present-character portrait standees, textbox on streaming content, ActionChoices as-is, typewriter | S | nothing — ship now |
+| **v1** | VN panel MVP: activePanel screen, sharp bg, present-character portrait standees w/ speaking/dimmed highlighting + in-slot generating placeholders, ADV click-through textbox with streaming segment hold-back (pixelsaga display loop), ActionChoices as-is, typewriter | S | nothing — ship now |
 | **v2** | Banded sprite sets: anchor governance, `character_sprites` cache, lazy batch gen, selection function, crossfade swaps; speaker-tagged textbox; resolve inline-vs-bg exclusivity | M-L | v0 + transparency ruling |
 | **v3** | Multi-character stage (compositing, z-order), regional interaction CGs, location-keyed bg cache | M | v2 |
 | **v4** | Growth polish: band-crossing transitions (pull earlier if cheap) + gated /animate/growth clips + MP4 surface | L | v2 |
@@ -155,7 +186,9 @@ No generic AI-VN has a deterministic body engine driving its sprites. Ours does:
    matting/RGBA output (verified). Options: (a) bridge-side matting node (Ben deploys;
    sibling to the standing img2img shim ask) · (b) app-side background removal (WASM)
    · (c) portrait-card style instead of cutout sprites (weaker VN feel, zero new
-   infra). v1 works regardless (cards); v2 wants (a) or (b).
+   infra). v1 works regardless (cards); v2 wants (a) or (b). *pixelsaga precedent:
+   its image plugin exposes `removeBackground: true` — generation-side matting is
+   the industry-normal answer, favoring (a).*
 2. **tier_index calibration** (Spec 2 Task 5): three ladders in play (engine bandIndex
    / krea nouns / illustrious tier_index) — verify via `POST /image/build` dry-run
    before trusting any mapping; band app-side on bandIndex regardless.
@@ -176,4 +209,6 @@ Synthesized from three agent research passes (2026-07-19): web landscape (Percha
 plugin docs, SillyTavern VN/expressions docs + issue tracker, Prome extension, VNCCS,
 Ren'Py docs — URLs preserved in the session transcript), a read-only Aventuras
 codebase map (file:line specifics inline above), and a BE-sprite design pass over the
-engine + research/32/37 + the si-bridge INTEGRATION contract.
+engine + research/32/37 + the si-bridge INTEGRATION contract. §1's pixelsaga analysis
+was upgraded from triangulation to OBSERVED after Ben provided the complete generator
+source (same day); the distilled mechanics live in `bundles/pixelsaga/MECHANICS.md`.
