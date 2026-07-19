@@ -128,7 +128,8 @@ export function createSiBridgeProvider(config: ImageProviderConfig): ImageProvid
       if (options.poseFaceAnchor) {
         body.pose_face_anchor_b64 = options.poseFaceAnchor
         if (options.faceidWeight !== undefined) body.faceid_weight = options.faceidWeight
-        if (options.openposeStrength !== undefined) body.openpose_strength = options.openposeStrength
+        if (options.openposeStrength !== undefined)
+          body.openpose_strength = options.openposeStrength
       }
       const dimensions = parseDimensions(size)
       if (dimensions) {

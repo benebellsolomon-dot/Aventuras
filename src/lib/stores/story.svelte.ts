@@ -1417,7 +1417,11 @@ class StoryStore {
   async updateCharacter(id: string, updates: Partial<Character>): Promise<void> {
     if (!this.currentStory) throw new Error('No story loaded')
 
-    const existing = this.characters.find((c) => c.id === id)
+    // Fall back to the COW override: a two-phase writer (e.g. the sprite-anchor
+    // service persisting generating→ready) captures the pre-COW id; the first
+    // write's cowCharacter remaps it, and the second write must still land.
+    const existing =
+      this.characters.find((c) => c.id === id) ?? this.characters.find((c) => c.overridesId === id)
     if (!existing) throw new Error('Character not found')
 
     if (updates.relationship !== undefined) {

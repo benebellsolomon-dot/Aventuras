@@ -37,8 +37,16 @@ describe('buildSpriteSpec', () => {
     expect(flushed.extra_tags!.some((t) => /flushed/.test(t))).toBe(true)
   })
 
+  test('engorged normalizes any expression to distressed (35-cell invariant)', () => {
+    const spec = buildSpriteSpec(cell({ expression: 'positive', engorged: true }))
+    expect(spec.be_moments).toEqual(['embarrassed', 'strain'])
+    expect(spec.extra_tags!.some((t) => /flushed/.test(t))).toBe(false)
+  })
+
   test('the engorged cell adds strain and the fluid-typed cue', () => {
-    const spec = buildSpriteSpec(cell({ expression: 'distressed', engorged: true, fluidType: 'mana' }))
+    const spec = buildSpriteSpec(
+      cell({ expression: 'distressed', engorged: true, fluidType: 'mana' }),
+    )
     expect(spec.be_moments).toEqual(expect.arrayContaining(['strain']))
     expect(spec.extra_tags!.some((t) => /engorged/.test(t) && /mana/.test(t))).toBe(true)
   })

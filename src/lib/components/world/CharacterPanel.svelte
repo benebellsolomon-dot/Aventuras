@@ -44,10 +44,7 @@
   import { cn } from '$lib/utils/cn'
   import IconRow from '$lib/components/ui/icon-row.svelte'
   import { DEFAULT_FALLBACK_STYLE_PROMPT } from '$lib/services/ai/image/constants'
-  import {
-    currentAppearanceHash,
-    spriteAnchorService,
-  } from '$lib/services/ai/image/SpriteService'
+  import { currentAppearanceHash, spriteAnchorService } from '$lib/services/ai/image/SpriteService'
 
   let showAddForm = $state(false)
   let newName = $state('')
@@ -767,19 +764,24 @@
 
               <!-- Sprite Anchor (V2 sprite engine; BE stories, non-protagonist) -->
               {#if story.currentStory?.settings?.beMode === true && !isProtagonist}
+                {@const anchorHashNow = currentAppearanceHash(character)}
                 <div class="border-border bg-muted/20 rounded-md border p-2">
                   <div
                     class="text-muted-foreground mb-2 flex items-center justify-between text-xs font-medium"
                   >
                     <span>Sprite Anchor</span>
                     {#if character.spriteAnchorStatus === 'approved'}
-                      {#if character.spriteAnchorHash === currentAppearanceHash(character)}
+                      {#if character.spriteAnchorHash === anchorHashNow}
                         <Badge variant="outline" class="h-5 text-xs">Approved</Badge>
                       {:else}
                         <Badge variant="destructive" class="h-5 text-xs">Stale — regenerate</Badge>
                       {/if}
                     {:else if character.spriteAnchorStatus === 'ready'}
                       <Badge variant="secondary" class="h-5 text-xs">Awaiting approval</Badge>
+                    {:else if character.spriteAnchorStatus === 'failed'}
+                      <Badge variant="destructive" class="h-5 text-xs">Failed — retry</Badge>
+                    {:else if character.spriteAnchorStatus === 'generating' && generatingAnchorId !== character.id}
+                      <Badge variant="secondary" class="h-5 text-xs">Interrupted — retry</Badge>
                     {/if}
                   </div>
                   <div class="flex items-start gap-3">

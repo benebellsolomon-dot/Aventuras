@@ -85,7 +85,9 @@ export interface SpriteAppearanceInput {
   register: string
 }
 
-const HASH_SEPARATOR = ''
+// Unit separator: field boundaries must survive concatenation ('long silv' +
+// 'erblue' must not hash like 'long silver' + 'blue').
+const HASH_SEPARATOR = '\u001f'
 
 // FNV-1a 32-bit — small, sync, dependency-free (crypto.subtle is async and
 // would force the whole selection layer async for no security benefit).

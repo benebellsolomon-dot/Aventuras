@@ -11,11 +11,7 @@
  */
 
 import type { StructuredImageSpecInput } from './providers/types'
-import {
-  bandRepresentativeTier,
-  bandWord,
-  type SpriteExpression,
-} from '$lib/services/be'
+import { bandRepresentativeTier, bandWord, type SpriteExpression } from '$lib/services/be'
 
 export interface SpriteCellInput {
   name: string
@@ -64,11 +60,18 @@ function identityExcerpt(d: SpriteCellInput['visualDescriptors']): string | unde
   return joined || undefined
 }
 
+// The engine invariant: the engorged cell always wears the strain/distressed
+// look — normalizing here keeps a naive 7×5 enumerator from minting off-spec
+// cells like (positive, engorged).
+const cellExpression = (input: SpriteCellInput): SpriteExpression =>
+  input.engorged ? 'distressed' : input.expression
+
 /** Structured spec for the si-bridge path. */
 export function buildSpriteSpec(input: SpriteCellInput): StructuredImageSpecInput {
-  const beMoments = [...EXPRESSION_MOMENTS[input.expression]]
+  const expression = cellExpression(input)
+  const beMoments = [...EXPRESSION_MOMENTS[expression]]
   const extraTags: string[] = []
-  if (input.expression === 'flushed') extraTags.push(FLUSH_CUE)
+  if (expression === 'flushed') extraTags.push(FLUSH_CUE)
   if (input.engorged) {
     beMoments.push('strain')
     extraTags.push(engorgedCue(input.fluidType))
@@ -128,12 +131,13 @@ export function buildAnchorPrompt(
 /** Prompt fallback for external providers — banded, framed, prompt-only. */
 export function buildSpritePrompt(input: SpriteCellInput): string {
   const tier = bandRepresentativeTier(input.bandIndex)
+  const expression = cellExpression(input)
   const parts: string[] = [
     ...SPRITE_FRAMING_TAGS,
     bandWord(tier),
-    ...EXPRESSION_MOMENTS[input.expression].map((m) => m.replace(/_/g, ' ')),
+    ...EXPRESSION_MOMENTS[expression].map((m) => m.replace(/_/g, ' ')),
   ]
-  if (input.expression === 'flushed') parts.push(FLUSH_CUE)
+  if (expression === 'flushed') parts.push(FLUSH_CUE)
   if (input.engorged) parts.push(engorgedCue(input.fluidType))
   const appearance = identityExcerpt(input.visualDescriptors)
   if (appearance) parts.push(appearance)

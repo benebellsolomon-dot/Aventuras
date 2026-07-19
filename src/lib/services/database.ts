@@ -844,8 +844,8 @@ class DatabaseService {
   async addCharacter(character: Character): Promise<void> {
     const db = await this.getDb()
     await db.execute(
-      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata, branch_id, overrides_id, deleted, translated_name, translated_description, translated_relationship, translated_traits, translated_visual_descriptors, translation_language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, sprite_anchor, sprite_anchor_status, sprite_anchor_hash, status, metadata, branch_id, overrides_id, deleted, translated_name, translated_description, translated_relationship, translated_traits, translated_visual_descriptors, translation_language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         character.id,
         character.storyId,
@@ -855,6 +855,11 @@ class DatabaseService {
         JSON.stringify(character.traits),
         JSON.stringify(character.visualDescriptors || {}),
         character.portrait || null,
+        // Anchor fields ride every re-persist path (retry-restore, COW copy,
+        // branch fork) — omitting them here silently wiped approved anchors.
+        character.spriteAnchor || null,
+        character.spriteAnchorStatus || null,
+        character.spriteAnchorHash || null,
         character.status,
         character.metadata ? JSON.stringify(character.metadata) : null,
         character.branchId || null,
@@ -2595,8 +2600,9 @@ class DatabaseService {
           image_data, seed, status, error_message, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (character_id, appearance_hash, band_index, expression, engorged)
-       DO UPDATE SET image_data = excluded.image_data, seed = excluded.seed,
-                     status = excluded.status, error_message = excluded.error_message`,
+       DO UPDATE SET id = excluded.id, image_data = excluded.image_data,
+                     seed = excluded.seed, status = excluded.status,
+                     error_message = excluded.error_message`,
       [
         sprite.id,
         sprite.storyId,

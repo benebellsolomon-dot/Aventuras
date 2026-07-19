@@ -125,6 +125,18 @@ describe('spriteAppearanceHash', () => {
     expect(spriteAppearanceHash({ ...APPEARANCE, stylePreset: 'none' })).not.toBe(base)
   })
 
+  test('field boundaries are preserved (no concatenation ambiguity)', () => {
+    const a = spriteAppearanceHash({
+      ...APPEARANCE,
+      visualDescriptors: { hair: 'long silver', eyes: 'blue' },
+    })
+    const b = spriteAppearanceHash({
+      ...APPEARANCE,
+      visualDescriptors: { hair: 'long silv', eyes: 'erblue' },
+    })
+    expect(a).not.toBe(b)
+  })
+
   test('tolerates null descriptors', () => {
     expect(
       spriteAppearanceHash({
