@@ -1,6 +1,7 @@
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod matting;
 mod migration_patch;
 mod sync;
 
@@ -232,7 +233,7 @@ pub fn run() {
         }
     ];
 
-    let mut builder = tauri::Builder::default();
+    let builder = tauri::Builder::default();
 
     #[cfg(all(debug_assertions, feature = "devtools"))]
     // only enable instrumentation in development builds
@@ -267,6 +268,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
+        .manage(matting::MattingState::default())
         .invoke_handler(tauri::generate_handler![
             start_sync_server,
             stop_sync_server,
@@ -275,6 +277,8 @@ pub fn run() {
             sync_connect,
             sync_pull_story,
             sync_push_story,
+            matting::sprite_matting_available,
+            matting::sprite_finish,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
