@@ -2654,6 +2654,15 @@ class DatabaseService {
     await db.execute(`UPDATE character_sprites SET ${setClauses.join(', ')} WHERE id = ?`, values)
   }
 
+  /** Manual full rebuild: drop every cached cell for a character (panel action). */
+  async deleteAllSpritesForCharacter(characterId: string): Promise<number> {
+    const db = await this.getDb()
+    const result = await db.execute('DELETE FROM character_sprites WHERE character_id = ?', [
+      characterId,
+    ])
+    return result.rowsAffected ?? 0
+  }
+
   /** Wholesale appearance-change invalidation: drop every set except the current hash. */
   async deleteStaleSprites(characterId: string, keepAppearanceHash: string): Promise<number> {
     const db = await this.getDb()

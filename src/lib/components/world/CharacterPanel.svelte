@@ -392,6 +392,21 @@
     await story.updateCharacter(character.id, { currentVisualDescriptors: null })
   }
 
+  let rebuildingSpritesId = $state<string | null>(null)
+
+  async function rebuildSprites(character: Character) {
+    anchorError = null
+    rebuildingSpritesId = character.id
+    try {
+      const dropped = await database.deleteAllSpritesForCharacter(character.id)
+      log('Sprite cache cleared for rebuild', { characterId: character.id, dropped })
+    } catch (error) {
+      anchorError = error instanceof Error ? error.message : String(error)
+    } finally {
+      rebuildingSpritesId = null
+    }
+  }
+
   async function generateSpriteAnchor(character: Character) {
     anchorError = null
     generatingAnchorId = character.id
@@ -871,6 +886,21 @@
                           Approve as identity anchor
                         </Button>
                       {/if}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="bg-background h-7 w-full justify-start text-xs"
+                        onclick={() => rebuildSprites(character)}
+                        disabled={rebuildingSpritesId !== null}
+                        title="Delete every cached sprite cell — the next VN render regenerates the band from current identity"
+                      >
+                        {#if rebuildingSpritesId === character.id}
+                          <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                          <span>Clearing...</span>
+                        {:else}
+                          <span>Rebuild sprites</span>
+                        {/if}
+                      </Button>
                     </div>
                   </div>
                   {#if anchorError}
