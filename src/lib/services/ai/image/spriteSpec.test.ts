@@ -44,6 +44,19 @@ describe('buildSpriteSpec', () => {
   })
 })
 
+describe('buildAnchorSpec / buildAnchorPrompt', () => {
+  test('anchor renders at the character tier (seed-tier ruling) on the same framing', async () => {
+    const { buildAnchorSpec, buildAnchorPrompt } = await import('./spriteSpec')
+    const spec = buildAnchorSpec(24, cell().visualDescriptors)
+    expect(spec.characters[0].tier_index).toBe(24)
+    expect(spec.be_moments).toBeUndefined()
+    expect(spec.scene_tags).toEqual(expect.arrayContaining(['solo', 'full body']))
+    const prompt = buildAnchorPrompt(24, cell().visualDescriptors)
+    expect(prompt).toMatch(/huge breasts/)
+    expect(prompt).toMatch(/white background/)
+  })
+})
+
 describe('buildSpritePrompt', () => {
   test('carries band word, framing, and appearance for prompt-only providers', () => {
     const prompt = buildSpritePrompt(cell({ bandIndex: 2 }))

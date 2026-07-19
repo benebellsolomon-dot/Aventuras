@@ -137,6 +137,10 @@ export interface ImageGenerationServiceSettings {
   backgroundProfileId: string | null // API profile for background image generation
   backgroundSize: string // Background image size (default: '1280x720')
   backgroundBlur: number // Background blur amount in pixels (default: 0)
+
+  // V2 sprite engine (Spec 4): banded character sprites + anchor renders
+  spriteProfileId?: string | null // API profile for sprite/anchor generation (provider-agnostic)
+  spriteSize?: string // Sprite render size (default: '832x1216', bridge-native portrait aspect)
 }
 
 // Re-export ImageGenerationContext type for backwards compatibility

@@ -110,12 +110,13 @@
     portrait: 'portraitProfileId',
     reference: 'referenceProfileId',
     background: 'backgroundProfileId',
+    sprite: 'spriteProfileId',
   } as const satisfies Record<string, keyof typeof settings.systemServicesSettings.imageGeneration>
 
   // Handle profile change
   function onProfileChange(
     profileId: string,
-    type: 'standard' | 'portrait' | 'reference' | 'background',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite',
   ) {
     settings.systemServicesSettings.imageGeneration[profileIdKey[type]] = profileId
     settings.saveSystemServicesSettings()
@@ -123,7 +124,7 @@
 
   // Get the currently selected image profile for a type
   function getSelectedImageProfile(
-    type: 'standard' | 'portrait' | 'reference' | 'background',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite',
   ): ImageProfile | undefined {
     const profileId = settings.systemServicesSettings.imageGeneration[profileIdKey[type]]
     return profileId ? settings.getImageProfile(profileId) : undefined
@@ -259,7 +260,7 @@
    * Get supported sizes for a specific profile type/ID
    */
   function getSupportedSizes(
-    type: 'standard' | 'portrait' | 'reference' | 'background' | 'testing',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite' | 'testing',
   ) {
     let profileId: string | null = null
     switch (type) {
@@ -274,6 +275,9 @@
         break
       case 'background':
         profileId = settings.systemServicesSettings.imageGeneration.backgroundProfileId
+        break
+      case 'sprite':
+        profileId = settings.systemServicesSettings.imageGeneration.spriteProfileId ?? null
         break
       case 'testing':
         profileId = testProfileId
@@ -1125,6 +1129,23 @@
             />
             <p class="text-muted-foreground mt-1 text-xs">
               Profile used for generating character portraits. Model is configured in the profile.
+            </p>
+          </div>
+
+          <div class="space-y-2">
+            <Label>Sprite Profile</Label>
+            <Autocomplete
+              items={settings.imageProfiles}
+              selected={getSelectedImageProfile('sprite')}
+              onSelect={(v) => onProfileChange((v as ImageProfile).id, 'sprite')}
+              itemLabel={(p: ImageProfile) =>
+                `${p.name} (${providerTypes.find((t) => t.value === p.providerType)?.label || p.providerType}${p.model ? ` · ${p.model}` : ''})`}
+              itemValue={(p: ImageProfile) => p.id}
+              placeholder="Select an image profile"
+            />
+            <p class="text-muted-foreground mt-1 text-xs">
+              Profile for VN sprite and anchor renders (BE stories). SI Bridge holds identity across
+              sizes via the approved anchor; other providers render prompt-only sprites.
             </p>
           </div>
 

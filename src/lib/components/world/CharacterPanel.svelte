@@ -44,6 +44,10 @@
   import { cn } from '$lib/utils/cn'
   import IconRow from '$lib/components/ui/icon-row.svelte'
   import { DEFAULT_FALLBACK_STYLE_PROMPT } from '$lib/services/ai/image/constants'
+  import {
+    currentAppearanceHash,
+    spriteAnchorService,
+  } from '$lib/services/ai/image/SpriteService'
 
   let showAddForm = $state(false)
   let newName = $state('')
@@ -64,6 +68,9 @@
   let uploadingPortraitId = $state<string | null>(null)
   let generatingPortraitId = $state<string | null>(null)
   let portraitError = $state<string | null>(null)
+  // Sprite anchor state (V2a — dedicated approved anchor render)
+  let generatingAnchorId = $state<string | null>(null)
+  let anchorError = $state<string | null>(null)
   let editPortrait = $state<string | null>(null)
   let expandedPortrait = $state<{ src: string; name: string } | null>(null)
   let savedToVaultId = $state<string | null>(null)
@@ -370,6 +377,31 @@
       uploadingPortraitId = null
       // Reset input
       input.value = ''
+    }
+  }
+
+  async function generateSpriteAnchor(character: Character) {
+    anchorError = null
+    generatingAnchorId = character.id
+    try {
+      await spriteAnchorService.generateAnchor(character, (id, updates) =>
+        story.updateCharacter(id, updates),
+      )
+    } catch (error) {
+      anchorError = error instanceof Error ? error.message : String(error)
+    } finally {
+      generatingAnchorId = null
+    }
+  }
+
+  async function approveSpriteAnchor(character: Character) {
+    anchorError = null
+    try {
+      await spriteAnchorService.approveAnchor(character, (id, updates) =>
+        story.updateCharacter(id, updates),
+      )
+    } catch (error) {
+      anchorError = error instanceof Error ? error.message : String(error)
     }
   }
 
@@ -732,6 +764,71 @@
                   <p class="text-destructive mt-2 text-xs">{portraitError}</p>
                 {/if}
               </div>
+
+              <!-- Sprite Anchor (V2 sprite engine; BE stories, non-protagonist) -->
+              {#if story.currentStory?.settings?.beMode === true && !isProtagonist}
+                <div class="border-border bg-muted/20 rounded-md border p-2">
+                  <div
+                    class="text-muted-foreground mb-2 flex items-center justify-between text-xs font-medium"
+                  >
+                    <span>Sprite Anchor</span>
+                    {#if character.spriteAnchorStatus === 'approved'}
+                      {#if character.spriteAnchorHash === currentAppearanceHash(character)}
+                        <Badge variant="outline" class="h-5 text-xs">Approved</Badge>
+                      {:else}
+                        <Badge variant="destructive" class="h-5 text-xs">Stale — regenerate</Badge>
+                      {/if}
+                    {:else if character.spriteAnchorStatus === 'ready'}
+                      <Badge variant="secondary" class="h-5 text-xs">Awaiting approval</Badge>
+                    {/if}
+                  </div>
+                  <div class="flex items-start gap-3">
+                    {#if character.spriteAnchor}
+                      <img
+                        src={normalizeImageDataUrl(character.spriteAnchor) ?? ''}
+                        alt="Sprite anchor preview"
+                        class="ring-border bg-background h-16 w-16 rounded-md object-cover ring-1"
+                      />
+                    {:else}
+                      <div
+                        class="border-border bg-background/50 flex h-16 w-16 items-center justify-center rounded-md border border-dashed"
+                      >
+                        <User class="text-muted-foreground h-6 w-6" />
+                      </div>
+                    {/if}
+                    <div class="flex flex-1 flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="bg-background h-7 w-full justify-start text-xs"
+                        onclick={() => generateSpriteAnchor(character)}
+                        disabled={generatingAnchorId !== null}
+                      >
+                        {#if generatingAnchorId === character.id}
+                          <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                          <span>Rendering anchor...</span>
+                        {:else}
+                          <Wand2 class="h-3.5 w-3.5" />
+                          <span>{character.spriteAnchor ? 'Regenerate' : 'Generate'}</span>
+                        {/if}
+                      </Button>
+                      {#if character.spriteAnchorStatus === 'ready'}
+                        <Button
+                          variant="default"
+                          size="sm"
+                          class="h-7 w-full justify-start text-xs"
+                          onclick={() => approveSpriteAnchor(character)}
+                        >
+                          Approve as identity anchor
+                        </Button>
+                      {/if}
+                    </div>
+                  </div>
+                  {#if anchorError}
+                    <p class="text-destructive mt-2 text-xs">{anchorError}</p>
+                  {/if}
+                </div>
+              {/if}
 
               <div class="border-border flex justify-end gap-2 border-t pt-2">
                 <Button variant="text" size="sm" class="h-7 text-xs" onclick={cancelEdit}>

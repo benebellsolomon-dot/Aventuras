@@ -11,7 +11,11 @@
  */
 
 import type { StructuredImageSpecInput } from './providers/types'
-import { bandRepresentativeTier, bandWord, type SpriteExpression } from '$lib/services/be'
+import {
+  bandRepresentativeTier,
+  bandWord,
+  type SpriteExpression,
+} from '$lib/services/be'
 
 export interface SpriteCellInput {
   name: string
@@ -85,6 +89,40 @@ export function buildSpriteSpec(input: SpriteCellInput): StructuredImageSpecInpu
   if (beMoments.length > 0) spec.be_moments = beMoments
   if (extraTags.length > 0) spec.extra_tags = extraTags
   return spec
+}
+
+/**
+ * Anchor render spec: the character at their OWN tier (Ben's seed-tier ruling —
+ * the "at rest" look), neutral, on the shared framing. Stored raw/un-matted as
+ * the FaceID/pose source every cell renders from.
+ */
+export function buildAnchorSpec(
+  tier: number,
+  visualDescriptors: SpriteCellInput['visualDescriptors'],
+): StructuredImageSpecInput {
+  return {
+    register: 'color',
+    style_preset: 'semireal',
+    intimacy: 'clean',
+    characters: [
+      {
+        tier_index: Math.max(0, Math.round(tier)),
+        appearance_excerpt: identityExcerpt(visualDescriptors),
+      },
+    ],
+    scene_tags: [...SPRITE_FRAMING_TAGS],
+  }
+}
+
+/** Anchor prompt fallback for external providers. */
+export function buildAnchorPrompt(
+  tier: number,
+  visualDescriptors: SpriteCellInput['visualDescriptors'],
+): string {
+  const parts: string[] = [...SPRITE_FRAMING_TAGS, bandWord(Math.max(0, Math.round(tier)))]
+  const appearance = identityExcerpt(visualDescriptors)
+  if (appearance) parts.push(appearance)
+  return parts.join(', ')
 }
 
 /** Prompt fallback for external providers — banded, framed, prompt-only. */

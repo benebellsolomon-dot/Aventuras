@@ -576,6 +576,8 @@ export function getDefaultImageGenerationSettings(): ImageGenerationServiceSetti
     backgroundProfileId: null,
     backgroundSize: '1280x720',
     backgroundBlur: 2, // Default blur for atmosphere
+    spriteProfileId: null,
+    spriteSize: '832x1216',
   }
 }
 
