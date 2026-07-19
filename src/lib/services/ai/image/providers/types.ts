@@ -77,6 +77,14 @@ export interface ImageGenerateOptions {
   providerOptions?: Record<string, unknown>
   /** Structured spec for the si-bridge provider; other providers ignore it. */
   spec?: StructuredImageSpecInput
+  /**
+   * si-bridge FaceID/OpenPose identity-hold (Spec 4 B1): bare base64 of the
+   * approved anchor render. Routes the request onto the openpose_faceid
+   * workflow bridge-side while the spec still drives tier sizing.
+   */
+  poseFaceAnchor?: string
+  faceidWeight?: number
+  openposeStrength?: number
 }
 
 export interface ImageGenerateResult {

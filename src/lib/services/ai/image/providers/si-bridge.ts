@@ -122,6 +122,14 @@ export function createSiBridgeProvider(config: ImageProviderConfig): ImageProvid
             }
           : { prompt }
       }
+      // FaceID/OpenPose identity-hold (Spec 4 B1) — coexists with the spec:
+      // the bridge routes onto the openpose_faceid workflow while the spec
+      // still drives tier sizing.
+      if (options.poseFaceAnchor) {
+        body.pose_face_anchor_b64 = options.poseFaceAnchor
+        if (options.faceidWeight !== undefined) body.faceid_weight = options.faceidWeight
+        if (options.openposeStrength !== undefined) body.openpose_strength = options.openposeStrength
+      }
       const dimensions = parseDimensions(size)
       if (dimensions) {
         body.width = dimensions.width

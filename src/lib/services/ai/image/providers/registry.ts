@@ -96,8 +96,23 @@ export async function generateImage(options: {
   signal?: AbortSignal
   /** Structured spec for the si-bridge provider; other providers ignore it. */
   spec?: StructuredImageSpecInput
+  /** si-bridge FaceID/OpenPose identity-hold (Spec 4 B1); other providers ignore them. */
+  poseFaceAnchor?: string
+  faceidWeight?: number
+  openposeStrength?: number
 }): Promise<ImageGenerateResult> {
-  const { profileId, model, prompt, size = '1024x1024', referenceImages, signal, spec } = options
+  const {
+    profileId,
+    model,
+    prompt,
+    size = '1024x1024',
+    referenceImages,
+    signal,
+    spec,
+    poseFaceAnchor,
+    faceidWeight,
+    openposeStrength,
+  } = options
 
   const profile = settings.getImageProfile(profileId)
   if (!profile) {
@@ -137,6 +152,9 @@ export async function generateImage(options: {
     signal,
     providerOptions: profile.providerOptions,
     spec,
+    poseFaceAnchor,
+    faceidWeight,
+    openposeStrength,
   })
 }
 

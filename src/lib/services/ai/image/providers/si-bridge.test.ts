@@ -111,6 +111,31 @@ describe('createSiBridgeProvider.generate', () => {
     expect(resultUrl).toBe('http://bridge.test:8001/image/img_1/result?format=png')
   })
 
+  test('poseFaceAnchor rides the body beside the spec (B1 identity-hold)', async () => {
+    mocks.imageFetch.mockResolvedValueOnce(jsonResponse({ job_id: 'img_fa' }))
+    mocks.imageGetFetch
+      .mockResolvedValueOnce(jsonResponse({ status: 'complete' }))
+      .mockResolvedValueOnce(binaryResponse(PNG_BYTES))
+
+    const provider = makeProvider()
+    const promise = provider.generate({
+      model: '',
+      prompt: 'fallback',
+      size: '832x1216',
+      spec: { characters: [{ tier_index: 29 }] },
+      poseFaceAnchor: 'QUJD',
+      faceidWeight: 0.55,
+      openposeStrength: 1.0,
+    })
+    await vi.advanceTimersByTimeAsync(30_000)
+    await promise
+
+    const body = JSON.parse((mocks.imageFetch.mock.calls[0][0] as { body: string }).body)
+    expect(body.pose_face_anchor_b64).toBe('QUJD')
+    expect(body.faceid_weight).toBe(0.55)
+    expect(body.openpose_strength).toBe(1.0)
+  })
+
   test('prompt fallback: no spec sends prompt only', async () => {
     mocks.imageFetch.mockResolvedValueOnce(jsonResponse({ job_id: 'img_2' }))
     mocks.imageGetFetch
