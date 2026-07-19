@@ -41,18 +41,36 @@ export interface BridgeSpecSubject {
 }
 
 /**
- * Identity travels as VERBATIM identity_tags — the bridge consumes
- * appearance_excerpt ONLY for skin-tone inference (compose_identity_tags,
- * source-verified 2026-07-19), so free text alone silently dropped hair/eyes/
- * face/build. The excerpt stays as the skin-tone fallback.
+ * Identity travels as identity_tags — the bridge consumes appearance_excerpt
+ * ONLY for skin-tone inference (compose_identity_tags, source-verified
+ * 2026-07-19), so free text alone silently dropped hair/eyes/face/build.
+ *
+ * ATOMIC + WEIGHTED (dry-run-verified 2026-07-19): a whole descriptor field as
+ * one prose-blob tag reads weakly on the Illustrious path, where the tier
+ * machinery appends a dozen weighted size tags — identity lost every time.
+ * Each field splits into short atomic tags, and the species-critical fields
+ * (face, distinguishing — ears/horns/tail/markings) carry an explicit weight
+ * so they compete with the size cluster. A1111 (tag:weight) syntax passes
+ * through both bridge pipelines unchanged.
  */
+const IDENTITY_EMPHASIS = 1.15
+const MIN_TAG_LENGTH = 3
+
+const atomicTags = (text: string | undefined): string[] =>
+  (text ?? '')
+    .split(/[;,]/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= MIN_TAG_LENGTH)
+
 export function identityTagsFromDescriptors(
   d: BridgeSpecSubject['visualDescriptors'],
 ): string[] | undefined {
   if (!d) return undefined
-  const tags = [d.face, d.hair, d.eyes, d.distinguishing]
-    .map((part) => (part ?? '').trim())
-    .filter((part) => part.length > 0)
+  const emphasized = [...atomicTags(d.face), ...atomicTags(d.distinguishing)].map(
+    (t) => `(${t}:${IDENTITY_EMPHASIS})`,
+  )
+  const plain = [...atomicTags(d.hair), ...atomicTags(d.eyes)]
+  const tags = [...emphasized, ...plain]
   return tags.length > 0 ? tags : undefined
 }
 

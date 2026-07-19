@@ -350,6 +350,36 @@ describe('workflow pinning via the profile model (style consistency)', () => {
   })
 })
 
+describe('identity tag atomization', () => {
+  test('descriptor fields split into atomic tags; face/distinguishing carry emphasis', () => {
+    const lucy = statefulCharacter(
+      'Lucy',
+      { tier: 24 },
+      {
+        face: 'warm, youthful face; small soft cow ears; two short curved ivory horns',
+        hair: 'long honey-blonde hair in loose waves',
+        distinguishing: 'short tufted cow tail',
+      },
+    )
+    const spec = buildStructuredImageSpec({
+      presentCharacters: [lucy],
+      tagCharacterNames: ['Lucy'],
+      sceneText: 'baking bread',
+      narrativeText: '',
+    })
+    const tags = spec!.characters[0].identity_tags!
+    // Species carriers are atomic AND weighted so they compete with the
+    // bridge's weighted size cluster on the Illustrious path.
+    expect(tags).toContain('(small soft cow ears:1.15)')
+    expect(tags).toContain('(two short curved ivory horns:1.15)')
+    expect(tags).toContain('(short tufted cow tail:1.15)')
+    // Hair stays plain but atomic.
+    expect(tags).toContain('long honey-blonde hair in loose waves')
+    // No whole-field prose blobs survive.
+    expect(tags.some((t) => t.includes(';'))).toBe(false)
+  })
+})
+
 describe('buildPortraitSpec', () => {
   test('tier comes from engine bodyState when present', () => {
     const lucy = statefulCharacter('Lucy', { tier: 47 }, { hair: 'silver hair', eyes: 'blue eyes' })
