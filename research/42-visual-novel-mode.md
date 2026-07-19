@@ -1,0 +1,179 @@
+# 42 — Visual Novel mode for Aventuras (research + recommended architecture)
+
+**Date:** 2026-07-19 · **Basis:** three parallel research passes (AI-VN landscape /
+Aventuras integration surface / BE-specific sprite design) commissioned by Ben's ask:
+"a Visual Novel mode similar to perchance.org/pixelsaga, tailored for BE stories."
+This doc is the synthesis; it is self-contained.
+
+## Executive summary
+
+- **VN mode should be a client-side presentation layer, not a new story mode** — a new
+  `ActivePanel` screen composing over the existing generation pipeline. The BE engine's
+  deterministic state (`bandIndex(tier)`, arousal, attitude, fill, `lastGrowth`,
+  present characters, location) is exactly the signal set a VN renderer needs, and it
+  already persists per-entry.
+- **The field's consensus on AI-VN images**: never generate sprites per turn (30-60s
+  latency + identity drift). Pre-generate cached sprite sets, swap client-side
+  deterministically, reserve live generation for backgrounds and occasional event CGs
+  behind skeleton placeholders. Our band ladder makes the cache tractable: 7 size
+  bands × 3 expression clusters + 1 engorged variant ≈ 28 cells/character, generated
+  lazily on first band entry.
+- **A surprising amount is already built**: the background pipeline is literally
+  VN-authored (its prompt opens "You are a Visual Director AI for a visual novel
+  game" and reserves negative space for dialogue boxes and sprites); portraits are
+  already standee-framed ("full body, facing viewer, plain background"); ActionChoices
+  is already a typed, keyboard-navigable 4-choice VN menu; per-entry scene state
+  (present characters, location) is durably stored in `world_state_delta`.
+- **v1 is nearly free** (a weekend-scale slice): new VN panel + sharp `currentBgImage`
+  + present-character portraits as standees + textbox bound to the existing streaming
+  content + the unmodified ActionChoices. Zero generation changes.
+- **The real build (v2+) is downstream of Spec 2** (the si-bridge native provider,
+  research/37): FaceID identity anchors, banded sprite sets, and `/animate/growth`
+  event clips all need the bridge's native `/image` path the current A1111 shim can't
+  reach. **The #1 blocking decision is transparency** — the bridge has no
+  transparent-sprite output today (verified: no matting node in any preset).
+
+## 1. Landscape lessons (what to copy, what to avoid)
+
+**pixelsaga** resisted direct verification (Perchance 403s automated fetches; no
+archive snapshot; no reviews). Triangulated from Perchance's own plugin docs: it
+rides `ai-text-plugin` (stateless — author re-injects context per call; documents
+"Multi-Choice Text Adventure" as the expected shape) + `text-to-image-plugin` (seed
+reuse ≈ "very similar", no LoRA/img2img — **no native consistency answer**), inside a
+shared VN chrome template (backlog/gallery/save-load/text-speed). Aventuras already
+exceeds this stack on every axis except the VN chrome itself.
+
+**SillyTavern VN mode** (Ben's prior era) is the reference implementation and its
+failure modes are our design checklist:
+1. Incomplete expression sets fall back to neutral-face at exactly the beats that
+   matter → we generate the full (small) cluster set per band, lazily but atomically.
+2. Non-uniform sprite framing makes characters jump/resize on every swap → one
+   framing contract per sprite set (shared anchor + seed + conditioning; independent
+   panels, never one crowded batch — crowded reference sheets drift).
+3. Group-chat sprite bugs / no multi-card scenes → our stage composes solo sprites
+   client-side from `presentCharacterNames` (z-index by recency), and multi-character
+   *interaction* art goes through the bridge's `regional:true` as event CGs — two
+   mechanisms, kept distinct.
+- The community's Prome VN extension (speaker focus/defocus, letterbox, sprite-shake,
+  one-message-at-a-time) is a feature mine for later polish.
+- Sprite-consistency prior art: ComfyUI VNCCS (character-profile → pose × expression
+  × outfit sprite trees, transparent exports); LoRA-per-character (~95% likeness) vs
+  img2img anchoring at denoise 0.3-0.5 (cheap, good enough per session). Our Spec 2
+  B1 FaceID anchor is the same idea, server-side.
+
+**Minimum "reads as a VN" grammar** (Ren'Py conventions): background + positioned
+sprite(s) + ADV textbox with nameplate + a choice/continue affordance + typewriter
+reveal (cheap, high signal). Skippable: NVL mode, elaborate enter/exit choreography,
+backlog (the feed IS the backlog). Treat CG event art cautiously — it's where AI
+identity-consistency bites hardest; CGs must ride the same anchored pipeline as
+sprites, never fresh unanchored generations.
+
+## 2. The Aventuras surface (what exists / what's new)
+
+**Reusable as-is** (verified with file/line specifics by the surface pass):
+- Screen-swap seam: `AppShell.svelte`'s `activePanel` switch (`'gallery'` is the
+  precedent for a full-canvas non-feed panel). NOT `visualProseMode` (that's a
+  prompt-format flag, same feed layout).
+- Backgrounds: `background_images` (one current row per story×branch) +
+  `story.currentBgImage` reactive binding + the VN-authored Visual-Director analysis
+  template running every turn. Render sharp (bypass `backgroundBlur`) and it's a VN
+  background layer today.
+- Choices: `ActionChoices.svelte` — numbered, typed (action/dialogue/examine/move
+  with icons), digit-key bindings, feeds `ActionInput` as prefilled text. Unmodified.
+- Streaming: `ui.streamingContent` is format-agnostic; a VN textbox binds to it.
+- Scene state: `entry.worldStateDelta.classificationResult.scene` gives
+  presentCharacterNames + currentLocationName per entry, durably (stateTracking
+  defaults ON). Caveats: player character must be OR'd in via `relationship==='self'`
+  (every consumer replicates this); classifier failure yields an empty list — the
+  renderer must tolerate stale presence.
+- Portraits: standee-framed by design, three generation triggers + upload,
+  `referenceMode` img2img plumbing exists. Gap: they never render in the feed today,
+  and backgrounds are opaque gradients (no alpha).
+
+**Must build new:**
+- The VN panel components (background/sprite-stage/textbox/nameplate layers).
+- **Speaker attribution** — the one zero-precedent LLM-format piece. Prose has NO
+  structured dialogue markup (the colored spans are visualProseMode free-form, model's
+  choice, not a speaker map). v1 ships plain narration in the textbox; v2 adds a
+  `VN_DIALOGUE_INSTRUCTIONS` block (same pattern as INLINE_IMAGE_INSTRUCTIONS)
+  requesting speaker-tagged output, + a tolerant parser.
+- `vnMode` toggle: per-story StorySettings flag (the beMode 8-file wiring template) or
+  even simpler, a per-UI view toggle (recommended: **view toggle**, composes with both
+  story modes and needs no generation fork).
+- A centralized reactive "images for current entry" accessor (each StoryEntry
+  currently queries its own).
+- **Pipeline wall to resolve at v2**: inline `<pic>` images and background generation
+  are mutually exclusive today (`BackgroundImagePhase.ts:69` skips bg when
+  imageGenerationMode==='inline'); a VN turn wants both.
+
+## 3. The BE-specific design (the differentiator)
+
+No generic AI-VN has a deterministic body engine driving its sprites. Ours does:
+
+- **Sprite strategy**: lazily-generated banded sprite sets per character —
+  `bandIndex(tier)` (7 bands: flat/small/medium/large/huge/gigantic/hyper) ×
+  3 expression clusters + 1 engorged variant, FaceID-anchored via the Spec 2 B1
+  extension point, cached in a new `character_sprites` table
+  (`character_id, appearance_hash, band_index, expression, engorged, status`) with
+  the `background_images` CRUD/GC pattern. Generate a band's cells on first entry
+  into that band (~30s/render ⇒ ~2 min/band, amortized across play); WEBP to keep
+  SQLite sane. Selection is a pure `bodyState → (band, cluster, engorged)` function —
+  testable, deterministic, no classifier needed (attitude+arousal already exist).
+- **Expression cut** (avoiding the ST 28-emotion trap): clusters =
+  positive/eager (craving, accepting) · neutral (conflicted/none) · distressed
+  (fearful, resentful); arousal ≥ 70 overrides to flushed; fill shows only as the
+  engorged variant at ≥ 75% (matches the existing imageStateCues threshold, so prose
+  and sprite agree). Conditions stay prose-only. Scripted override hook: a growth
+  land forces the shock/distressed cluster for that beat.
+- **Growth moments, two tiers**:
+  - *Band-crossing sprite transition* (cheap, always-on): `bandIndex` changed →
+    crossfade to the new band's sprite (`{#key}` + svelte crossfade). The honest floor.
+  - */animate/growth event clip* (expensive, gated): only on `lastGrowth.delta ≥ 2`,
+    milestone crossings, or the SURGING two-beat — fire-and-forget with the
+    embedded_images status/retry pattern, "[growth clip generating]" badge, static
+    swap already on screen as the fallback. Needs MP4 filesystem storage + a <video>
+    surface (largest new piece; defer to v4).
+- **Stage vs CG**: solo transparent sprites composited client-side are the stage;
+  `regional:true` multi-character frames and `<pic>` inline images are event CGs
+  (full-bleed overlay render in VN mode).
+- **Backgrounds**: keep the diff-based Visual Director, add a location-keyed cache
+  (`currentLocationName` → cached bg) so revisits don't regenerate.
+
+## 4. Phased roadmap
+
+| Phase | Content | Effort | Depends on |
+|---|---|---|---|
+| **v0** | Spec 2 si-bridge native provider (already planned as research/37 Phase 4) — unlocks illustrious tier ladder, FaceID, regional, /animate | M-L | bridge reachable |
+| **v1** | VN panel MVP: activePanel screen, sharp bg, present-character portrait standees, textbox on streaming content, ActionChoices as-is, typewriter | S | nothing — ship now |
+| **v2** | Banded sprite sets: anchor governance, `character_sprites` cache, lazy batch gen, selection function, crossfade swaps; speaker-tagged textbox; resolve inline-vs-bg exclusivity | M-L | v0 + transparency ruling |
+| **v3** | Multi-character stage (compositing, z-order), regional interaction CGs, location-keyed bg cache | M | v2 |
+| **v4** | Growth polish: band-crossing transitions (pull earlier if cheap) + gated /animate/growth clips + MP4 surface | L | v2 |
+
+## 5. Open decisions (Ben rules)
+
+1. **Transparency — decides whether true sprites are possible.** Bridge has no
+   matting/RGBA output (verified). Options: (a) bridge-side matting node (Ben deploys;
+   sibling to the standing img2img shim ask) · (b) app-side background removal (WASM)
+   · (c) portrait-card style instead of cutout sprites (weaker VN feel, zero new
+   infra). v1 works regardless (cards); v2 wants (a) or (b).
+2. **tier_index calibration** (Spec 2 Task 5): three ladders in play (engine bandIndex
+   / krea nouns / illustrious tier_index) — verify via `POST /image/build` dry-run
+   before trusting any mapping; band app-side on bandIndex regardless.
+3. **Anchor source + governance**: reuse `Character.portrait` as the FaceID anchor vs
+   a dedicated approved anchor render; re-anchor policy on appearance change.
+4. **vnMode scope**: UI view toggle (recommended) vs per-story setting vs third
+   StoryMode (rejected — forks generation).
+5. **Growth-clip scope**: every band crossing vs delta≥2/milestones only; MP4 storage
+   commitment; or defer clips entirely and ship transitions.
+6. **Sprite trigger**: lazy per-band (recommended) vs eager full-set at creation, with
+   an optional pre-warm action in the character panel.
+7. **Speaker attribution format** (v2): structured dialogue tags in narrator output —
+   design the tag grammar so the drift detectors and the plain feed view stay happy.
+
+## Provenance
+
+Synthesized from three agent research passes (2026-07-19): web landscape (Perchance
+plugin docs, SillyTavern VN/expressions docs + issue tracker, Prome extension, VNCCS,
+Ren'Py docs — URLs preserved in the session transcript), a read-only Aventuras
+codebase map (file:line specifics inline above), and a BE-sprite design pass over the
+engine + research/32/37 + the si-bridge INTEGRATION contract.
