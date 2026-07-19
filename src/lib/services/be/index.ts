@@ -8,11 +8,24 @@
 
 export * from './types'
 export {
+  ANTICIPATION_THRESHOLD,
   DEFAULT_BE_STORY_CONFIG,
+  DEFAULT_FLUID_PROFILE,
   DEFAULT_GROWTH_COOLDOWN_BEATS,
+  ENGORGED_FILL_THRESHOLD,
+  ENGORGED_TTL,
+  FLUID_REGISTRY,
   GROWTH_DELTA_BY_OUTCOME,
   GROWTH_EVENT_KINDS,
+  MAX_BE_CONDITIONS,
+  OVERFILL_ADD_BASE,
+  OVERFILL_FILL_THRESHOLD,
+  PRESSURE_ACCRUAL,
+  PRESSURE_FIRE,
+  PRESSURE_RELEASE,
+  fluidProfile,
   parseGrowthEligibleKinds,
+  type FluidProfile,
 } from './constants'
 export { buildBeGenreRules, type BeGenreRuleOptions } from './genre-rules'
 export {
@@ -35,6 +48,7 @@ export {
   capacityMlPerSide,
   droopCm,
   dryKgPerSide,
+  effectiveSupport,
   estimatedBodyWeightKg,
   fluidPressureLabel,
   imageStateCues,
@@ -47,14 +61,19 @@ export {
 } from './measurements'
 export { reduceCharacterBody, seededRoll } from './reducer'
 export {
+  beConditionSchema,
+  beConditionsFromResult,
   beEventSchema,
   beEventsFromResult,
   beSoftStateSchema,
   beSoftStatesFromResult,
   buildBeEventInstructions,
   extendClassificationSchemaWithBeEvents,
+  type BeCharacterCondition,
 } from './schema'
 export { buildBeStateBlock, type BeStateEntry } from './context'
+export { detectDrift } from './drift'
+export { INTERACTION_MILESTONES, nextMilestone, type InteractionMilestone } from './milestones'
 export {
   BODY_STATE_KEY,
   DEFAULT_FLUID_TYPE,

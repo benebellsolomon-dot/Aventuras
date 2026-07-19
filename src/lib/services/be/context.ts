@@ -12,8 +12,16 @@
  * (31a §3.5, register tier-gated).
  */
 
+import { SUPPORT_HANG_GATE } from './constants'
 import { bandWord, comparative, cupLetter } from './ladder'
-import { bodyRow, bwhCmString, fluidPressureLabel, measurements } from './measurements'
+import {
+  bodyRow,
+  bwhCmString,
+  effectiveSupport,
+  fluidPressureLabel,
+  measurements,
+} from './measurements'
+import { nextMilestone } from './milestones'
 import type { BodyState } from './types'
 
 export interface BeStateEntry {
@@ -34,14 +42,22 @@ const liters = (ml: number): string => (ml / 1000).toFixed(1)
 function growthDirective(name: string, state: BodyState): string {
   const growth = state.lastGrowth
   if (!growth) return ''
+  // Mid-split: this turn's land is one stage of a larger surge — the ONSET line
+  // (rendered separately) owns the "more is coming" half, so the directive must
+  // not demand the full result NOR clamp against the coming remainder.
+  if (state.pendingGrowth) {
+    return `GROWTH SURGING: ${name} just grew (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}) and the surge is still building. Render THIS stage's change fully and physically now; the ONSET note below covers what is yet to come.`
+  }
   const highRegister = HIGH_REGISTER_BANDS.has(bandWord(state.tier))
+  // Combined multi-increment land in one turn (pending remainder + event, or
+  // multi-event with no cooldown) — the dramatic register is earned.
   if (growth.delta >= 2) {
     const register = highRegister
       ? 'Dramatic register is earned: render the surge with full weight and spatial consequence.'
       : 'Render it as a clear, startling change — but keep comparisons within one band of her actual new size; no room-scale imagery.'
     return `GROWTH JUST LANDED: ${name} grew significantly this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). ${register}`
   }
-  return `GROWTH JUST LANDED: ${name} grew one increment this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). Narrate it as subtle and incremental — noticeable strain and warmth, NOT a dramatic transformation. Exactly this much and no further.`
+  return `GROWTH JUST LANDED: ${name} grew one increment this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). Narrate it as subtle and incremental — noticeable strain and warmth, NOT a dramatic transformation. Exactly this much and no further this beat.`
 }
 
 function characterLines(entry: BeStateEntry): string {
@@ -64,8 +80,18 @@ function characterLines(entry: BeStateEntry): string {
     `Body weight: ~${Math.round(m.totalBodyWeightKg)} kg total (~${Math.round(m.frameKg)} kg frame + ~${kg(m.nowTotalKg)} kg breast).`,
   )
 
-  const hangCm = row.hang && m.droopCm >= 5 ? ` (~${Math.round(m.droopCm)} cm of hang)` : ''
-  lines.push(`Shape: ${state.shape} — ${row.shape}${row.hang ? ` — ${row.hang}${hangCm}` : ''}.`)
+  const milestone = nextMilestone(m.nowTotalKg)
+  if (milestone) {
+    const away = milestone.remaining < 0.1 ? 'under 0.1' : kg(milestone.remaining)
+    lines.push(
+      `Next size milestone (NOT yet true — only if she grows another ~${away} kg): ${milestone.label}.`,
+    )
+  }
+
+  // Support ≥ the gate suppresses the hang rung (buoyant/charmed busts don't hang).
+  const showHang = Boolean(row.hang) && effectiveSupport(state) < SUPPORT_HANG_GATE
+  const hangCm = showHang && m.droopCm >= 5 ? ` (~${Math.round(m.droopCm)} cm of hang)` : ''
+  lines.push(`Shape: ${state.shape} — ${row.shape}${showHang ? ` — ${row.hang}${hangCm}` : ''}.`)
   lines.push(`Posture: ${row.posture}; mobility: ${row.mobility}; clothing: ${row.clothing}.`)
 
   if (state.fluids.fillPercent > 0) {
@@ -76,6 +102,16 @@ function characterLines(entry: BeStateEntry): string {
     if (m.nowTotalKg - m.dryTotalKg >= 0.5)
       line += `, swollen to ~${kg(m.nowTotalKg)} kg with ${state.fluids.fluidType}`
     lines.push(`${line}.`)
+  }
+
+  if (state.conditions.length > 0) {
+    const rendered = state.conditions
+      .map((c) => {
+        const label = c.label.slice(0, 60)
+        return c.note ? `${label} (${c.note.slice(0, 80)})` : label
+      })
+      .join('; ')
+    lines.push(`Active conditions: ${rendered}.`)
   }
 
   const moodBits: string[] = []
@@ -92,8 +128,20 @@ function characterLines(entry: BeStateEntry): string {
       `SIZE LOCKED: ${name} is exactly ${cupLetter(state.tier)}-cup and stays that way. Assert her exact current size; never round up, never grow her in prose.`,
     )
   }
+  if (state.pendingGrowth) {
+    lines.push(
+      `ONSET: ${name}'s body is mid-surge — tension building toward a further change next beat. Render anticipation/early strain, not the full result yet.`,
+    )
+  }
+
   const directive = growthDirective(name, state)
   if (directive) lines.push(directive)
+
+  // The note carries its own imperative (silently-correct vs render-now differ
+  // per drift kind) — the wrapper adds no tail that could contradict it.
+  if (state.driftNote) {
+    lines.push(`[CONTINUITY] ${state.driftNote.note}.`)
+  }
 
   return lines.map((line, index) => (index === 0 ? line : `  ${line}`)).join('\n')
 }

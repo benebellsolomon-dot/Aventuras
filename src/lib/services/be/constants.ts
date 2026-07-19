@@ -7,7 +7,7 @@
  * them as final, and do not tune them without cadence data.
  */
 
-import type { BeEventKind, BeStoryConfig, GrowthOutcome } from './types'
+import type { BeEventKind, BeStoryConfig, BodyShape, GrowthOutcome } from './types'
 
 /** Growth per outcome band — small and capped, never continuous off the roll margin (31a §3.4). */
 export const GROWTH_DELTA_BY_OUTCOME: Readonly<Partial<Record<GrowthOutcome, number>>> = {
@@ -37,7 +37,65 @@ export const DEFAULT_BE_STORY_CONFIG: Readonly<BeStoryConfig> = {
   enabled: false,
   sizeCapTier: null,
   growthCooldownBeats: DEFAULT_GROWTH_COOLDOWN_BEATS,
+  fluidType: 'milk',
+  passiveFillEnabled: true,
 }
+
+/**
+ * Fluid registry (Spec 1 Task 2): density feeds swollen-mass honesty,
+ * growthFactor couples the fluid to fill speed and overfill pressure,
+ * fillRate is percent-points per passive turn tick.
+ */
+export interface FluidProfile {
+  density: number
+  growthFactor: number
+  fillRate: number
+}
+
+export const FLUID_REGISTRY: Readonly<Record<string, FluidProfile>> = {
+  milk: { density: 1.03, growthFactor: 0.0, fillRate: 8 },
+  mana: { density: 1.0, growthFactor: 0.3, fillRate: 5 },
+  arcane: { density: 1.1, growthFactor: 0.6, fillRate: 8 },
+  ambrosia: { density: 1.25, growthFactor: 1.0, fillRate: 12 },
+}
+
+export const DEFAULT_FLUID_PROFILE = FLUID_REGISTRY.milk
+
+/** Registry lookup; unknown/garbage fluid names fall back to milk. hasOwn keeps
+ * prototype-chain keys ('constructor', '__proto__') from leaking non-profiles. */
+export function fluidProfile(type: string): FluidProfile {
+  if (typeof type !== 'string') return DEFAULT_FLUID_PROFILE
+  const key = type.trim().toLowerCase()
+  return Object.hasOwn(FLUID_REGISTRY, key) ? FLUID_REGISTRY[key] : DEFAULT_FLUID_PROFILE
+}
+
+// ⚠ D5: every number below is an inherited reference default — re-derive
+// against measured cadence data (beLog) before trusting as final.
+export const ANTICIPATION_THRESHOLD = 2
+export const PRESSURE_FIRE = 85
+export const PRESSURE_ACCRUAL = 12
+export const PRESSURE_RELEASE = 50
+export const OVERFILL_FILL_THRESHOLD = 96
+export const OVERFILL_ADD_BASE = 30
+/** Hard ceiling on banked pressure (locked/muzzled characters otherwise accrue forever). */
+export const PRESSURE_CAP = 170
+export const ENGORGED_FILL_THRESHOLD = 75
+export const ENGORGED_TTL = 2
+export const MAX_BE_CONDITIONS = 6
+
+/** Support/buoyancy axis (Spec 1 Task 7): shape base + condition deltas, clamped [0,1]. */
+export const SHAPE_SUPPORT: Readonly<Record<BodyShape, number>> = {
+  natural: 0,
+  firm: 0.4,
+  gravity_defying: 0.9,
+}
+export const SUPPORT_FROM_CONDITIONS: Readonly<Record<string, number>> = {
+  featherlight: 0.8,
+  'buoyancy charm': 0.5,
+  'heaviness curse': -0.5,
+}
+/** At or above this support, the hang rung is suppressed in the context block. */
+export const SUPPORT_HANG_GATE = 0.3
 
 /** The kinds that can land growth (milking drains, stabilize settles — never these). */
 export const GROWTH_EVENT_KINDS: ReadonlyArray<BeEventKind> = ['catalyst', 'contact', 'attempt']

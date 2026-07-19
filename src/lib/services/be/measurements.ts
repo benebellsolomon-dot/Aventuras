@@ -31,8 +31,22 @@ import {
   saneWaistCm,
   saneWeightKg,
 } from './curves'
+import { SHAPE_SUPPORT, SUPPORT_FROM_CONDITIONS, fluidProfile } from './constants'
 import { cupLetter } from './ladder'
 import type { BodyShape, BodyState } from './types'
+
+/**
+ * Effective support/buoyancy (Spec 1 Task 7): shape base plus active condition
+ * labels, clamped to [0,1]. Derived, never stored.
+ */
+export function effectiveSupport(state: BodyState): number {
+  let support = SHAPE_SUPPORT[state.shape] ?? 0
+  for (const condition of state.conditions) {
+    const key = condition.label.toLowerCase()
+    if (Object.hasOwn(SUPPORT_FROM_CONDITIONS, key)) support += SUPPORT_FROM_CONDITIONS[key]
+  }
+  return Math.min(1, Math.max(0, support))
+}
 
 export {
   bandCm,
@@ -179,7 +193,7 @@ export interface BodyMeasurements {
 export function measurements(state: BodyState): BodyMeasurements {
   const fill = clampPercent(state.fluids.fillPercent)
   const dryTotal = 2 * dryKgPerSide(state.tier)
-  const nowPerSide = nowKgPerSide(state.tier, fill)
+  const nowPerSide = nowKgPerSide(state.tier, fill, fluidProfile(state.fluids.fluidType).density)
   const nowTotal = 2 * nowPerSide
   const capacityTotal = 2 * capacityMlPerSide(state.tier)
   const build = resolveBuild(state.baseline)

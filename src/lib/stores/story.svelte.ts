@@ -28,9 +28,11 @@ import { ui } from './ui.svelte'
 import { settings } from './settings.svelte'
 import {
   DEFAULT_BE_STORY_CONFIG,
+  beConditionsFromResult,
   beEventsFromResult,
   beSoftStatesFromResult,
   defaultBodyState,
+  detectDrift,
   parseGrowthEligibleKinds,
   readBodyState,
   reduceCharacterBody,
@@ -38,6 +40,7 @@ import {
   writeBodyState,
   type BeLogRecord,
   type BeSoftState,
+  type BodyCondition,
 } from '$lib/services/be'
 import { extractInlineCustomVars } from '$lib/services/ai/sdk/schemas/runtime-variables'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
@@ -2820,6 +2823,7 @@ class StoryStore {
 
     const events = beEventsFromResult(result as unknown as Record<string, unknown>)
     const softStates = beSoftStatesFromResult(result as unknown as Record<string, unknown>)
+    const softConditions = beConditionsFromResult(result as unknown as Record<string, unknown>)
 
     // Group events by resolved character (same case-insensitive matching as the entity loops).
     const eventsByCharacterId = new SvelteMap<string, typeof events>()
@@ -2842,15 +2846,43 @@ class StoryStore {
       if (!target || target.relationship === 'self') continue
       softStateByCharacterId.set(target.id, soft)
     }
+    // Classifier-proposed conditions resolve the same way (Spec 1 Task 4).
+    const conditionsByCharacterId = new SvelteMap<string, BodyCondition[]>()
+    for (const condition of softConditions) {
+      const target = this.characters.find(
+        (c) => c.name.toLowerCase() === condition.character.toLowerCase(),
+      )
+      if (!target || target.relationship === 'self') continue
+      const bucket = conditionsByCharacterId.get(target.id) ?? []
+      bucket.push({
+        label: condition.label,
+        ...(condition.note !== undefined ? { note: condition.note } : {}),
+        ...(condition.ttl !== undefined ? { ttl: condition.ttl } : {}),
+      })
+      conditionsByCharacterId.set(target.id, bucket)
+    }
 
-    // Config from story settings (research/41): the eligible-kinds gate keeps
-    // canon-illegal growth from ever rolling; unset settings keep the defaults.
+    // Present-only tick gating (Spec 1 Task 9 ruling): the passive fill/pressure
+    // tick runs for characters the classifier placed in the scene.
+    const presentNames = new Set(
+      (result.scene?.presentCharacterNames ?? []).map((name) => name.trim().toLowerCase()),
+    )
+    // Finalized narrative for output-side drift detection (Spec 1 Task 6).
+    const narrativeContent = this.entries.find((e) => e.id === entryId)?.content ?? ''
+
+    // Config from story settings (research/41 + Spec 1 Task 9): the eligible-kinds
+    // gate keeps canon-illegal growth from ever rolling; the story fluid drives
+    // the registry tick; unset settings keep the defaults.
     const eligibleKinds = parseGrowthEligibleKinds(
       this.currentStory?.settings?.beGrowthEligibleKinds,
     )
+    const settingsFluid = this.currentStory?.settings?.beFluidType
     const config = {
       ...DEFAULT_BE_STORY_CONFIG,
       enabled: true,
+      ...(typeof settingsFluid === 'string' && settingsFluid.trim()
+        ? { fluidType: settingsFluid.trim() }
+        : {}),
       ...(eligibleKinds ? { growthEligibleKinds: eligibleKinds } : {}),
     }
 
@@ -2858,6 +2890,8 @@ class StoryStore {
       if (character.relationship === 'self') continue
       const charEvents = eventsByCharacterId.get(character.id) ?? []
       const charSoftState = softStateByCharacterId.get(character.id)
+      const charConditions = conditionsByCharacterId.get(character.id)
+      const isPresent = presentNames.has(character.name.toLowerCase())
       let state = readBodyState(character.metadata)
 
       // Auto-seed on a character's first event: tier sniffed from her own
@@ -2883,15 +2917,26 @@ class StoryStore {
           note: sniffedTier !== null ? 'tier sniffed from descriptors' : 'default tier',
         })
       } else if (
+        !isPresent &&
         charEvents.length === 0 &&
         !charSoftState &&
+        !charConditions &&
         state.cooldown === 0 &&
         !state.lastGrowth &&
+        !state.pendingGrowth &&
+        !state.driftNote &&
         state.conditions.every((c) => c.ttl === undefined)
       ) {
-        // Fully settled, untargeted, no soft reads: skip the no-op write.
+        // Absent, untargeted, and fully settled: skip the no-op write. Present
+        // seeded characters reduce EVERY turn now (Spec 1 fill/pressure tick),
+        // so this narrow skip is the only remaining short-circuit.
         continue
       }
+
+      // Output-side drift (Spec 1 Task 6): compare the finalized prose against
+      // the PRE-reduce state — what the narrator's [BODY STATE] block showed.
+      const driftFindings =
+        isPresent && narrativeContent ? detectDrift(narrativeContent, character.name, state) : []
 
       const seed = `${storyId}:${entryId}:${character.id}`
       const { state: nextState, log: reducerLog } = reduceCharacterBody(
@@ -2901,6 +2946,14 @@ class StoryStore {
         seed,
         character.name,
         charSoftState,
+        {
+          // Present-only ruling: off-screen characters keep time but never
+          // change size unseen (fill/pressure/pity/pending all held). Events
+          // imply presence even when the classifier's scene list misses her.
+          ticksEnabled: isPresent || charEvents.length > 0,
+          ...(charConditions ? { softConditions: charConditions } : {}),
+          ...(driftFindings.length > 0 ? { driftFindings } : {}),
+        },
       )
       pendingLog.push(...reducerLog)
 

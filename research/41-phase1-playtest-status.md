@@ -150,6 +150,46 @@ each time"; optionally toggle Growth-Eligible Events to Catalyst-only for strict
 canon. With the precedence contract in place, the Growth Catalyst lore entry can stay
 as-is.
 
+## Phase 2 Spec 1 shipped (0.7.6-be.8)
+
+Ben's "continue with the plan" → the full quick-wins batch, TDD'd (177 tests, 78 new)
+and adversarially reviewed (3 Opus lenses; every actionable finding fixed pre-commit):
+
+- **Pinned 9-step reducer pipeline** (decay → cooldown → pending-land → softState →
+  passive fill → events w/ anticipation split → pressure/pity → conditions → drift).
+- **Fluid registry + passive fill** (milk/mana/arcane/ambrosia; density threads into
+  carried mass). **Anticipation two-beat** (≥2 deltas split; ONSET + SURGING
+  directives). **Growth-pressure escalator** (dry beats bank pressure; pity-fire at
+  85; `ineligible` never accrues). **Conditions writer** (classifier `beConditions`,
+  derived-first Engorged, rendered in the block). **Drift detection** (3 Era-1
+  detectors + the research/41 omission detector → next-turn [CONTINUITY] notes).
+  **Support axis** (buoyancy suppresses hang) + **interaction milestones** (authentic
+  13-row NAI table; "Next size milestone (NOT yet true …)" line). **Store tick-path**
+  (present-only, config from settings).
+
+**Review rulings baked in (the important design decisions):**
+1. **Overfill couples through growthFactor ALONE** — a neutral fluid (milk, gf 0)
+   saturates and converges (no writes, no growth); only growth-fluids feed the
+   intentional FIL loop. Fixes the probe-confirmed default-config runaway (+1 tier
+   every ~3-6 turns for any full un-milked bystander, forever).
+2. **Off-screen bodies never change size unseen** — `ticksEnabled` (present-only)
+   holds fill/pressure/pity AND the pending-land while a character is absent; time
+   (decay, cooldown) still passes. Staged growth waits for her return.
+3. **[CONTINUITY] notes carry their own imperative** (no blanket "correct silently" —
+   it contradicted the omission note's "render it now") and name no absolute sizes
+   (they staled between detection and render).
+4. Directive coherence: mid-split renders GROWTH SURGING (owns the ONSET pairing);
+   genre rules got the staged-onset carve-out; subtle clamp is "no further this beat".
+5. Hardening: prototype-chain-safe registry lookups (hasOwn ×4 sites), NaN-proof
+   growthPressure (a NaN silently nuked the whole record via the all-or-nothing
+   parse), pressure cap 170, ttl cap 99, Engorged survives the condition cap.
+
+**Deferred:** sensitivity/bounce/cleavage ladder bake (extract-ladder2.mjs extension —
+additive flavor, own session) · wizard-side BE fields (full Spec 3) · known-limit
+notes from the reviews: `readBodyState`'s all-or-nothing parse is pre-existing tech
+debt (any future NaN-class bug = silent record loss); cup-mention detector is
+uppercase-only by design ("a cup of tea"); ttl:0 ≡ ttl:1 off-by-one is harmless.
+
 ## Early pacing observations (D5 feed)
 
 At tier 47 with intensity-2/3 contact events, it took SEVEN attempts to land one growth

@@ -45,6 +45,8 @@ export const bodyStateSchema = z
     lastGrowth: z.object({ delta: z.number(), tierBefore: z.number() }).passthrough().optional(),
     attitude: z.enum(['craving', 'accepting', 'conflicted', 'fearful', 'resentful']).optional(),
     arousal: z.number().min(0).max(100).optional(),
+    growthPressure: z.number().nonnegative().optional(),
+    driftNote: z.object({ note: z.string() }).passthrough().optional(),
   })
   .passthrough()
 

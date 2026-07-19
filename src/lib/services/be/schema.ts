@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod'
+import { MAX_BE_CONDITIONS } from './constants'
 import type { BeEvent, BeSoftState } from './types'
 
 export const beEventSchema = z.object({
@@ -49,6 +50,22 @@ export const beSoftStateSchema = z.object({
 const BE_STATES_DESCRIPTION =
   'Per-character soft-state reads OBSERVED in this response: transformation attitude, arousal, fluid fullness. Include a character only when the scene gives evidence; omit fields you cannot ground. Empty array is correct when nothing changed.'
 
+export const beConditionSchema = z.object({
+  character: z.string().describe('Exact name of the affected female character'),
+  label: z
+    .string()
+    .max(200)
+    .describe('Short condition label, e.g. "aching fullness", "buoyancy charm", "lactation surge"'),
+  note: z.string().describe('One-phrase detail, when the scene gives one').optional(),
+  ttl: z
+    .number()
+    .describe('Turns the condition should persist; omit for until-resolved')
+    .optional(),
+})
+
+const BE_CONDITIONS_DESCRIPTION =
+  'Transient body conditions the scene ESTABLISHED this response (enchantments, states, afflictions affecting her transformation). Empty array when none.'
+
 /**
  * Extend a classification schema (base or runtime-vars-extended — both are object
  * schemas with entryUpdates + scene) with the top-level beEvents array.
@@ -70,6 +87,11 @@ export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.Zod
       .max(MAX_BE_EVENTS_PER_TURN)
       .default([])
       .describe(BE_STATES_DESCRIPTION),
+    beConditions: z
+      .array(beConditionSchema)
+      .max(MAX_BE_CONDITIONS)
+      .default([])
+      .describe(BE_CONDITIONS_DESCRIPTION),
   })
 }
 
@@ -94,7 +116,11 @@ Also fill the top-level \`beStates\` array with per-character soft-state reads t
 - \`attitude\`: her current emotional stance toward her transformation (craving/accepting/conflicted/fearful/resentful) — only when the scene shows it.
 - \`arousal\`: 0-100 — only when the scene evidences a level.
 - \`fluidFill\`: 0-100 percent of breast capacity — only when the scene establishes fullness (engorgement, expressing, time passing).
-Omit fields without evidence; empty array when nothing changed.`
+Omit fields without evidence; empty array when nothing changed.
+
+Also fill the top-level \`beConditions\` array with transient body conditions the scene ESTABLISHED (enchantments, blessings/curses, physical states affecting her transformation — e.g. "buoyancy charm", "lactation surge"):
+- \`label\` = a short reusable name; \`note\` = one-phrase detail when given; \`ttl\` = how many turns it should persist, omitted for until-resolved.
+- Report only conditions the prose actually established; empty array when none.`
 
   // Settings JSON is unvalidated at load — a non-string here must not throw
   // (this runs in the classification hot path, outside its try/catch).
@@ -120,6 +146,26 @@ export function beEventsFromResult(result: Record<string, unknown>): BeEvent[] {
     if (parsed.success) events.push(parsed.data)
   }
   return events
+}
+
+/** A classifier-proposed transient condition, still carrying its character attribution. */
+export interface BeCharacterCondition {
+  character: string
+  label: string
+  note?: string
+  ttl?: number
+}
+
+/** Pull validated conditions off a classification result (same tolerance rules). */
+export function beConditionsFromResult(result: Record<string, unknown>): BeCharacterCondition[] {
+  const raw = result['beConditions']
+  if (!Array.isArray(raw)) return []
+  const conditions: BeCharacterCondition[] = []
+  for (const candidate of raw.slice(0, MAX_BE_CONDITIONS)) {
+    const parsed = beConditionSchema.safeParse(candidate)
+    if (parsed.success) conditions.push(parsed.data)
+  }
+  return conditions
 }
 
 /** Pull validated soft-state reads off a classification result (same tolerance rules). */

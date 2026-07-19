@@ -76,6 +76,10 @@ export interface BodyState {
   attitude?: TransformationAttitude
   /** Arousal 0-100 (soft state; feeds prose mood + image expression cues). */
   arousal?: number
+  /** Growth-pressure escalator accumulator (Spec 1 Task 5; 0-capped, resets on fire). */
+  growthPressure?: number
+  /** One-turn drift-correction carrier (Spec 1 Task 6; cleared by the next reduce). */
+  driftNote?: { note: string }
 }
 
 /** Classifier-extracted event kinds (research/31 §2.2). The LLM proposes EVENTS, not values. */
@@ -117,11 +121,17 @@ export type GrowthOutcome =
  */
 export interface BeLogRecord {
   character: string
-  kind: BeEventKind | 'decay' | 'seed' | 'mood'
+  kind: BeEventKind | 'decay' | 'seed' | 'mood' | 'fill' | 'pressure' | 'pending'
   outcome: GrowthOutcome
   delta: number
   tierAfter: number
   note?: string
+}
+
+/** Output-side drift finding (Spec 1 Task 6; produced by drift.ts, consumed by the reducer). */
+export interface DriftFinding {
+  kind: 'cup_contradiction' | 'size_overshoot' | 'non_breast_growth' | 'growth_omitted'
+  note: string
 }
 
 /** Per-story BE configuration (grows into the story-creation BE definition, research/34 §6a). */
@@ -136,6 +146,10 @@ export interface BeStoryConfig {
    * research/41: canon-illegal growth must never roll). Undefined = all.
    */
   growthEligibleKinds?: ReadonlyArray<BeEventKind>
+  /** The story's fluid — FLUID_REGISTRY key (mirrors settings.beFluidType). */
+  fluidType: string
+  /** Per-turn passive fill tick (Spec 1 Task 2); the FIL loop's intake side. */
+  passiveFillEnabled: boolean
 }
 
 export interface ReducerResult {

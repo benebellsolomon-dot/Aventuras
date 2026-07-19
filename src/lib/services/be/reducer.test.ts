@@ -5,6 +5,8 @@ import { reduceCharacterBody, seededRoll } from './reducer'
 import type { BeEvent, BeStoryConfig, BodyState } from './types'
 
 const CONFIG: BeStoryConfig = { ...DEFAULT_BE_STORY_CONFIG, enabled: true }
+// Fill-sensitive legacy tests opt out of the Spec-1 passive tick (pipeline.test.ts owns it).
+const NO_TICK: BeStoryConfig = { ...CONFIG, passiveFillEnabled: false }
 
 const growthEvent = (overrides: Partial<BeEvent> = {}): BeEvent => ({
   character: 'Lucy',
@@ -61,14 +63,15 @@ describe('reduceCharacterBody', () => {
     expect(state).toEqual(frozen)
   })
 
-  test('critical success grows +2, sets the cooldown, and logs the outcome', () => {
+  test('critical success lands half now, stages the rest, and arms the cooldown', () => {
     const seed = seedFor((roll) => roll + 2 >= 18) // intensity 2 → +2 bonus
     const result = reduceCharacterBody(defaultBodyState(10), [growthEvent()], CONFIG, seed)
 
-    expect(result.state.tier).toBe(12)
+    expect(result.state.tier).toBe(11) // anticipation split: +1 now
+    expect(result.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
     expect(result.state.cooldown).toBe(CONFIG.growthCooldownBeats)
-    expect(result.log).toHaveLength(1)
-    expect(result.log[0]).toMatchObject({ outcome: 'critical', delta: 2, tierAfter: 12 })
+    const record = result.log.find((entry) => entry.kind === 'catalyst')
+    expect(record).toMatchObject({ outcome: 'critical', delta: 1, tierAfter: 11 })
   })
 
   test('failure leaves tier untouched', () => {
@@ -76,7 +79,7 @@ describe('reduceCharacterBody', () => {
     const result = reduceCharacterBody(defaultBodyState(10), [growthEvent()], CONFIG, seed)
 
     expect(result.state.tier).toBe(10)
-    expect(result.log[0].outcome).toBe('fail')
+    expect(result.log.find((entry) => entry.kind === 'catalyst')?.outcome).toBe('fail')
   })
 
   test('the size-lock muzzles growth without rolling — even at max intensity', () => {
@@ -84,7 +87,7 @@ describe('reduceCharacterBody', () => {
     const result = reduceCharacterBody(state, [growthEvent({ intensity: 3 })], CONFIG, 'any')
 
     expect(result.state.tier).toBe(10)
-    expect(result.log[0].outcome).toBe('muzzled')
+    expect(result.log.find((entry) => entry.kind === 'catalyst')?.outcome).toBe('muzzled')
   })
 
   test('a successful growth cools down later events in the same turn', () => {
@@ -92,16 +95,18 @@ describe('reduceCharacterBody', () => {
     const events = [growthEvent(), growthEvent(), growthEvent()]
     const result = reduceCharacterBody(defaultBodyState(10), events, CONFIG, seed)
 
-    const outcomes = result.log.map((entry) => entry.outcome)
+    const outcomes = result.log
+      .filter((entry) => entry.kind === 'catalyst')
+      .map((entry) => entry.outcome)
     expect(outcomes[0]).toBe('critical')
     expect(outcomes.slice(1)).toEqual(['cooldown', 'cooldown'])
-    expect(result.state.tier).toBe(12) // only the first event landed
+    expect(result.state.tier).toBe(11) // only the first event's landed half
   })
 
   test('an active cooldown gates growth and ticks down once per turn', () => {
     const state = { ...defaultBodyState(10), cooldown: 2 }
     const first = reduceCharacterBody(state, [growthEvent()], CONFIG, 'x')
-    expect(first.log[0].outcome).toBe('cooldown')
+    expect(first.log.find((entry) => entry.kind === 'catalyst')?.outcome).toBe('cooldown')
     expect(first.state.cooldown).toBe(1)
 
     const second = reduceCharacterBody(first.state, [], CONFIG, 'x')
@@ -114,7 +119,7 @@ describe('reduceCharacterBody', () => {
     const result = reduceCharacterBody(defaultBodyState(10), [growthEvent()], config, seed)
 
     expect(result.state.tier).toBe(11)
-    expect(result.log[0].delta).toBe(1)
+    expect(result.log.find((entry) => entry.kind === 'catalyst')?.delta).toBe(1)
   })
 
   test('milking drains fluids and never touches tier', () => {
@@ -123,7 +128,7 @@ describe('reduceCharacterBody', () => {
     const result = reduceCharacterBody(
       state,
       [growthEvent({ kind: 'milking', intensity: 2 })],
-      CONFIG,
+      NO_TICK,
       's',
     )
 
@@ -163,7 +168,7 @@ describe('reduceCharacterBody', () => {
     const result = reduceCharacterBody(
       state,
       [growthEvent({ kind: 'milking', intensity: 1 })],
-      CONFIG,
+      NO_TICK,
       's',
       'Lucy',
       { character: 'Lucy', attitude: 'craving', arousal: 450, fluidFill: 90 },
@@ -205,7 +210,7 @@ describe('reduceCharacterBody', () => {
 describe('growth-eligible kinds (per-story cosmology)', () => {
   // Playtest finding (research/41): a story whose canon says "only the catalyst
   // drives growth" must never land canon-illegal growth from contact rolls.
-  const CATALYST_ONLY: BeStoryConfig = { ...CONFIG, growthEligibleKinds: ['catalyst'] }
+  const CATALYST_ONLY: BeStoryConfig = { ...NO_TICK, growthEligibleKinds: ['catalyst'] }
 
   test('ineligible growth kind never rolls: no tier change, no cooldown, outcome ineligible', () => {
     // Arrange: a seed that WOULD crit at intensity 2 if the roll happened

@@ -11,6 +11,7 @@ import {
 } from './metadata'
 import {
   MAX_BE_EVENTS_PER_TURN,
+  beConditionsFromResult,
   beEventsFromResult,
   beSoftStatesFromResult,
   buildBeEventInstructions,
@@ -265,6 +266,40 @@ describe('uniformBodyStateTier (the grounding gate)', () => {
   test('unseeded companions do not block grounding of the seeded one', () => {
     expect(uniformBodyStateTier(characters, ['Lucy', 'Mira'])).toBe(45)
     expect(uniformBodyStateTier(characters, ['Mira'])).toBeNull()
+  })
+})
+
+describe('beConditions extraction (Spec 1 Task 4)', () => {
+  test('the extended schema validates beConditions and defaults them empty', () => {
+    const schema = extendClassificationSchemaWithBeEvents(classificationResultSchema)
+    const parsed = schema.safeParse({
+      entryUpdates: {},
+      scene: {},
+      beConditions: [{ character: 'Lucy', label: 'Engorged', ttl: 2 }],
+    })
+    expect(parsed.success).toBe(true)
+    const bare = schema.safeParse({ entryUpdates: {}, scene: {} })
+    expect(bare.success).toBe(true)
+    expect((bare.success ? (bare.data as Record<string, unknown>) : {}).beConditions).toEqual([])
+  })
+
+  test('beConditionsFromResult tolerates absence and drops malformed entries', () => {
+    expect(beConditionsFromResult({})).toEqual([])
+    const conditions = beConditionsFromResult({
+      beConditions: [
+        { character: 'Lucy', label: 'aching fullness', note: 'from the ritual' },
+        { character: 'Lucy' }, // no label — malformed
+        { label: 'orphaned' }, // no character — malformed
+        42,
+      ],
+    })
+    expect(conditions).toEqual([
+      { character: 'Lucy', label: 'aching fullness', note: 'from the ritual' },
+    ])
+  })
+
+  test('the instruction block teaches beConditions extraction', () => {
+    expect(buildBeEventInstructions()).toContain('beConditions')
   })
 })
 

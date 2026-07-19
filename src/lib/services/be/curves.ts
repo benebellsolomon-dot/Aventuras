@@ -92,9 +92,14 @@ export function fillMlPerSide(tier: number, fillPercent: number): number {
   return capacityMlPerSide(tier) * (clampPercent(fillPercent) / 100)
 }
 
-/** Current mass per side (kg) at a fill level (fluid at milk density). */
-export function nowKgPerSide(tier: number, fillPercent: number): number {
-  return dryKgPerSide(tier) + (fillMlPerSide(tier, fillPercent) * K.milkDensity) / 1000
+/** Current mass per side (kg) at a fill level; density defaults to milk (Spec 1
+ * Task 2 threads the story fluid's density through measurements()). */
+export function nowKgPerSide(
+  tier: number,
+  fillPercent: number,
+  fluidDensity: number = K.milkDensity,
+): number {
+  return dryKgPerSide(tier) + (fillMlPerSide(tier, fillPercent) * fluidDensity) / 1000
 }
 
 /**
@@ -198,7 +203,7 @@ export function inferredBuildNumbers(
 const BUILD_LABELS = ['petite', 'slim', 'average', 'curvy', 'full'] as const
 export function resolveBuild(baseline?: BodyBaseline): string {
   const explicit = baseline?.build
-  if (explicit && explicit in BUILD_BAND_OFFSET) return explicit
+  if (explicit && Object.hasOwn(BUILD_BAND_OFFSET, explicit)) return explicit
   const whtr = effectiveWhtr(baseline)
   if (whtr === null) return 'average'
   let best = 0
@@ -212,7 +217,8 @@ export function resolveBuild(baseline?: BodyBaseline): string {
 export function bandCm(baseline?: BodyBaseline): number {
   const waist = saneWaistCm(baseline?.waistCm) ?? REF_WAIST_CM
   const explicit = baseline?.build
-  if (explicit && explicit in BUILD_BAND_OFFSET) return waist + BUILD_BAND_OFFSET[explicit]
+  if (explicit && Object.hasOwn(BUILD_BAND_OFFSET, explicit))
+    return waist + BUILD_BAND_OFFSET[explicit]
   const inferred = inferredBuildNumbers(baseline)
   return waist + (inferred ? inferred.offset : (BUILD_BAND_OFFSET[resolveBuild(baseline)] ?? 5))
 }
@@ -223,7 +229,7 @@ export function frameEstimateKg(baseline?: BodyBaseline): number {
   const explicit = baseline?.build
   const mods = K.buildWeightMods as Record<string, number>
   let mod = 0
-  if (explicit && explicit in mods) mod = mods[explicit]
+  if (explicit && Object.hasOwn(mods, explicit)) mod = mods[explicit]
   else {
     const inferred = inferredBuildNumbers(baseline)
     if (inferred) mod = inferred.mod
