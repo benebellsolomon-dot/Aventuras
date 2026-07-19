@@ -38,6 +38,7 @@ export {
   sniffTierFromText,
   tierForCupLetter,
 } from './ladder'
+export { BAND_WORD_THRESHOLDS } from './ladder-data'
 export { groundingFacts } from './derive'
 export {
   bandCm,

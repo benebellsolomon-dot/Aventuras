@@ -773,6 +773,7 @@ export type ImageProviderType =
   | 'zhipu'
   | 'comfyui'
   | 'a1111'
+  | 'si-bridge'
 
 export interface ImageProfile {
   id: string

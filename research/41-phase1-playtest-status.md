@@ -199,3 +199,19 @@ escalator the six dry attempts would have banked ~72 pressure — a pity fire ju
 the natural success. Reads as: cadence is starved at high tier exactly where the
 growth-pressure escalator (Spec 1 Task 5) and passive fill (Task 2) intervene — playtest
 evidence supports building the quick-wins batch with the pressure escalator first.
+
+## P3 shipped — Spec 2 si-bridge native provider (2026-07-19, 0.7.6-be.12)
+
+The engine now speaks the bridge's native structured API: `si-bridge` provider
+(async submit→poll→binary result), `StructuredImageSpec` assembly from engine
+bodyState at BOTH inline call sites (streaming tracker + manual/batch service),
+scene inference (intimacy gate with one-step context escalation; 14-key curated
+location mapper), and the `__betier_N__`→`be_tier_index` translation on the
+prompt-fallback path. **Task 5 calibration verdict: identity mapping** — the
+app tier scalar and bridge tier_index are the same 0-51 cup-band ladder (full
+band-table agreement verified against deployed-truth source; the "three ladders
+disagree" concern is resolved). Full deviation log: research/37 Spec 2
+§"Shipped". Review: 3-lens adversarial pass (security/concurrency/edge-case,
+27 findings triaged) + a fix-diff pass (8 findings, 4 fixed); gates 217 vitest /
+0 check / 0 lint. Setup note for Ben: the si-bridge ImageProfile needs the PC's
+real X-API-Key — native endpoints reject keyless (NOAUTH covers /sdapi/* only).

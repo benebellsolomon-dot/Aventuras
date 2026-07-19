@@ -22,6 +22,8 @@ import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/s
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { sizeBandMarker } from './sizeBandMarker'
+import { maybeBuildBridgeSpec } from './bridgeSpec'
+import type { StructuredImageSpecInput } from './providers/types'
 import {
   groundImagePromptSize,
   imageStateCues,
@@ -179,7 +181,11 @@ export class InlineImageGenerationService {
     const beTier = context.beMode
       ? uniformBodyStateTier(context.presentCharacters, tag.characters)
       : null
-    let groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    // The cue-less grounded prompt is what the spec builder sees as the scene —
+    // cues ride the spec's extra_tags; appending them first would duplicate them
+    // into scene_tags.
+    const groundedScene = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    let groundedPrompt = groundedScene
     // State cues (engorgement/arousal) apply only for a single unambiguous subject.
     if (context.beMode) {
       const solo = soloBodyState(context.presentCharacters, tag.characters)
@@ -187,6 +193,36 @@ export class InlineImageGenerationService {
       if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
     }
     const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
+
+    // si-bridge native path: send structure beside the prompt. The spec (when
+    // one assembles — needs at least one tagged character with bodyState)
+    // OVERRIDES the prompt bridge-side; the marker/grounded prompt above stays
+    // as the recorded fallback and serves every other provider unchanged.
+    const activeProviderType = settings.getImageProfile(profileId)?.providerType
+    const bridgeSpec: StructuredImageSpecInput | undefined = maybeBuildBridgeSpec({
+      providerType: activeProviderType,
+      beMode: context.beMode,
+      presentCharacters: context.presentCharacters,
+      tagCharacterNames: tag.characters,
+      sceneText: groundedScene,
+      narrativeText: context.narrativeContent,
+    })
+    if (bridgeSpec) {
+      log('Built si-bridge structured spec', {
+        characters: bridgeSpec.characters.length,
+        tiers: bridgeSpec.characters.map((c) => c.tier_index),
+        intimacy: bridgeSpec.intimacy,
+        location: bridgeSpec.location,
+        regional: bridgeSpec.regional ?? false,
+      })
+    }
+    if (activeProviderType === 'si-bridge' && referenceImageUrls?.length) {
+      // B1 anchor path not wired yet — the native provider cannot consume
+      // portrait references; the render proceeds spec/prompt-only.
+      log('si-bridge ignores portrait references (B1 identity anchors not yet wired)', {
+        droppedReferences: referenceImageUrls.length,
+      })
+    }
 
     const { width, height } = parseImageSize(sizeToUse)
 
@@ -226,6 +262,7 @@ export class InlineImageGenerationService {
       sizeToUse,
       context.entryId,
       referenceImageUrls,
+      bridgeSpec,
     ).catch((error) => {
       log('Async inline image generation failed', { imageId, error })
     })
@@ -259,6 +296,7 @@ export class InlineImageGenerationService {
     size: string,
     entryId: string,
     referenceImageUrls?: string[],
+    spec?: StructuredImageSpecInput,
   ): Promise<void> {
     try {
       // Update status to generating
@@ -278,6 +316,7 @@ export class InlineImageGenerationService {
         prompt,
         size,
         referenceImages: referenceImageUrls,
+        spec,
       })
 
       if (!result.base64) {
@@ -301,11 +340,16 @@ export class InlineImageGenerationService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       log('Inline image generation failed', { imageId, error: errorMessage })
 
-      // Update record with error
-      await database.updateEmbeddedImage(imageId, {
-        status: 'failed',
-        errorMessage,
-      })
+      // Update record with error. A failed write must not swallow the UI
+      // events below — that would strand the row in 'generating' with no signal.
+      try {
+        await database.updateEmbeddedImage(imageId, {
+          status: 'failed',
+          errorMessage,
+        })
+      } catch (dbError) {
+        log('Failed to persist image failure status', { imageId, dbError })
+      }
 
       // Emit ready event (with failure) and notify UI
       emitImageReady(imageId, entryId, false)

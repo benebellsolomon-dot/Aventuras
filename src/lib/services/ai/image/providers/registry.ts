@@ -13,6 +13,7 @@ import type {
   ImageProviderConfig,
   ImageGenerateResult,
   ImageModelInfo,
+  StructuredImageSpecInput,
 } from './types'
 import { createLogger } from '$lib/log'
 
@@ -26,6 +27,7 @@ import { createZhipuProvider } from './zhipu'
 import { createComfyProvider } from './comfy'
 import { createOpenRouterProvider } from './openrouter'
 import { createA1111Provider } from './a1111'
+import { createSiBridgeProvider } from './si-bridge'
 
 const log = createLogger('ImageRegistry')
 
@@ -45,6 +47,7 @@ const PROVIDER_FACTORIES: Record<ImageProviderType, ProviderFactory> = {
   zhipu: createZhipuProvider,
   comfyui: createComfyProvider,
   a1111: createA1111Provider,
+  'si-bridge': createSiBridgeProvider,
 }
 
 // ============================================================================
@@ -91,8 +94,10 @@ export async function generateImage(options: {
   size?: string
   referenceImages?: string[]
   signal?: AbortSignal
+  /** Structured spec for the si-bridge provider; other providers ignore it. */
+  spec?: StructuredImageSpecInput
 }): Promise<ImageGenerateResult> {
-  const { profileId, model, prompt, size = '1024x1024', referenceImages, signal } = options
+  const { profileId, model, prompt, size = '1024x1024', referenceImages, signal, spec } = options
 
   const profile = settings.getImageProfile(profileId)
   if (!profile) {
@@ -131,6 +136,7 @@ export async function generateImage(options: {
     referenceImages: cleanRefs,
     signal,
     providerOptions: profile.providerOptions,
+    spec,
   })
 }
 

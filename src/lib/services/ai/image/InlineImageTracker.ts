@@ -31,6 +31,8 @@ import {
   uniformBodyStateTier,
 } from '$lib/services/be'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
+import { maybeBuildBridgeSpec } from './bridgeSpec'
+import type { StructuredImageSpecInput } from './providers/types'
 import { createLogger } from '$lib/log'
 import type { Character, EmbeddedImage } from '$lib/types'
 
@@ -83,8 +85,10 @@ export class InlineImageTracker {
         characters: tag.characters,
       })
 
-      // Fire-and-forget: style prompt fetch + generation start is async
-      this.startGeneration(tag, referenceMode).catch((error) => {
+      // Fire-and-forget: style prompt fetch + generation start is async.
+      // accumulatedContent (the narrative streamed so far) is the context
+      // signal for the si-bridge spec's intimacy inference.
+      this.startGeneration(tag, referenceMode, accumulatedContent).catch((error) => {
         log('startGeneration failed', { error })
       })
     }
@@ -94,7 +98,11 @@ export class InlineImageTracker {
    * Start image generation for a tag. The generation runs async and stores
    * the result in pendingImages for later DB persistence.
    */
-  private async startGeneration(tag: ParsedPicTag, referenceMode: boolean): Promise<void> {
+  private async startGeneration(
+    tag: ParsedPicTag,
+    referenceMode: boolean,
+    narrativeSoFar: string,
+  ): Promise<void> {
     const imageSettings = settings.systemServicesSettings.imageGeneration
 
     const imageId = crypto.randomUUID()
@@ -140,13 +148,42 @@ export class InlineImageTracker {
     const beTier = this.getBeMode()
       ? uniformBodyStateTier(this.getCharacters(), tag.characters)
       : null
-    let groundedPrompt = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    // Cue-less grounded prompt = the spec builder's scene text (cues ride the
+    // spec's extra_tags; appending first would duplicate them into scene_tags).
+    const groundedScene = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
+    let groundedPrompt = groundedScene
     if (this.getBeMode()) {
       const solo = soloBodyState(this.getCharacters(), tag.characters)
       const cues = solo ? imageStateCues(solo) : []
       if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
     }
     const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
+
+    // si-bridge native path (mirrors InlineImageService — this streaming
+    // tracker is the LIVE inline path, so the spec must assemble here too).
+    const bridgeSpec = maybeBuildBridgeSpec({
+      providerType: profile.providerType,
+      beMode: this.getBeMode(),
+      presentCharacters: this.getCharacters(),
+      tagCharacterNames: tag.characters,
+      sceneText: groundedScene,
+      narrativeText: narrativeSoFar,
+    })
+    if (bridgeSpec) {
+      log('Built si-bridge structured spec', {
+        characters: bridgeSpec.characters.length,
+        tiers: bridgeSpec.characters.map((c) => c.tier_index),
+        intimacy: bridgeSpec.intimacy,
+        location: bridgeSpec.location,
+        regional: bridgeSpec.regional ?? false,
+      })
+    }
+    if (profile.providerType === 'si-bridge' && referenceImageUrls?.length) {
+      // B1 anchor path not wired yet — portrait references cannot be consumed.
+      log('si-bridge ignores portrait references (B1 identity anchors not yet wired)', {
+        droppedReferences: referenceImageUrls.length,
+      })
+    }
 
     log('Starting async image generation', {
       imageId,
@@ -162,6 +199,7 @@ export class InlineImageTracker {
       fullPrompt,
       imageSettings.size,
       referenceImageUrls,
+      bridgeSpec,
     )
 
     this.pendingImages.push({
@@ -185,6 +223,7 @@ export class InlineImageTracker {
     prompt: string,
     size: string,
     referenceImageUrls?: string[],
+    spec?: StructuredImageSpecInput,
   ): Promise<{ base64: string | null; error?: string }> {
     try {
       const result = await registryGenerateImage({
@@ -193,6 +232,7 @@ export class InlineImageTracker {
         prompt,
         size,
         referenceImages: referenceImageUrls,
+        spec,
       })
 
       if (!result.base64) {
@@ -263,22 +303,31 @@ export class InlineImageTracker {
 
       log('Image record created with generating status', { imageId: pending.id })
 
-      // Update record when generation completes (non-blocking)
+      // Update record when generation completes (non-blocking). A failed DB
+      // write must not swallow the ready event — that would strand the row in
+      // 'generating' with no UI signal (mirrors InlineImageService's catch).
       pending.generationPromise
         .then(async (result) => {
-          await database.updateEmbeddedImage(pending.id, {
-            imageData: result.base64 || '',
-            status: result.base64 ? 'complete' : 'failed',
-            errorMessage: result.error,
-          })
-          emitImageReady(pending.id, this.entryId, !!result.base64)
+          let persisted = false
+          try {
+            await database.updateEmbeddedImage(pending.id, {
+              imageData: result.base64 || '',
+              status: result.base64 ? 'complete' : 'failed',
+              errorMessage: result.error,
+            })
+            persisted = true
+          } catch (dbError) {
+            log('Failed to update image record', { imageId: pending.id, dbError })
+          }
+          // Success requires the image to actually be readable from the DB.
+          emitImageReady(pending.id, this.entryId, !!result.base64 && persisted)
           log('Image record updated', {
             imageId: pending.id,
-            status: result.base64 ? 'complete' : 'failed',
+            status: result.base64 && persisted ? 'complete' : 'failed',
           })
         })
         .catch((error) => {
-          log('Failed to update image record', { imageId: pending.id, error })
+          log('Failed to finalize image record', { imageId: pending.id, error })
         })
     }
 

@@ -74,7 +74,7 @@ detail source.
 | P1 | Lucy playtest (acceptance gate) | ✅ PASSED (research/41) — classifier ruled: keep grok-4.3 |
 | P2 | Spec 1 quick-wins batch | ✅ SHIPPED 0.7.6-be.8 (+ the be.7 cosmology/precedence package pulled forward from Spec 3) |
 | **V1** | **VN presentation MVP** (Part III) | **Buildable NOW** — no gates, parallel to P3 |
-| **P3** | **Spec 2 si-bridge native provider** (Part II) | Next engine phase — now ALSO the VN-v2 prerequisite (FaceID anchors, regional, /animate) |
+| **P3** | **Spec 2 si-bridge native provider** (Part II) | ✅ CODE COMPLETE 2026-07-19 (ships as 0.7.6-be.12; see Spec 2 §"Shipped"). B1 FaceID anchors remain the V2-side extension point |
 | P4 | Spec 3 remainder (Part II) | cosmology/pacing/eligible-kinds shipped in be.7; remaining: beSizeCapTier/beGrowthCooldownBeats + full wizard chain + dedicated BE step + retire the imported [BE] rules |
 | **V2** | **BE sprite engine** (Part III) | Gated on P3 + the transparency ruling (research/42 OD#1) |
 | V3 | Multi-character stage + regional CGs (Part III) | After V2 |
@@ -349,6 +349,53 @@ File: `story.svelte.ts` (`applyBeEvents`, ~L2802-2939)
 - **`pendingGrowth.delta` under `sizeCapTier`** — re-clamp at land time.
 
 ## Spec 2 — si-bridge image provider
+
+### ✅ Shipped (2026-07-19, 0.7.6-be.12) — deviations from the spec as written
+
+All deviations follow the CURRENT deployed bridge contract (fresh GitHub-main clone;
+the spec was drafted against the stale local clone):
+
+- **`workflow` omitted from the request** (spec said pin `illustrious_image`): the bridge
+  now auto-routes — BE specs (tier ≥ 22 or any be_moment) land on Illustrious, standard
+  specs on Krea2. Pinning would have forced everything onto Illustrious.
+- **`be_moments` is SPEC-level, not per-character**: `SpecCharacter` has no such field
+  (silently swallowed via `extra="allow"`), and the spec-level field is the sub-tier-22
+  Illustrious routing trigger. Union across subjects — a multi-subject growth beat shares
+  one cluster (contract limitation, noted).
+- **Identity rides `appearance_excerpt`** (new contract field) instead of parsing
+  visualDescriptors into flat hair/eye fields — the bridge infers from free text.
+- **TWO call sites, not one**: the streaming `InlineImageTracker` is the LIVE inline path
+  (found in adversarial review as a HIGH) — spec assembly is shared via
+  `maybeBuildBridgeSpec` (bridgeSpec.ts) with `InlineImageService` (manual/batch path).
+- **Prompt-path marker translation**: native `/image` does NOT parse `__betier_N__`
+  (only the /sdapi shim does) — the provider strips the marker and sends `be_tier_index`,
+  covering the spec-less fallback, DB Retry replay, and non-BE stories.
+- **Task 5 calibration verdict: `bridgeTierIndex` = IDENTITY** (clamp+round). The HTTP
+  `/image/build` dry-run 401s from the Mac (X-API-Key lives only on the PC; NOAUTH covers
+  /sdapi/* only) — calibration done by full-table source verification instead: the app's
+  `BAND_WORD_THRESHOLDS`, the shim's `_KREA_TIER_NOUNS`, and Illustrious `tier_to_cup_tag`
+  agree at EVERY band boundary (flat 0 / small 1-3 / medium 4-13 / large 14-21 / huge
+  22-29 / gigantic 30-39 / hyper 40+). The "three ladders disagree" concern is resolved;
+  the ladder-data.ts header note about a one-band krea drift is stale. Cup LETTERS diverge
+  (research/38 re-anchor) but never enter the image pipeline. **Residual:** beyond-ZZ
+  (tier > 51) measurement curves not cross-verified (bridge derives its own); confirm with
+  a keyed dry-run when convenient: `curl -H "X-API-Key: $KEY" -d '{"characters":[{"tier_index":N}]}' http://100.100.142.29:8001/image/build`.
+- **Intimacy/location inference is deliberately conservative**: the <pic> scene text is
+  primary; the narrative beat escalates at most ONE step (an establishing shot in an
+  explicit beat renders suggestive, not explicit); engorgement cues floor a clean rating
+  at suggestive; location comes from scene text only — a wrong curated key is worse than
+  none. Adversarially reviewed keyword tables with idiom exclusions.
+- **Hardening from the 3-lens + fix-diff review passes**: poll loop tolerates 3
+  consecutive transient failures (30s per-poll request timeout, counter resets on
+  success); job deadline floored at 5 min (LLM-tuned timeouts can't cut image jobs;
+  NaN-guarded); job_id validated + URL-encoded; emit-safety on DB-write failure in BOTH
+  call paths (rows can't strand in 'generating').
+- **Known limitations (accepted)**: portrait references are logged-and-dropped on the
+  native path until B1 anchors ship · Retry/regenerate replays the stored prompt (spec
+  not persisted; marker translation preserves size) — regen lossiness is pre-existing
+  app behavior for all providers · profile REQUIRES the real X-API-Key (native endpoints
+  reject keyless; NOAUTH is shim-only) · stateless tagged characters stay in scene_tags,
+  so `regional` fires only on ≥2 stateful subjects (multi-char stage work is V3's).
 
 ### Approach
 New `si-bridge` provider speaking the bridge's modern `/image` + `StructuredImageSpec` API. The

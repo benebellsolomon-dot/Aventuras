@@ -72,6 +72,7 @@
     { value: 'zhipu', label: 'Zhipu CogView' },
     { value: 'comfyui', label: 'ComfyUI' },
     { value: 'a1111', label: 'A1111 / SD.cpp / Kobold' },
+    { value: 'si-bridge', label: 'SI Bridge' },
   ]
   const profileModes = [
     { value: ComfyMode.CustomWorkflow, label: 'Custom Workflow' },
@@ -1404,10 +1405,21 @@
       </div>
     {/if}
 
-    {#if profileProviderType === 'comfyui' || profileProviderType === 'openai' || profileProviderType === 'zhipu' || profileProviderType === 'a1111'}
+    {#if profileProviderType === 'comfyui' || profileProviderType === 'openai' || profileProviderType === 'zhipu' || profileProviderType === 'a1111' || profileProviderType === 'si-bridge'}
       <div class="space-y-2">
         <Label>Base URL (optional)</Label>
-        <Input bind:value={profileBaseUrl} placeholder="Custom base URL" />
+        <Input
+          bind:value={profileBaseUrl}
+          placeholder={profileProviderType === 'si-bridge'
+            ? 'http://127.0.0.1:8001'
+            : 'Custom base URL'}
+        />
+        {#if profileProviderType === 'si-bridge'}
+          <p class="text-muted-foreground text-xs">
+            The bridge's native structured API. The API key is sent as X-API-Key; the bridge routes
+            each request to its own pipeline, so no model/sampler setup is needed.
+          </p>
+        {/if}
       </div>
     {/if}
 
