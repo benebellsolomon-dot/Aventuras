@@ -215,3 +215,18 @@ disagree" concern is resolved). Full deviation log: research/37 Spec 2
 27 findings triaged) + a fix-diff pass (8 findings, 4 fixed); gates 217 vitest /
 0 check / 0 lint. Setup note for Ben: the si-bridge ImageProfile needs the PC's
 real X-API-Key — native endpoints reject keyless (NOAUTH covers /sdapi/* only).
+
+## V2a shipped — sprite-engine foundation (2026-07-19, 0.7.6-be.13)
+
+Spec 4 sub-phase V2a: the 35-cell selection core (`be/sprite.ts` — engorged >
+growth-shock > flushed > attitude precedence, band-representative tiers,
+boundary-safe appearance hash, deterministic seeds), migration 036
+(`character_sprites` cache + anchor columns), provider-agnostic
+`spriteProfileId` slot, the FaceID seam (`pose_face_anchor_b64` + weights), and
+the anchor lifecycle UI (generate at seed tier → approve → stale-on-appearance-
+change) in CharacterPanel. 3-lens review found one live HIGH (retry-restore
+wiped approved anchors via addCharacter's column list — fixed) + COW two-phase
+persist fix + cell-invariant guards. Gates: 238 vitest / 0 check / 0 lint.
+**Ben setup:** Settings → Images → Characters tab → pick a Sprite Profile
+(SI Bridge recommended), then per-NPC Generate + Approve in the character
+panel. No VN-visible change until V2b (matting + generation + VnView layer).
