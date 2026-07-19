@@ -377,9 +377,13 @@ the spec was drafted against the stale local clone):
   agree at EVERY band boundary (flat 0 / small 1-3 / medium 4-13 / large 14-21 / huge
   22-29 / gigantic 30-39 / hyper 40+). The "three ladders disagree" concern is resolved;
   the ladder-data.ts header note about a one-band krea drift is stale. Cup LETTERS diverge
-  (research/38 re-anchor) but never enter the image pipeline. **Residual:** beyond-ZZ
-  (tier > 51) measurement curves not cross-verified (bridge derives its own); confirm with
-  a keyed dry-run when convenient: `curl -H "X-API-Key: $KEY" -d '{"characters":[{"tier_index":N}]}' http://100.100.142.29:8001/image/build`.
+  (research/38 re-anchor) but never enter the image pipeline. **Residual CLOSED
+  (2026-07-19, keyed dry-run via the app-profile key):** live probes at tiers
+  14/24/47/60/80 match the source calibration exactly (cup tags per the band table;
+  hyper_concept 0.74 @ 47 per formula, capped 0.85 from tier 50). The beyond-ZZ
+  measurement phrase is OPT-IN (`size_phrase_in_still`, not sent by our provider) →
+  no curve-divergence exposure in shipped behavior; above ~tier 50 the visible
+  ceiling is the hyper-LoRA plateau (the known graph ceiling).
 - **Intimacy/location inference is deliberately conservative**: the <pic> scene text is
   primary; the narrative beat escalates at most ONE step (an establishing shot in an
   explicit beat renders suggestive, not explicit); engorgement cues floor a clean rating
