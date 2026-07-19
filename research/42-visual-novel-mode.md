@@ -186,12 +186,15 @@ No generic AI-VN has a deterministic body engine driving its sprites. Ours does:
 
 ## 5. Open decisions (Ben rules)
 
-1. **Transparency — ✅ RULED (Ben, 2026-07-19): app-side background removal (WASM),
+1. **Transparency — ✅ RULED (Ben, 2026-07-19): app-side background removal,
    option (b).** Rationale fit: client-side matting works for ANY sprite provider
    (NanoGPT / OpenRouter image models included), matching the provider-agnostic
    ruling — the bridge-side matting node (a) would have covered si-bridge only.
-   V2 scope gains a bundled matting model (ONNX/WASM, e.g. an RMBG/U2Net-class
-   net) + a cutout step in the sprite pipeline; no bridge-side work needed.
+   *Implementation reconciliation (research, same day): NATIVE Rust — `ort` crate
+   + isnet-anime.onnx (Apache-2.0, anime-purpose-built) behind one Tauri command
+   doing matte+resize+WEBP; WKWebView WASM disqualified (ORT-web WebGPU memory bug
+   on WebKit 26, ~20s CPU timings, large-allocation kills); RMBG license-banned.
+   Model is an optional bundle resource — absent → pass-through (opaque sprites).*
 2. **tier_index calibration — ✅ RESOLVED (2026-07-19, P3): identity mapping.** All
    three ladders agree at every band boundary (full-table source verification against
    deployed-truth GitHub main; the dry-run 401s from the Mac — keyed curl in
@@ -201,6 +204,10 @@ No generic AI-VN has a deterministic body engine driving its sprites. Ours does:
    stored beside the portrait — NOT portrait reuse. V2 scope gains a small approval
    flow (generate → approve/regenerate) + an anchor asset per character; re-anchor
    policy on appearance change comes with the approval flow by construction.
+   *Follow-up rulings (same day): anchor renders at the character's SEED tier (the
+   "at rest" look — play grows upward from seed), and the cell space is 35 (a
+   dedicated `flushed` arousal cluster joins positive/neutral/distressed + engorged;
+   arousal is first-class in this genre). Full spec: research/37 Part II Spec 4.*
 4. **vnMode scope**: UI view toggle (recommended) vs per-story setting vs third
    StoryMode (rejected — forks generation).
 5. **Growth-clip scope**: every band crossing vs delta≥2/milestones only; MP4 storage

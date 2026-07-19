@@ -76,7 +76,7 @@ detail source.
 | **V1** | **VN presentation MVP** (Part III) | **Buildable NOW** — no gates, parallel to P3 |
 | **P3** | **Spec 2 si-bridge native provider** (Part II) | ✅ CODE COMPLETE 2026-07-19 (ships as 0.7.6-be.12; see Spec 2 §"Shipped"). B1 FaceID anchors remain the V2-side extension point |
 | P4 | Spec 3 remainder (Part II) | cosmology/pacing/eligible-kinds shipped in be.7; remaining: beSizeCapTier/beGrowthCooldownBeats + full wizard chain + dedicated BE step + retire the imported [BE] rules |
-| **V2** | **BE sprite engine** (Part III) | **UNBLOCKED 2026-07-19** — P3 shipped; transparency RULED: app-side WASM matting; anchor RULED: dedicated approved render (research/42 §5) |
+| **V2** | **BE sprite engine** (Part III) | **IN BUILD 2026-07-19** — Spec 4 (Part II) complete w/ Ben's rulings: app-side matting (native ort+isnet-anime), dedicated approved anchor @ seed tier, 35 cells, provider-agnostic spriteProfileId. Sub-phases V2a→V2c |
 | V3 | Multi-character stage + regional CGs (Part III) | After V2 |
 | V4 | Growth media: transitions + /animate/growth clips (Part III) | After V2 |
 | R | RPG layer (Part III §R — design brief) | Own ruling session, like Chronicler/D2 |
@@ -584,6 +584,137 @@ wizard round-trip persists all five; settings tab edits; a pre-change story stil
 Dedicated wizard step vs cramming Step7 (adopted: dedicated) · confirm no code assumes a separate
 `fluidType` · template bloat (consider the style-inject-twice pattern or trim to highest-value
 rules) · licensing (Megumin CC BY-NC header; AGPL material reimplement-only).
+
+## Spec 4 — V2 BE sprite engine (design pass 2026-07-19; rulings baked)
+
+**Basis:** Part III V2 + research/42 §3-5 + pixelsaga MECHANICS.md. Produced by an Opus
+design pass against `0.7.6-be.12` (`d52694d6`) with bridge facts source-verified on the
+deployed-truth clone. **Ben's rulings (2026-07-19), all baked in below:** transparency =
+app-side matting · sprite anchor = dedicated approved render · provider-agnostic
+`spriteProfileId` slot · **35 cells** (4 expression clusters positive/neutral/distressed/
+flushed + 1 engorged cell, × 7 bands) · **anchor renders at the character's seed tier**
+(their engine tier at anchor time — the "at rest" look; BE play grows upward from seed).
+
+**Matting reconciliation (research verdict, 2026-07-19):** app-side = **native Rust, not
+WKWebView WASM**. `ort` crate (MIT/Apache, CoreML EP) + SkyTNT **isnet-anime.onnx**
+(Apache-2.0, 176 MB, fixed 1024² input, anime-purpose-built) behind ONE Tauri command
+`sprite_finish(png) → matted+resized(~1024)+WEBP bytes` — solves matting AND the
+WKWebView WebP-encode question in one place. WKWebView WASM is disqualified for now
+(ORT-web WebGPU memory bug on WebKit 26, ~20s+ CPU timings, large-allocation process
+kills). RMBG models are license-banned (BRIA non-commercial). Model ships as an OPTIONAL
+`bundle.resources` file — when absent the command reports unavailable and the frontend
+pass-through keeps sprites opaque (still correct). Quality-max upgrade path later:
+ToonOut BiRefNet (MIT, needs manual ONNX export).
+
+**Verified contract facts:** `POST /image` accepts `pose_face_anchor_b64` +
+`openpose_strength` (1.0) + `faceid_weight` (0.8) + `faceid_weight_v2` (1.0) +
+`faceid_lora_strength` (0.6); an image-conditioned spec forces `illustrious_image` and
+routes to `illustrious_image_openpose_faceid.json` WHILE still building tier-LoRA
+strengths from the spec — one call = tier-driven size + identity/pose hold (the B1 seam).
+The bridge has NO matting node. The anchor must be the full un-matted render (≤9 MB).
+
+### V2a — anchor flow + sprite cache + selection function (no rendering)
+1. **`src/lib/services/be/sprite.ts`** (pure; export via be/index): `SpriteExpression =
+   'positive'|'neutral'|'distressed'|'flushed'`; `selectSprite(state) → { bandIndex,
+   expression, engorged }` — bandIndex via ladder `bandIndex(tier)`; engorged =
+   `fillPercent ≥ ENGORGED_FILL_THRESHOLD`; precedence: engorged cell (strain look) →
+   growth-landed (`lastGrowth.delta > 0`) `distressed` → `arousal ≥ 70` `flushed` →
+   attitude (craving/accepting `positive`, fearful/resentful `distressed`, else
+   `neutral`). 5 cells/band × 7 bands = 35. `BAND_SPRITE_TIER = [0,3,13,21,29,45?]` —
+   reuse sizeBandMarker anchors [0,3,13,21,29,39,45]; `bandRepresentativeTier(i)`.
+   `spriteAppearanceHash` (sync FNV-1a over identity-stable fields ONLY:
+   visualDescriptors face/hair/eyes/build/distinguishing lowercased + shape +
+   stylePreset + register — clothing/accessories/fluidType EXCLUDED, anti-thrash) +
+   `spriteSeed(characterId, hash)`.
+2. **Migration `src-tauri/migrations/036_character_sprites.sql`** (LF-only; register
+   version 36 in src-tauri/src/lib.rs): `character_sprites` (id, story_id, character_id,
+   appearance_hash, band_index, expression, engorged, image_data TEXT data-URL, seed,
+   status pending|generating|complete|failed, error_message, created_at; FKs ON DELETE
+   CASCADE to stories+characters; UNIQUE(character_id, appearance_hash, band_index,
+   expression, engorged); 3 indexes) + `characters` columns `sprite_anchor` /
+   `sprite_anchor_status` (none|pending|generating|ready|approved|failed) /
+   `sprite_anchor_hash` (all NULL-default).
+3. **database.ts CRUD** beside embedded_images (get/getOne/upsert/update/
+   deleteStaleSprites(keepHash)/cleanupOrphanedSprites + mapper); characters mappers +
+   COW copy carry the 3 anchor fields (vault does NOT — anchors regenerate).
+   types/index.ts: `CharacterSprite`, `SpriteStatus`, Character anchor fields (optional).
+4. **`spriteProfileId` slot**: ai/index.ts ImageGenerationServiceSettings
+   (`spriteProfileId: string|null`, `spriteSize: '832x1216'`), settings defaults,
+   images.svelte profileIdKey + union + preload + a "Sprite Profile" picker in the
+   Characters tab.
+5. **Provider seam**: ImageGenerateOptions += `poseFaceAnchor?` (bare b64) /
+   `faceidWeight?` / `openposeStrength?`; si-bridge.ts attaches them to the body at the
+   reserved B1 point; registry threads them like `spec`.
+6. **`spriteSpec.ts`** (pure): `buildSpritePrompt(cell)` (external providers — size via
+   `bandWord(bandRepresentativeTier)`, grounded, framing contract) +
+   `buildSpriteSpec(cell)` (si-bridge). Fixed framing contract both paths: `solo, full
+   body, standing, facing viewer, plain white background, neutral studio lighting` —
+   the plain background is load-bearing for matting. Expression → be_moments:
+   positive `['pleasure']` · neutral `[]` · distressed `['embarrassed']` · flushed
+   `['pleasure']`+flush cue in extra_tags · engorged adds `['strain']`+engorged cue.
+7. **Anchor flow**: SpriteService `ensureAnchor` (renders at the character's CURRENT
+   engine tier per Ben's seed-tier ruling; plain-background framing; neutral; stored
+   raw/un-matted as data-URL) / `approveAnchor` (stamps sprite_anchor_hash) /
+   `regenerateAnchor`. CharacterPanel "Sprite Anchor" section cloned from the Portrait
+   block, beMode-gated + !isProtagonist, with an explicit Approve button (genuinely new
+   UI — no existing approve pattern).
+   **Gate V2a:** unit tests (35-cell coverage, precedence, hash stability/invalidation,
+   boundary bands), migration applies, anchor generate→preview→approve→regenerate works,
+   appearance change marks anchor stale. No VN-visible change.
+
+### V2b — generation pipeline + native matting + VnView sprite layer
+1. **Matting module** `ai/image/matting/`: `BackgroundMatte` interface
+   (`available`, `removeBackground(bytes) → RGBA/WEBP bytes`); `native.ts` invokes the
+   Tauri `sprite_finish` command; `passthrough.ts` fallback; `index.ts` picks. Rust side:
+   `src-tauri/src/matting.rs` — ort session (load once, managed state, CoreML EP),
+   isnet-anime 1024² inference, mask upscaled onto the ORIGINAL full-res image, resize
+   ~1024 tall, WEBP(alpha, q≈80) encode (`webp` crate), model under
+   `resources/models/` registered in tauri.conf bundle.resources (OPTIONAL — absent →
+   command returns unavailable). Preprocessing verified against SkyTNT export.py
+   (normalization/channel order) before trust.
+2. **SpriteService.ensureSprite**: hash check (≠ sprite_anchor_hash → re-anchor bail) →
+   cache hit → else enqueue the band's 5 cells (needed cell FIRST) → per cell:
+   pending→generating → build prompt/spec → `spriteSeed` shared across the set →
+   registry.generateImage (+spec+poseFaceAnchor only when si-bridge; faceid_weight ~0.55
+   pending OD#S4 verification) → matte → store → complete; emit-safe failure handling.
+   Pre-warm action in CharacterPanel (lazy default).
+3. **Invalidation + GC**: on identity/shape change → deleteStaleSprites + anchor stale;
+   cleanupOrphanedSprites at story load; bounded ≤35 cells/character (~4.5 MB WEBP).
+4. **BackgroundImagePhase.ts** inline-mode early-return relaxed for VN stories (gate on
+   the V2c `vnDialogue` flag OR sprites-active) so VN turns get backgrounds in inline mode.
+5. **VnView sprite layer**: per present character `readBodyState → selectSprite` → sprite
+   map via ensureSprite; cutout `<img>` replaces the portrait standee (portrait fallback
+   for stateless characters keeps VN usable in non-BE stories); inner `{#key cellKey}`
+   crossfade for band/expression/engorged swaps; display fallback chain last-known sprite
+   → portrait → spinner during the ~2.5-min lazy band generation.
+   **Gate V2b:** live BE turn in VN view shows the banded cutout crossfading on state
+   change over currentBgImage; pass-through path stays opaque without erroring; si-bridge
+   holds identity across bands; external provider renders prompt-only sprites. Ben smoke.
+
+### V2c — VN dialogue format + speaking/dimmed highlighting
+1. `VN_DIALOGUE_INSTRUCTIONS` (NarrativeService, beside INLINE_IMAGE_INSTRUCTIONS):
+   pixelsaga grammar — line-leading `NARR:` / `DIALOG[Name]:`, one speaker per DIALOG
+   line. Injected when `story.settings.vnDialogue === true` (new optional StorySettings
+   flag; persistent — it changes stored turns; the VN VIEW stays a UI toggle);
+   template gate in BOTH narrative.ts templates; pack auto-refresh is free.
+2. `utils/dialogueParser.ts` (pure): `parseVnDialogue(content) → DialogueSegment[]`
+   (tolerant; no tags → one narration segment) + `stripDialogueTags`. Feed view strips
+   via ImageEmbeddingService before parseMarkdown; drift detectors keep raw content
+   (DIALOG[Name] preserves attribution windows).
+3. VnView: segment via parseVnDialogue (replacing blank-line split), nameplate on
+   dialogue segments, speaker → sprite `speaking` (scale+glow) vs `dimmed`
+   (brightness/opacity) — the V1-deferred highlighting. Typewriter only if cheap.
+   **Gate V2c:** tags emitted when flag on; nameplates + highlighting live; feed clean;
+   tag-less turns render; drift detectors unaffected. Ben smoke.
+
+### Remaining open items (non-blocking)
+- **OD#S4 (V2b, empirical):** FaceID weight may mute expression differences — verify
+  with keyed test renders during V2b (key now lives in the app's image profile);
+  recommend faceid_weight ~0.55, openpose_strength 1.0.
+- OD#S9 external-provider identity via referenceImages img2img — deferred (YAGNI).
+- OD#S10 COW-branch sprite sharing via story_id+hash fallback — deferred.
+- research/42 OD#4 vnMode view-toggle vs per-story setting — the FORMAT flag is per-story
+  (`vnDialogue`); the view stays a toggle; no further ruling needed unless Ben objects.
 
 ---
 
