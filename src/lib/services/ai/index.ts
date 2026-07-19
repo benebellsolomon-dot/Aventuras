@@ -67,6 +67,15 @@ import {
 } from './image'
 import type { InlineImageContext, ImageAnalysisContext } from './image'
 import { generateImage as registryGenerateImage } from './image/providers/registry'
+import { sizeBandMarker } from './image/sizeBandMarker'
+import { maybeBuildBridgeSpec } from './image/bridgeSpec'
+import type { StructuredImageSpecInput } from './image/providers/types'
+import {
+  groundImagePromptSize,
+  imageStateCues,
+  soloBodyState,
+  uniformBodyStateTier,
+} from '$lib/services/be'
 import { EntryInjector, MemoryService, NarrativeService } from './generation'
 import type {
   ClassificationContext,
@@ -979,6 +988,7 @@ class AIService {
           context.presentCharacters,
           referenceMode,
           getImageProfile,
+          context.beMode,
         )
       }
     } catch (error) {
@@ -999,6 +1009,7 @@ class AIService {
     presentCharacters: Character[],
     referenceMode: boolean,
     getImageProfile: (id: string) => ImageProfile | undefined,
+    beMode: boolean = false,
   ): Promise<void> {
     const imageId = crypto.randomUUID()
 
@@ -1058,9 +1069,29 @@ class AIService {
       return
     }
 
-    // Build full prompt with style
+    // Build full prompt with style. BE grounding + cues + marker + structured
+    // spec — the same treatment as the inline path (this was the C7 markerless
+    // gap: analyzed scenes ignored engine state entirely).
     const stylePrompt = await this.getStylePrompt(styleId)
-    const fullPrompt = `${scene.prompt}. ${stylePrompt}`
+    const beTier = beMode ? uniformBodyStateTier(presentCharacters, scene.characters) : null
+    const groundedScene =
+      beTier !== null ? groundImagePromptSize(scene.prompt, beTier) : scene.prompt
+    let groundedPrompt = groundedScene
+    if (beMode) {
+      const solo = soloBodyState(presentCharacters, scene.characters)
+      const cues = solo ? imageStateCues(solo) : []
+      if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
+    }
+    const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
+
+    const bridgeSpec: StructuredImageSpecInput | undefined = maybeBuildBridgeSpec({
+      providerType: getImageProfile(profileId)?.providerType,
+      beMode,
+      presentCharacters,
+      tagCharacterNames: scene.characters,
+      sceneText: groundedScene,
+      narrativeText: scene.sourceText ?? '',
+    })
 
     const { width, height } = parseImageSize(sizeToUse)
     // Create pending record in database
@@ -1101,6 +1132,7 @@ class AIService {
       scene,
       presentCharacters,
       referenceImageUrls,
+      bridgeSpec,
     ).catch((error) => {
       log('Async analyzed image generation failed', { imageId, error })
     })
@@ -1119,6 +1151,7 @@ class AIService {
     scene: ImageableScene,
     presentCharacters: Character[],
     referenceImageUrls?: string[],
+    spec?: StructuredImageSpecInput,
   ): Promise<void> {
     try {
       // Update status to generating
@@ -1139,6 +1172,7 @@ class AIService {
         prompt,
         size,
         referenceImages: referenceImageUrls,
+        spec,
       })
 
       if (!result.base64) {

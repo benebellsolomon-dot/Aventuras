@@ -21,6 +21,7 @@ import {
   BAND_WORD_THRESHOLDS,
   imageStateCues,
   readBodyState,
+  sniffTierFromText,
   soloBodyState,
 } from '$lib/services/be'
 import { combineSceneIntimacy, inferBridgeLocation, inferSceneIntimacy } from './sceneInference'
@@ -216,6 +217,51 @@ export function buildStructuredImageSpec(
   if (characters.length > 1) spec.regional = true
   if (cues.length > 0) spec.extra_tags = cues
   return spec
+}
+
+/** Portrait framing contract — head-and-shoulders identity renders. */
+export const PORTRAIT_FRAMING_TAGS: readonly string[] = [
+  'solo',
+  'upper body',
+  'portrait',
+  'looking at viewer',
+]
+
+/** Default tier for portrait subjects without engine state or size vocabulary. */
+const PORTRAIT_FALLBACK_TIER = 14
+
+/**
+ * Structured spec for a character portrait (si-bridge portraits previously
+ * sent prose-only — no tier, identity dropped bridge-side). Tier priority:
+ * engine bodyState → size vocabulary sniffed from the descriptors → bridge
+ * default. Works for story characters AND pre-story wizard subjects
+ * (metadata null).
+ */
+export function buildPortraitSpec(subject: BridgeSpecSubject): StructuredImageSpecInput {
+  const state = readBodyState(subject.metadata)
+  const d = subject.visualDescriptors
+  const descriptorText = [d?.face, d?.hair, d?.eyes, d?.build, d?.distinguishing]
+    .map((part) => (part ?? '').trim())
+    .filter((part) => part.length > 0)
+    .join('; ')
+  const tier = state?.tier ?? sniffTierFromText(descriptorText) ?? PORTRAIT_FALLBACK_TIER
+
+  const clothing = d?.clothing?.trim()
+  return {
+    register: 'color',
+    style_preset: 'semireal',
+    intimacy: 'clean',
+    characters: [
+      {
+        tier_index: bridgeTierIndex(tier),
+        breast_shape: state?.shape,
+        build: mapBridgeBuild(d?.build),
+        identity_tags: identityTagsFromDescriptors(d),
+        appearance_excerpt: descriptorText || undefined,
+      },
+    ],
+    scene_tags: [...(clothing ? [`wearing ${clothing}`] : []), ...PORTRAIT_FRAMING_TAGS],
+  }
 }
 
 /**

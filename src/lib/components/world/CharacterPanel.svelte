@@ -465,7 +465,11 @@
       })
 
       // Generate the portrait using SDK
-      const base64 = await sdkGeneratePortrait(portraitPrompt)
+      const base64 = await sdkGeneratePortrait(portraitPrompt, {
+        name: character.name,
+        visualDescriptors: stringToDescriptors(editVisualDescriptors),
+        metadata: character.metadata,
+      })
 
       log('Portrait generated successfully', {
         characterName: character.name,

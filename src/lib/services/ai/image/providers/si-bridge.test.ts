@@ -17,7 +17,7 @@ vi.mock('./fetchAdapter', () => ({
 
 import { createSiBridgeProvider } from './si-bridge'
 import { createA1111Provider } from './a1111'
-import { bridgeTierIndex, buildStructuredImageSpec } from '../bridgeSpec'
+import { bridgeTierIndex, buildPortraitSpec, buildStructuredImageSpec } from '../bridgeSpec'
 import { writeBodyState, defaultBodyState } from '$lib/services/be'
 import type { BodyState } from '$lib/services/be'
 
@@ -347,6 +347,37 @@ describe('workflow pinning via the profile model (style consistency)', () => {
     const body = await generateWith('bridge-auto')
     expect(body.spec).toBeDefined()
     expect(body.workflow).toBeUndefined()
+  })
+})
+
+describe('buildPortraitSpec', () => {
+  test('tier comes from engine bodyState when present', () => {
+    const lucy = statefulCharacter('Lucy', { tier: 47 }, { hair: 'silver hair', eyes: 'blue eyes' })
+    const spec = buildPortraitSpec(lucy)
+    expect(spec.characters[0].tier_index).toBe(47)
+    expect(spec.characters[0].identity_tags).toEqual(['silver hair', 'blue eyes'])
+    expect(spec.scene_tags).toEqual(expect.arrayContaining(['upper body', 'portrait']))
+  })
+
+  test('tier falls back to descriptor size vocabulary for stateless subjects (wizard)', () => {
+    const spec = buildPortraitSpec({
+      name: 'Mara',
+      visualDescriptors: { build: 'curvy, huge breasts', hair: 'red hair' },
+      metadata: null,
+    })
+    // 'huge breasts' band word sniffs to the band's min tier (22)
+    expect(spec.characters[0].tier_index).toBe(22)
+    expect(spec.characters[0].build).toBe('curvy')
+  })
+
+  test('clothing rides scene_tags; bare subjects get the bridge default tier', () => {
+    const spec = buildPortraitSpec({
+      name: 'Ann',
+      visualDescriptors: { hair: 'black bob', clothing: 'a lab coat' },
+      metadata: null,
+    })
+    expect(spec.characters[0].tier_index).toBe(14)
+    expect(spec.scene_tags![0]).toBe('wearing a lab coat')
   })
 })
 
