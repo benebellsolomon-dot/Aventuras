@@ -17,6 +17,8 @@ import type {
   TimeTracker,
   EmbeddedImage,
   EmbeddedImageStatus,
+  CharacterSprite,
+  SpriteStatus,
   VaultCharacter,
   VaultLorebook,
   VaultScenario,
@@ -898,6 +900,18 @@ class DatabaseService {
     if (updates.portrait !== undefined) {
       setClauses.push('portrait = ?')
       values.push(updates.portrait)
+    }
+    if (updates.spriteAnchor !== undefined) {
+      setClauses.push('sprite_anchor = ?')
+      values.push(updates.spriteAnchor)
+    }
+    if (updates.spriteAnchorStatus !== undefined) {
+      setClauses.push('sprite_anchor_status = ?')
+      values.push(updates.spriteAnchorStatus)
+    }
+    if (updates.spriteAnchorHash !== undefined) {
+      setClauses.push('sprite_anchor_hash = ?')
+      values.push(updates.spriteAnchorHash)
     }
     if (updates.status !== undefined) {
       setClauses.push('status = ?')
@@ -2543,6 +2557,124 @@ class DatabaseService {
     }
   }
 
+  // ===== V2 sprite cache (character_sprites) =====
+
+  async getSpritesForCharacter(
+    characterId: string,
+    appearanceHash: string,
+  ): Promise<CharacterSprite[]> {
+    const db = await this.getDb()
+    const rows = await db.select<any[]>(
+      'SELECT * FROM character_sprites WHERE character_id = ? AND appearance_hash = ?',
+      [characterId, appearanceHash],
+    )
+    return rows.map(this.mapSprite)
+  }
+
+  async getSprite(
+    characterId: string,
+    appearanceHash: string,
+    bandIndex: number,
+    expression: string,
+    engorged: boolean,
+  ): Promise<CharacterSprite | null> {
+    const db = await this.getDb()
+    const rows = await db.select<any[]>(
+      `SELECT * FROM character_sprites
+       WHERE character_id = ? AND appearance_hash = ? AND band_index = ? AND expression = ? AND engorged = ?`,
+      [characterId, appearanceHash, bandIndex, expression, engorged ? 1 : 0],
+    )
+    return rows.length > 0 ? this.mapSprite(rows[0]) : null
+  }
+
+  async upsertSprite(sprite: Omit<CharacterSprite, 'createdAt'>): Promise<void> {
+    const db = await this.getDb()
+    await db.execute(
+      `INSERT INTO character_sprites
+         (id, story_id, character_id, appearance_hash, band_index, expression, engorged,
+          image_data, seed, status, error_message, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (character_id, appearance_hash, band_index, expression, engorged)
+       DO UPDATE SET image_data = excluded.image_data, seed = excluded.seed,
+                     status = excluded.status, error_message = excluded.error_message`,
+      [
+        sprite.id,
+        sprite.storyId,
+        sprite.characterId,
+        sprite.appearanceHash,
+        sprite.bandIndex,
+        sprite.expression,
+        sprite.engorged ? 1 : 0,
+        sprite.imageData,
+        sprite.seed ?? null,
+        sprite.status,
+        sprite.errorMessage ?? null,
+        Date.now(),
+      ],
+    )
+  }
+
+  async updateSprite(id: string, updates: Partial<CharacterSprite>): Promise<void> {
+    const db = await this.getDb()
+    const setClauses: string[] = []
+    const values: any[] = []
+    if (updates.imageData !== undefined) {
+      setClauses.push('image_data = ?')
+      values.push(updates.imageData)
+    }
+    if (updates.status !== undefined) {
+      setClauses.push('status = ?')
+      values.push(updates.status)
+    }
+    if (updates.errorMessage !== undefined) {
+      setClauses.push('error_message = ?')
+      values.push(updates.errorMessage ?? null)
+    }
+    if (updates.seed !== undefined) {
+      setClauses.push('seed = ?')
+      values.push(updates.seed)
+    }
+    if (setClauses.length === 0) return
+    values.push(id)
+    await db.execute(`UPDATE character_sprites SET ${setClauses.join(', ')} WHERE id = ?`, values)
+  }
+
+  /** Wholesale appearance-change invalidation: drop every set except the current hash. */
+  async deleteStaleSprites(characterId: string, keepAppearanceHash: string): Promise<number> {
+    const db = await this.getDb()
+    const result = await db.execute(
+      'DELETE FROM character_sprites WHERE character_id = ? AND appearance_hash != ?',
+      [characterId, keepAppearanceHash],
+    )
+    return result.rowsAffected ?? 0
+  }
+
+  /** Belt-and-suspenders orphan sweep (FK cascade is the primary GC). */
+  async cleanupOrphanedSprites(): Promise<number> {
+    const db = await this.getDb()
+    const result = await db.execute(
+      'DELETE FROM character_sprites WHERE character_id NOT IN (SELECT id FROM characters)',
+    )
+    return result.rowsAffected ?? 0
+  }
+
+  private mapSprite(row: any): CharacterSprite {
+    return {
+      id: row.id,
+      storyId: row.story_id,
+      characterId: row.character_id,
+      appearanceHash: row.appearance_hash,
+      bandIndex: row.band_index,
+      expression: row.expression,
+      engorged: row.engorged === 1,
+      imageData: row.image_data,
+      seed: row.seed ?? undefined,
+      status: row.status as SpriteStatus,
+      errorMessage: row.error_message ?? undefined,
+      createdAt: row.created_at,
+    }
+  }
+
   // Mapping functions
   private mapStory(row: any): Story {
     const retryState = row.retry_state ? JSON.parse(row.retry_state) : null
@@ -2620,6 +2752,9 @@ class DatabaseService {
       branchId: row.branch_id || null,
       overridesId: row.overrides_id || null,
       deleted: row.deleted === 1,
+      spriteAnchor: row.sprite_anchor || null,
+      spriteAnchorStatus: row.sprite_anchor_status || null,
+      spriteAnchorHash: row.sprite_anchor_hash || null,
       // Translation fields
       translatedName: row.translated_name || null,
       translatedDescription: row.translated_description || null,

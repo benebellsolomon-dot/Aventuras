@@ -174,6 +174,10 @@ export interface Character {
   branchId: string | null // Branch this character belongs to (null = main/inherited)
   overridesId?: string | null // COW: ID of the parent entity this row overrides (null = original)
   deleted?: boolean // COD: tombstone — entity is deleted on this branch (COW only)
+  // V2 sprite engine: dedicated approved anchor render (raw/un-matted FaceID/pose source)
+  spriteAnchor?: string | null // Data URL, like portrait
+  spriteAnchorStatus?: SpriteAnchorStatus | null
+  spriteAnchorHash?: string | null // appearance hash the anchor was approved for
   // Translation fields
   translatedName?: string | null
   translatedDescription?: string | null
@@ -783,6 +787,27 @@ export interface ImageProfile {
   baseUrl?: string
   model: string
   providerOptions: Record<string, unknown>
+  createdAt: number
+}
+
+// ===== V2 Sprite Engine (Spec 4) =====
+
+export type SpriteStatus = 'pending' | 'generating' | 'complete' | 'failed'
+export type SpriteAnchorStatus = 'none' | 'pending' | 'generating' | 'ready' | 'approved' | 'failed'
+
+/** One cached cell of a character's banded sprite set (35 cells per appearance). */
+export interface CharacterSprite {
+  id: string
+  storyId: string
+  characterId: string
+  appearanceHash: string
+  bandIndex: number
+  expression: 'positive' | 'neutral' | 'distressed' | 'flushed'
+  engorged: boolean
+  imageData: string // Data URL (webp/png base64); matted when the matting model is available
+  seed?: number
+  status: SpriteStatus
+  errorMessage?: string
   createdAt: number
 }
 

@@ -41,6 +41,17 @@ export {
 export { BAND_WORD_THRESHOLDS } from './ladder-data'
 export { groundingFacts } from './derive'
 export {
+  BAND_SPRITE_TIER,
+  SPRITE_AROUSAL_FLUSH_THRESHOLD,
+  bandRepresentativeTier,
+  selectSprite,
+  spriteAppearanceHash,
+  spriteSeed,
+  type SpriteAppearanceInput,
+  type SpriteExpression,
+  type SpriteSelection,
+} from './sprite'
+export {
   bandCm,
   bodyRow,
   bustCm,

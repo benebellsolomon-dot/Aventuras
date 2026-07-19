@@ -223,6 +223,12 @@ pub fn run() {
             description: "entry_versions",
             sql: include_str!("../migrations/035_entry_versions.sql"),
             kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 36,
+            description: "character_sprites",
+            sql: include_str!("../migrations/036_character_sprites.sql"),
+            kind: MigrationKind::Up,
         }
     ];
 
