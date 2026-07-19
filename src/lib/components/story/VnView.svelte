@@ -19,6 +19,8 @@
   import { fade } from 'svelte/transition'
   import { ChevronDown, Loader2 } from 'lucide-svelte'
   import type { Character, EmbeddedImage } from '$lib/types'
+  import { readBodyState, selectSprite } from '$lib/services/be'
+  import { spriteAnchorService } from '$lib/services/ai/image/SpriteService'
 
   const asImageUrl = (raw: string): string =>
     raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`
@@ -118,6 +120,43 @@
 
   const MAX_STANDEES = 3
   const standees = $derived(presentCharacters.slice(0, MAX_STANDEES))
+
+  // ---- V2b sprite layer: banded cutout sprites for characters with engine
+  // bodyState; the map keeps the LAST COMPLETE cell so band/expression swaps
+  // crossfade instead of blanking during the lazy ~30s-per-cell generation.
+  // Fallback chain: current cell → last-known sprite → portrait → spinner.
+  let spriteUrls = $state<Record<string, string>>({})
+  let spriteCellKeys = $state<Record<string, string>>({})
+
+  async function refreshSprite(character: Character): Promise<void> {
+    if (story.currentStory?.settings?.beMode !== true) return
+    const bodyState = readBodyState(character.metadata)
+    if (!bodyState || !story.currentStory) return
+    const selection = selectSprite(bodyState)
+    const sprite = await spriteAnchorService.ensureSprite(
+      character,
+      story.currentStory.id,
+      selection,
+    )
+    if (sprite?.status === 'complete' && sprite.imageData) {
+      const cellKey = `${sprite.bandIndex}:${sprite.expression}:${sprite.engorged}`
+      if (spriteCellKeys[character.id] !== cellKey) {
+        spriteUrls = { ...spriteUrls, [character.id]: sprite.imageData }
+        spriteCellKeys = { ...spriteCellKeys, [character.id]: cellKey }
+      }
+    }
+  }
+
+  $effect(() => {
+    for (const character of standees) void refreshSprite(character)
+  })
+
+  $effect(() => {
+    return spriteAnchorService.subscribe((characterId) => {
+      const character = standees.find((c) => c.id === characterId)
+      if (character) void refreshSprite(character)
+    })
+  })
   const overflowCount = $derived(Math.max(0, presentCharacters.length - MAX_STANDEES))
   const standeeWidth = $derived(
     standees.length <= 1 ? '38%' : standees.length === 2 ? '34%' : '30%',
@@ -297,7 +336,19 @@
             in:fade={{ duration: 300 }}
             out:fade={{ duration: 300 }}
           >
-            {#if character.portrait}
+            {#if spriteUrls[character.id]}
+              <div class="relative h-full w-full">
+                {#key spriteCellKeys[character.id]}
+                  <img
+                    src={spriteUrls[character.id]}
+                    alt={character.name}
+                    class="absolute inset-x-0 bottom-0 mx-auto max-h-full max-w-full object-contain object-bottom drop-shadow-[0_0_14px_rgba(0,0,0,0.85)]"
+                    in:fade={{ duration: 350 }}
+                    out:fade={{ duration: 350 }}
+                  />
+                {/key}
+              </div>
+            {:else if character.portrait}
               <img
                 src={asImageUrl(character.portrait)}
                 alt={character.name}

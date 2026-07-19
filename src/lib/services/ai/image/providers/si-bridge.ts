@@ -155,6 +155,7 @@ export function createSiBridgeProvider(config: ImageProviderConfig): ImageProvid
       if (model === 'illustrious') {
         body.workflow = 'illustrious_image'
       }
+      if (options.seed !== undefined) body.seed = options.seed
       // FaceID/OpenPose identity-hold (Spec 4 B1) — coexists with the spec:
       // the bridge routes onto the openpose_faceid workflow while the spec
       // still drives tier sizing. Dropped on a krea2 pin: an anchor makes the

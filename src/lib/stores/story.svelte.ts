@@ -500,6 +500,8 @@ class StoryStore {
     // Clean up any orphaned embedded_images before loading
     // (fixes FK constraint issues from older data)
     await database.cleanupOrphanedEmbeddedImages()
+    // Sprite-cache orphan sweep (belt-and-suspenders beside the FK cascade)
+    await database.cleanupOrphanedSprites()
 
     this.currentStory = story
     this.currentBgImage = await database.getBackgroundForBranch(storyId, story.currentBranchId)

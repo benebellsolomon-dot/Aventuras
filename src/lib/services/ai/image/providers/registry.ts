@@ -100,6 +100,8 @@ export async function generateImage(options: {
   poseFaceAnchor?: string
   faceidWeight?: number
   openposeStrength?: number
+  /** Deterministic seed (sprite sets); providers without seed support ignore it. */
+  seed?: number
 }): Promise<ImageGenerateResult> {
   const {
     profileId,
@@ -112,6 +114,7 @@ export async function generateImage(options: {
     poseFaceAnchor,
     faceidWeight,
     openposeStrength,
+    seed,
   } = options
 
   const profile = settings.getImageProfile(profileId)
@@ -155,6 +158,7 @@ export async function generateImage(options: {
     poseFaceAnchor,
     faceidWeight,
     openposeStrength,
+    seed,
   })
 }
 

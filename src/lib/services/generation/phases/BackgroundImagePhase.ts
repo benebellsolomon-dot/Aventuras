@@ -29,6 +29,8 @@ export interface BackgroundImageDependencies {
 export interface BackgroundImageSettings {
   backgroundImagesEnabled?: boolean
   imageGenerationMode?: 'none' | 'agentic' | 'inline'
+  /** V2 sprite engine: when a sprite profile is set, VN stages need backgrounds even in inline mode. */
+  spriteProfileId?: string | null
 }
 
 /** Input for the image phase */
@@ -65,8 +67,12 @@ export class BackgroundImagePhase {
       return result
     }
 
-    // Skip in inline mode - we don't want agentic background analysis in pure inline mode
-    if (imageSettings.imageGenerationMode === 'inline') {
+    // Skip in inline mode - we don't want agentic background analysis in pure
+    // inline mode. EXCEPT when the VN sprite engine is active (a sprite profile
+    // is configured): the VN stage composites cutout sprites over the
+    // background, so inline-mode BE stories still need one (Spec 4 V2b Task 4).
+    const spritesActive = !!imageSettings.spriteProfileId
+    if (imageSettings.imageGenerationMode === 'inline' && !spritesActive) {
       const result: BackgroundImageResult = { started: false, skippedReason: 'inline_mode' }
       yield { type: 'phase_complete', phase: 'image', result } satisfies PhaseCompleteEvent
       return result

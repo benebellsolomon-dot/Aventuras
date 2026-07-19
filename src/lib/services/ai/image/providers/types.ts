@@ -85,6 +85,8 @@ export interface ImageGenerateOptions {
   poseFaceAnchor?: string
   faceidWeight?: number
   openposeStrength?: number
+  /** Deterministic seed (sprite sets share one per character+appearance). */
+  seed?: number
 }
 
 export interface ImageGenerateResult {
