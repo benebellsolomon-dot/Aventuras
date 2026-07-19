@@ -76,7 +76,7 @@ detail source.
 | **V1** | **VN presentation MVP** (Part III) | **Buildable NOW** — no gates, parallel to P3 |
 | **P3** | **Spec 2 si-bridge native provider** (Part II) | ✅ CODE COMPLETE 2026-07-19 (ships as 0.7.6-be.12; see Spec 2 §"Shipped"). B1 FaceID anchors remain the V2-side extension point |
 | P4 | Spec 3 remainder (Part II) | cosmology/pacing/eligible-kinds shipped in be.7; remaining: beSizeCapTier/beGrowthCooldownBeats + full wizard chain + dedicated BE step + retire the imported [BE] rules |
-| **V2** | **BE sprite engine** (Part III) | Gated on P3 + the transparency ruling (research/42 OD#1) |
+| **V2** | **BE sprite engine** (Part III) | **UNBLOCKED 2026-07-19** — P3 shipped; transparency RULED: app-side WASM matting; anchor RULED: dedicated approved render (research/42 §5) |
 | V3 | Multi-character stage + regional CGs (Part III) | After V2 |
 | V4 | Growth media: transitions + /animate/growth clips (Part III) | After V2 |
 | R | RPG layer (Part III §R — design brief) | Own ruling session, like Chronicler/D2 |
@@ -621,6 +621,14 @@ portrait/background/reference slot pattern) — si-bridge is the preferred provi
 OpenRouter image models — the "Nano Banana" profile precedent) must work for basic
 banded sprite generation. An external provider with native transparent-PNG output
 would also satisfy the transparency gate without the bridge matting node.
+
+**V2 gate rulings (Ben, 2026-07-19 — V2 is now unblocked):**
+- **Transparency = app-side WASM background removal** (research/42 §5 #1). Bundled
+  matting model + a client-side cutout step in the sprite pipeline; works for every
+  provider in the spriteProfileId slot, no bridge-side work.
+- **Sprite anchor = dedicated approved anchor render** (research/42 §5 #3), not
+  portrait reuse: per-character neutral-pose anchor, generate → approve/regenerate
+  flow, re-anchor on appearance change handled by the same flow.
 
 Per-character FaceID anchor (portrait-reuse vs dedicated approved anchor — OD#3) ·
 new `character_sprites` cache table `(character_id, appearance_hash, band_index,

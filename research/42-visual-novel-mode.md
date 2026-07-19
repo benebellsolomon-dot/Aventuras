@@ -186,18 +186,21 @@ No generic AI-VN has a deterministic body engine driving its sprites. Ours does:
 
 ## 5. Open decisions (Ben rules)
 
-1. **Transparency — decides whether true sprites are possible.** Bridge has no
-   matting/RGBA output (verified). Options: (a) bridge-side matting node (Ben deploys;
-   sibling to the standing img2img shim ask) · (b) app-side background removal (WASM)
-   · (c) portrait-card style instead of cutout sprites (weaker VN feel, zero new
-   infra). v1 works regardless (cards); v2 wants (a) or (b). *pixelsaga precedent:
-   its image plugin exposes `removeBackground: true` — generation-side matting is
-   the industry-normal answer, favoring (a).*
-2. **tier_index calibration** (Spec 2 Task 5): three ladders in play (engine bandIndex
-   / krea nouns / illustrious tier_index) — verify via `POST /image/build` dry-run
-   before trusting any mapping; band app-side on bandIndex regardless.
-3. **Anchor source + governance**: reuse `Character.portrait` as the FaceID anchor vs
-   a dedicated approved anchor render; re-anchor policy on appearance change.
+1. **Transparency — ✅ RULED (Ben, 2026-07-19): app-side background removal (WASM),
+   option (b).** Rationale fit: client-side matting works for ANY sprite provider
+   (NanoGPT / OpenRouter image models included), matching the provider-agnostic
+   ruling — the bridge-side matting node (a) would have covered si-bridge only.
+   V2 scope gains a bundled matting model (ONNX/WASM, e.g. an RMBG/U2Net-class
+   net) + a cutout step in the sprite pipeline; no bridge-side work needed.
+2. **tier_index calibration — ✅ RESOLVED (2026-07-19, P3): identity mapping.** All
+   three ladders agree at every band boundary (full-table source verification against
+   deployed-truth GitHub main; the dry-run 401s from the Mac — keyed curl in
+   research/37 Spec 2 §Shipped for a later confirmation probe).
+3. **Anchor source — ✅ RULED (Ben, 2026-07-19): dedicated approved anchor render.**
+   A neutral-pose per-character anchor image, generated once and explicitly approved,
+   stored beside the portrait — NOT portrait reuse. V2 scope gains a small approval
+   flow (generate → approve/regenerate) + an anchor asset per character; re-anchor
+   policy on appearance change comes with the approval flow by construction.
 4. **vnMode scope**: UI view toggle (recommended) vs per-story setting vs third
    StoryMode (rejected — forks generation).
 5. **Growth-clip scope**: every band crossing vs delta≥2/milestones only; MP4 storage
