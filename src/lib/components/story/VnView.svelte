@@ -184,6 +184,8 @@
 
   let paraIndex = $state(0)
   let beatKey = $state<string | null>(null)
+  // User toggled from the choice menu back to re-reading the beat.
+  let choicesHidden = $state(false)
 
   // Reset the click-through position only on genuinely NEW beats; the
   // streaming→finalized transition of the same beat keeps the reader's place.
@@ -192,6 +194,7 @@
     if (key !== beatKey) {
       const wasStreamingSameBeat = beatKey === '__streaming__' && key !== null
       beatKey = key
+      choicesHidden = false
       if (!wasStreamingSameBeat) paraIndex = 0
     }
   })
@@ -201,9 +204,25 @@
   const hasMore = $derived(shownIndex < paragraphs.length - 1)
   const awaitingStream = $derived(ui.isStreaming && !hasMore)
 
+  // ADV pacing: the choice menu takes the textbox's place once the beat is
+  // read through — never both at once, so the scene keeps the frame.
+  const choicesReady = $derived(
+    !ui.isStreaming &&
+      !ui.isGenerating &&
+      !hasMore &&
+      story.storyMode === 'adventure' &&
+      !settings.uiSettings.disableSuggestions,
+  )
+  const choicesVisible = $derived(choicesReady && !choicesHidden)
+
   function advance() {
     // Don't advance away from text the user is selecting to copy.
     if (typeof window !== 'undefined' && window.getSelection()?.toString()) return
+    if (choicesVisible) {
+      // Scene tap while the menu is up = go back to re-reading.
+      choicesHidden = true
+      return
+    }
     if (hasMore) paraIndex = shownIndex + 1
   }
 
@@ -214,16 +233,6 @@
     }
   }
 
-  // ADV pacing: choices reveal once the beat is read through — while reading,
-  // the scene owns the screen.
-  const showChoices = $derived(
-    !ui.isStreaming &&
-      !ui.isGenerating &&
-      !hasMore &&
-      story.storyMode === 'adventure' &&
-      !settings.uiSettings.disableSuggestions,
-  )
-
   const storyMaxWidthStyle = $derived.by(() => {
     const maxWidth =
       STORY_WIDTH_OPTIONS.find((o) => o.key === settings.uiSettings.storyMaxWidth)?.maxWidth ??
@@ -232,7 +241,7 @@
   })
 </script>
 
-<div class="relative h-full overflow-hidden bg-black">
+<div class="bg-background relative h-full overflow-hidden">
   <!-- Full-bleed viewport: scene image > background > gradient -->
   <div
     class="absolute inset-0 cursor-pointer"
@@ -272,7 +281,7 @@
 
     {#if sceneGenerating}
       <div
-        class="absolute top-3 left-3 z-[3] flex items-center gap-2 rounded bg-black/70 px-3 py-1.5 text-xs text-gray-200"
+        class="bg-background/80 text-muted-foreground absolute top-3 left-3 z-[3] flex items-center gap-2 rounded px-3 py-1.5 text-xs backdrop-blur-sm"
       >
         <Loader2 class="h-3.5 w-3.5 animate-spin" /> scene image generating…
       </div>
@@ -296,7 +305,7 @@
               />
             {:else}
               <div
-                class="mb-24 flex flex-col items-center gap-2 rounded-lg bg-black/60 px-4 py-3 text-sm text-gray-200"
+                class="bg-background/70 text-muted-foreground mb-24 flex flex-col items-center gap-2 rounded-lg px-4 py-3 text-sm backdrop-blur-sm"
               >
                 <Loader2 class="h-5 w-5 animate-spin" />
                 {character.name.split(' ')[0]}
@@ -305,7 +314,9 @@
           </div>
         {/each}
         {#if overflowCount > 0}
-          <div class="absolute top-3 right-3 rounded bg-black/60 px-2 py-1 text-xs text-gray-300">
+          <div
+            class="bg-background/70 text-muted-foreground absolute top-3 right-3 rounded px-2 py-1 text-xs"
+          >
             +{overflowCount} more present
           </div>
         {/if}
@@ -316,10 +327,22 @@
   <!-- Bottom overlay: textbox → choices → input -->
   <div class="pointer-events-none absolute inset-x-0 bottom-0 z-[5] flex flex-col justify-end">
     <div class="pointer-events-auto mx-auto w-full px-2 sm:px-4" style={storyMaxWidthStyle}>
-      {#if currentParagraph || awaitingStream}
+      {#if choicesVisible}
+        <div
+          class="vn-choices border-primary/50 bg-background/90 max-h-[44vh] overflow-y-auto rounded-t-lg border-t-2 px-2 pb-1 backdrop-blur-md"
+        >
+          <ActionChoices />
+          <button
+            class="text-muted-foreground hover:text-foreground mx-auto block py-1 text-xs"
+            onclick={() => (choicesHidden = true)}
+          >
+            ↺ re-read the scene
+          </button>
+        </div>
+      {:else if currentParagraph || awaitingStream}
         <!-- eslint-disable-next-line svelte/valid-compile -->
         <div
-          class="border-primary/70 relative cursor-pointer rounded-t-lg border-t-2 bg-black/90 px-5 py-4 backdrop-blur-sm"
+          class="border-primary/70 bg-background/90 relative cursor-pointer rounded-t-lg border-t-2 px-5 py-4 backdrop-blur-md"
           role="button"
           tabindex="-1"
           onclick={advance}
@@ -327,15 +350,13 @@
         >
           <div class="max-h-[32vh] overflow-y-auto">
             {#if currentParagraph}
-              <div
-                class="vn-text text-base leading-relaxed text-gray-50 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)] sm:text-lg"
-              >
+              <div class="vn-text text-foreground text-base leading-relaxed sm:text-lg">
                 <!-- eslint-disable-next-line svelte/no-at-html-tags — model content, same trust model as the feed -->
                 {@html currentParagraph}
               </div>
             {/if}
             {#if awaitingStream}
-              <div class="mt-1 text-sm text-gray-400 italic">…</div>
+              <div class="text-muted-foreground mt-1 text-sm italic">…</div>
             {/if}
           </div>
           {#if hasMore}
@@ -343,21 +364,27 @@
               <ChevronDown class="h-5 w-5" />
             </div>
           {/if}
+          {#if choicesReady && choicesHidden}
+            <button
+              class="text-primary hover:text-primary/80 absolute right-3 bottom-1.5 text-xs font-medium"
+              onclick={(e) => {
+                e.stopPropagation()
+                choicesHidden = false
+              }}
+            >
+              choices ▾
+            </button>
+          {/if}
         </div>
       {:else if !latestNarration && !ui.isStreaming}
         <div
-          class="rounded-t-lg bg-black/85 px-5 py-5 text-center text-sm text-gray-300 backdrop-blur-sm"
+          class="bg-background/85 text-muted-foreground rounded-t-lg px-5 py-5 text-center text-sm backdrop-blur-md"
         >
           Take an action below to begin — the scene will render here.
         </div>
       {/if}
 
-      {#if showChoices}
-        <div class="max-h-[34vh] overflow-y-auto bg-black/85 px-2 py-1 backdrop-blur-sm">
-          <ActionChoices />
-        </div>
-      {/if}
-      <div class="bg-black/85 px-2 pb-2 backdrop-blur-sm">
+      <div class="bg-background/85 px-2 pb-2 backdrop-blur-md">
         <ActionInput />
       </div>
     </div>
@@ -370,5 +397,11 @@
   }
   .vn-text :global(p:last-child) {
     margin-bottom: 0;
+  }
+  /* Compact the reused choice cards inside the VN menu. */
+  .vn-choices :global(button.group) {
+    min-height: 0;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
   }
 </style>
