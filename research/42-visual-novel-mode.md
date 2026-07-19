@@ -5,6 +5,10 @@ Aventuras integration surface / BE-specific sprite design) commissioned by Ben's
 "a Visual Novel mode similar to perchance.org/pixelsaga, tailored for BE stories."
 This doc is the synthesis; it is self-contained.
 
+**Status:** FOLDED INTO THE ACTIVE PLAN — research/37 Part III (added 2026-07-19)
+carries the build phases (V1–V4 + the RPG-layer brief R) and the live ordering; this
+doc remains the architecture/rationale source.
+
 ## Executive summary
 
 - **VN mode should be a client-side presentation layer, not a new story mode** — a new

@@ -60,6 +60,33 @@ classifier model — do not hard-code a choice before it runs. Also confirm duri
 honors the [BODY STATE] metric block verbatim (the GLM-vs-Claude tiebreaker), and narrator
 maxTokens raised above 8192 doesn't truncate Peak scenes.
 
+## Roadmap revision (2026-07-19): the BE VN game-engine track
+
+**Ben's ruling:** Aventuras evolves into a VN-style game engine focused on BE RPG
+adventures. The VN research (research/42 + `bundles/pixelsaga/MECHANICS.md`) folds
+into this plan as Part III; engine phases and VN phases interleave as below. This
+table is the live ordering — the per-phase sections elsewhere in this doc remain the
+detail source.
+
+| # | Phase | Status / gate |
+|---|---|---|
+| P0 | Consolidation | ✅ 2026-07-17 |
+| P1 | Lucy playtest (acceptance gate) | ✅ PASSED (research/41) — classifier ruled: keep grok-4.3 |
+| P2 | Spec 1 quick-wins batch | ✅ SHIPPED 0.7.6-be.8 (+ the be.7 cosmology/precedence package pulled forward from Spec 3) |
+| **V1** | **VN presentation MVP** (Part III) | **Buildable NOW** — no gates, parallel to P3 |
+| **P3** | **Spec 2 si-bridge native provider** (Part II) | Next engine phase — now ALSO the VN-v2 prerequisite (FaceID anchors, regional, /animate) |
+| P4 | Spec 3 remainder (Part II) | cosmology/pacing/eligible-kinds shipped in be.7; remaining: beSizeCapTier/beGrowthCooldownBeats + full wizard chain + dedicated BE step + retire the imported [BE] rules |
+| **V2** | **BE sprite engine** (Part III) | Gated on P3 + the transparency ruling (research/42 OD#1) |
+| V3 | Multi-character stage + regional CGs (Part III) | After V2 |
+| V4 | Growth media: transitions + /animate/growth clips (Part III) | After V2 |
+| R | RPG layer (Part III §R — design brief) | Own ruling session, like Chronicler/D2 |
+| P5 | Chronicler-lite (design brief, unchanged) | After the VN core stabilizes |
+| P6 | D2 relationship assembly (design brief, unchanged) | Own session |
+
+Riding sub-items: sensitivity/bounce/cleavage ladder bake (extract-ladder2 extension)
+· D5 constant re-derivation once be.8 cadence data accumulates · omission-detector
+tuning against live play.
+
 ## Phases 2–4 — see Part II (full specs).
 
 ⚠ **GATE (2026-07-17): research/38 body-math rulings must land before Phase 2's
@@ -510,6 +537,89 @@ wizard round-trip persists all five; settings tab edits; a pre-change story stil
 Dedicated wizard step vs cramming Step7 (adopted: dedicated) · confirm no code assumes a separate
 `fluidType` · template bloat (consider the style-inject-twice pattern or trim to highest-value
 rules) · licensing (Megumin CC BY-NC header; AGPL material reimplement-only).
+
+---
+
+# PART III — VN game-engine track (added 2026-07-19)
+
+Full research and architecture: [42-visual-novel-mode.md](42-visual-novel-mode.md)
+(the seams, effort estimates, and open decisions) + `bundles/pixelsaga/MECHANICS.md`
+(the reference implementation, source-verified). This part holds the build-plan
+level only: what each phase ships and its gates. Design invariant: **VN mode is a
+client-side presentation layer** (an `ActivePanel` screen), never a third StoryMode —
+it composes over the existing generation pipeline and consumes engine state the BE
+reducer already emits.
+
+## V1 — VN presentation MVP (no gates; parallel to P3)
+
+New `ActivePanel: 'vn'` + AppShell branch · sharp `currentBgImage` background layer ·
+present-character portrait standees (from `worldStateDelta.classificationResult.scene`
++ the `relationship === 'self'` OR-in) with speaking/dimmed highlighting and in-slot
+generating placeholders · ADV click-through textbox bound to `ui.streamingContent`
+with the pixelsaga streaming hold-back (segments appear as they stream; partial last
+segment held back; choices only after finalization) · typewriter reveal ·
+`ActionChoices`/`ActionInput` reused unmodified. Zero generation changes; the prose
+feed stays the canonical log/backlog view. **Acceptance: a full Lucy session played
+in VN view.**
+
+## V2 — the BE sprite engine (gates: P3 shipped + transparency ruling)
+
+Per-character FaceID anchor (portrait-reuse vs dedicated approved anchor — OD#3) ·
+new `character_sprites` cache table `(character_id, appearance_hash, band_index,
+expression, engorged, status)` mirroring the background_images CRUD/GC pattern ·
+lazy per-band batch generation through the P3 provider (solo renders, shared
+anchor/conditioning/seed — independent panels, never crowded batches) · pure
+`bodyState → (bandIndex, expressionCluster, engorged)` selection function (expression
+cut: positive/neutral/distressed + arousal ≥ 70 flush override + engorged @ fill ≥ 75,
+matching imageStateCues; conditions stay prose-only) · crossfade sprite swaps ·
+**the VN dialogue format**: `VN_DIALOGUE_INSTRUCTIONS` on the proven pixelsaga
+`NARR:` / `DIALOG[Name]:` grammar + tolerant parser + feed-view tag stripping (drift
+detectors keep their name-attribution windows) · resolve the inline-vs-background
+mutual exclusivity (`BackgroundImagePhase` gate).
+
+## V3 — the stage (after V2)
+
+Multi-character client-side compositing (z-order by recency) · `regional:true`
+multi-character interaction CGs through the `embedded_images` channel, rendered
+full-bleed in VN view · location-keyed background cache layered over the existing
+Visual Director (revisits don't regenerate).
+
+## V4 — growth media (after V2; the BE payoff)
+
+Band-crossing sprite transitions always-on (cheap floor) · `/animate/growth` event
+clips gated to significant crossings (`lastGrowth.delta ≥ 2`, milestone crossings,
+the SURGING two-beat), fire-and-forget with the embedded_images status/retry pattern
+and the static swap as fallback · MP4 filesystem storage + `<video>` playback surface
+(the one genuinely new storage channel).
+
+## R — the RPG layer (design brief; needs its own ruling session)
+
+"BE RPG adventures" means **choices that interact with the body engine — the body IS
+the character sheet**, not a parallel STR/DEX system duplicating what prose already
+does. Raw material on the table: pixelsaga's stat-check/training choice grammar
+(`[STR:5]` / `[STR+]` tags parsed off choice lines — proven parseable) · Aventuras'
+`pack_runtime_variables` (typed per-character stats, classifier-maintained — the
+native stat substrate if generic stats are ever wanted) · the BE engine's derived
+surfaces (band, mobility/posture rungs, carried mass, fill, conditions, milestones,
+growth pressure). Candidate mechanics to rule on in the brainstorm:
+
+1. **Body-gated choices** — options that require or are blocked by body state
+   ("Squeeze through the gap — *blocked: gigantic*", "Carry the crate [needs
+   mobility ≥ unhindered]"). The actionChoices service already sees present-character
+   state; the tag grammar is the pixelsaga pattern.
+2. **Fill/capacity as an economy** — milking as a resource loop (sell, relieve,
+   trade), engorgement as a cost/pressure the player manages.
+3. **Milestone progression** — the interaction-milestone ladder as unlock tiers
+   (options, dialogue, events that only exist past a mass threshold).
+4. **Growth pressure as a visible risk meter** — the escalator surfaced in the VN
+   HUD; players can court or avoid pity-fires.
+5. **Deterministic checks** — the reducer's `seededRoll` precedent extended to
+   choice resolution (seeded d20 vs body-derived difficulty), keeping the
+   single-writer/replay-safety discipline; vs LLM-adjudicated outcomes.
+
+Explicitly parked until ruled: generic attribute sheets, XP/levels, combat. The
+brainstorm should also rule how RPG state renders in VN view (stats bar precedent:
+pixelsaga's `stats-bar`; ours would be a body-state HUD).
 
 ---
 
