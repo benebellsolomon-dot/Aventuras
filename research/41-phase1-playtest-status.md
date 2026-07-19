@@ -251,3 +251,20 @@ to fill (needed cell first), then crossfades on band/expression changes.
 distinctness at faceid_weight 0.55 (OD#S4) · seed-tier anchor identity-hold.
 **Remaining: V2c** — NARR/DIALOG dialogue format + speaking/dimmed
 highlighting (research/37 Spec 4).
+
+## Fidelity arc + two-layer appearance (2026-07-19, be.16-be.19)
+
+Ben's playtest exposed a fidelity chain, fixed in four releases: be.16
+(identity_tags — the bridge consumes appearance_excerpt ONLY for skin tone;
+sentence-intact scene_tags; clothing rides scenes) · be.17 (portraits + analyzed
+scenes get the full engine treatment — the C7 markerless gap closed; portrait
+tier from bodyState or descriptor sniff) · be.18 (classifier no longer
+overwrites canonical descriptors — root cause of "renders a different
+character": Lucy's descriptors held transient scene state, 'holstaur' only in
+her description) · be.19 (**Ben's ruling: two-layer appearance** —
+`visualDescriptors` = canonical baseline, user-owned, identity rendering +
+sprite hash; NEW `currentVisualDescriptors` (migration 037) receives classifier
+tracking for ALL story types, feeds scene analysis, never identity; panel shows
+the tracked look with Adopt-as-baseline / Clear; portraits render FULL BODY).
+Ben still needs to hand-restore Lucy's canonical descriptors once, then
+regenerate portrait + anchor (sprite sets rebuild via the hash change).
