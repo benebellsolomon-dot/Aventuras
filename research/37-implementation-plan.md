@@ -400,6 +400,14 @@ the spec was drafted against the stale local clone):
   app behavior for all providers · profile REQUIRES the real X-API-Key (native endpoints
   reject keyless; NOAUTH is shim-only) · stateless tagged characters stay in scene_tags,
   so `regional` fires only on ≥2 stateful subjects (multi-char stage work is V3's).
+- **Pipeline pinning (added 2026-07-19, Ben's style-consistency ask):** the si-bridge
+  profile's MODEL picks the pipeline — `bridge-auto` (bridge routes; style can flip at
+  tier ≥ 22 / growth beats) · `krea2` (always Krea2 via prompt + be_tier_index; the spec
+  and FaceID anchor are dropped — a krea pin cannot ride the spec because the bridge's
+  BE reroute triggers on the DEFAULT workflow value) · `illustrious` (spec path with the
+  workflow pinned; FaceID works). Per-surface profiles give per-surface style control
+  (e.g. scenes krea2, sprites illustrious). Optional future bridge-side work: a
+  spec-honoring krea BE dial would let krea renders keep the structured spec.
 
 ### Approach
 New `si-bridge` provider speaking the bridge's modern `/image` + `StructuredImageSpec` API. The
