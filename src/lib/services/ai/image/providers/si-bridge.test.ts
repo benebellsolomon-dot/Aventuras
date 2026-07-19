@@ -294,6 +294,62 @@ describe('createSiBridgeProvider.generate', () => {
   })
 })
 
+describe('workflow pinning via the profile model (style consistency)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mocks.imageFetch.mockReset()
+    mocks.imageGetFetch.mockReset()
+    mocks.imageFetch.mockResolvedValueOnce(jsonResponse({ job_id: 'img_w' }))
+    mocks.imageGetFetch
+      .mockResolvedValueOnce(jsonResponse({ status: 'complete' }))
+      .mockResolvedValueOnce(binaryResponse(PNG_BYTES))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function makeProvider() {
+    return createSiBridgeProvider({ apiKey: 'k', baseUrl: 'http://bridge.test:8001' })
+  }
+
+  async function generateWith(model: string) {
+    const provider = makeProvider()
+    const promise = provider.generate({
+      model,
+      prompt: '__betier_24__ Lucy at the window, warm light. Prose style.',
+      size: '1024x1024',
+      spec: { characters: [{ tier_index: 24 }], intimacy: 'clean' },
+      poseFaceAnchor: 'QUJD',
+    })
+    await vi.advanceTimersByTimeAsync(30_000)
+    await promise
+    return JSON.parse((mocks.imageFetch.mock.calls[0][0] as { body: string }).body)
+  }
+
+  test('krea2 pin drops the spec and anchor, rides prompt + be_tier_index (spec pins cannot reach krea bridge-side)', async () => {
+    const body = await generateWith('krea2')
+    expect(body.spec).toBeUndefined()
+    expect(body.be_tier_index).toBe(24)
+    expect(body.prompt).toContain('Lucy at the window')
+    expect(body.workflow).toBeUndefined()
+    expect(body.pose_face_anchor_b64).toBeUndefined()
+  })
+
+  test('illustrious pin keeps the spec + anchor and sets the workflow explicitly', async () => {
+    const body = await generateWith('illustrious')
+    expect(body.spec).toBeDefined()
+    expect(body.workflow).toBe('illustrious_image')
+    expect(body.pose_face_anchor_b64).toBe('QUJD')
+  })
+
+  test('bridge-auto and empty model keep auto-routing (no workflow field)', async () => {
+    const body = await generateWith('bridge-auto')
+    expect(body.spec).toBeDefined()
+    expect(body.workflow).toBeUndefined()
+  })
+})
+
 describe('a1111 provider with a stray spec', () => {
   test('ignores options.spec — request body carries the prompt only', async () => {
     mocks.imageFetch.mockReset()
@@ -319,12 +375,11 @@ describe('createSiBridgeProvider.listModels', () => {
     mocks.imageGetFetch.mockReset()
   })
 
-  test('returns the auto-routing sentinel when the bridge answers', async () => {
+  test('returns the three pipeline pins when the bridge answers', async () => {
     mocks.imageGetFetch.mockResolvedValueOnce(jsonResponse({ workflows: {} }))
     const provider = createSiBridgeProvider({ apiKey: 'k', baseUrl: 'http://b:8001' })
     const models = await provider.listModels('k')
-    expect(models).toHaveLength(1)
-    expect(models[0].id).toBe('bridge-auto')
+    expect(models.map((m) => m.id)).toEqual(['bridge-auto', 'krea2', 'illustrious'])
   })
 
   test('tolerates failure with an empty list', async () => {

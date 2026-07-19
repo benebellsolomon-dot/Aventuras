@@ -46,13 +46,41 @@ const BE_TIER_MARKER = /__betier_(\d+)__\s*,?\s*/
 const MIN_DIMENSION = 512
 const MAX_DIMENSION = 2048
 
-const AUTO_MODEL: ImageModelInfo = {
-  id: 'bridge-auto',
-  name: 'Bridge auto-routing',
-  description: 'The bridge picks the pipeline (Krea2 / Illustrious) from the request itself.',
-  supportsSizes: [],
-  supportsImg2Img: false,
-}
+/**
+ * The profile "model" picks the render pipeline — the style-consistency control
+ * (auto-routing flips art style when a subject crosses tier 22 or a growth beat
+ * fires). 'krea2' cannot pin via the spec: the bridge's reroute triggers on the
+ * DEFAULT workflow value, so an explicit krea2_image is indistinguishable from
+ * unset — instead the provider drops the spec and rides the proven
+ * prompt + be_tier_index path, which always renders on Krea2 with the same cup
+ * ladder. 'illustrious' pins the spec path's workflow explicitly (honored).
+ */
+const PIPELINE_MODELS: ImageModelInfo[] = [
+  {
+    id: 'bridge-auto',
+    name: 'Auto (bridge routes)',
+    description:
+      'The bridge picks Krea2 or Illustrious per request — art style can differ across sizes.',
+    supportsSizes: [],
+    supportsImg2Img: false,
+  },
+  {
+    id: 'krea2',
+    name: 'Krea2 (house dialect)',
+    description:
+      'Always renders on the Krea2 pipeline via prompt + be_tier_index — consistent style; structured-spec extras and FaceID anchors do not apply.',
+    supportsSizes: [],
+    supportsImg2Img: false,
+  },
+  {
+    id: 'illustrious',
+    name: 'Illustrious (SDXL)',
+    description:
+      'Always renders on the Illustrious pipeline with the full structured spec + FaceID support — consistent SDXL style.',
+    supportsSizes: [],
+    supportsImg2Img: false,
+  },
+]
 
 function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -108,7 +136,9 @@ export function createSiBridgeProvider(config: ImageProviderConfig): ImageProvid
     name: 'SI Bridge',
 
     async generate(options: ImageGenerateOptions): Promise<ImageGenerateResult> {
-      const { prompt, size, signal, spec } = options
+      const { model, prompt, size, signal } = options
+      // A krea2 pin renders through the prompt path (see PIPELINE_MODELS note).
+      const spec = model === 'krea2' ? undefined : options.spec
 
       let body: Record<string, unknown>
       if (spec) {
@@ -122,10 +152,14 @@ export function createSiBridgeProvider(config: ImageProviderConfig): ImageProvid
             }
           : { prompt }
       }
+      if (model === 'illustrious') {
+        body.workflow = 'illustrious_image'
+      }
       // FaceID/OpenPose identity-hold (Spec 4 B1) — coexists with the spec:
       // the bridge routes onto the openpose_faceid workflow while the spec
-      // still drives tier sizing.
-      if (options.poseFaceAnchor) {
+      // still drives tier sizing. Dropped on a krea2 pin: an anchor makes the
+      // request image-conditioned, which would force Illustrious regardless.
+      if (options.poseFaceAnchor && model !== 'krea2') {
         body.pose_face_anchor_b64 = options.poseFaceAnchor
         if (options.faceidWeight !== undefined) body.faceid_weight = options.faceidWeight
         if (options.openposeStrength !== undefined)
@@ -200,10 +234,10 @@ export function createSiBridgeProvider(config: ImageProviderConfig): ImageProvid
       try {
         const key = apiKey || config.apiKey
         const headers: Record<string, string> = key ? { 'X-API-Key': key } : {}
-        // Connectivity/auth check; the response enumerates workflows, not
-        // caller-selectable models — the bridge owns routing.
+        // Connectivity/auth check; the response enumerates ComfyUI workflows,
+        // but the caller-facing "models" are the three pipeline pins above.
         await imageGetFetch(`${baseUrl}/models`, headers, { serviceId: 'si-bridge-models' })
-        return [AUTO_MODEL]
+        return PIPELINE_MODELS
       } catch {
         return []
       }
