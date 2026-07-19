@@ -552,17 +552,28 @@ reducer already emits.
 
 ## V1 — VN presentation MVP (no gates; parallel to P3)
 
-New `ActivePanel: 'vn'` + AppShell branch · sharp `currentBgImage` background layer ·
-present-character portrait standees (from `worldStateDelta.classificationResult.scene`
-+ the `relationship === 'self'` OR-in) with speaking/dimmed highlighting and in-slot
-generating placeholders · ADV click-through textbox bound to `ui.streamingContent`
-with the pixelsaga streaming hold-back (segments appear as they stream; partial last
-segment held back; choices only after finalization) · typewriter reveal ·
-`ActionChoices`/`ActionInput` reused unmodified. Zero generation changes; the prose
-feed stays the canonical log/backlog view. **Acceptance: a full Lucy session played
-in VN view.**
+✅ **SHIPPED 0.7.6-be.9 (2026-07-19).** New `ActivePanel: 'vn'` + AppShell branch +
+Header toggle · sharp `currentBgImage` background layer · present-NPC portrait
+standees (protagonist excluded — the camera in second person; dedup + overflow badge
++ in-slot generating placeholders) · ADV click-through textbox with the pixelsaga
+streaming hold-back, DOM-based block splitting (no dropped interstitial text),
+markdown rendering, translation support, selection-guarded advance, and reading
+position preserved across the stream→finalized transition · visual-prose streams
+render live (single growing block — no seams to split) · `ActionChoices`/
+`ActionInput` reused with the story column width respected · Android back returns
+to the feed. *Moved to V2 (need speaker attribution):* speaking/dimmed highlighting,
+typewriter reveal. **Acceptance: a full Lucy session played in VN view — Ben's
+smoke test.**
 
 ## V2 — the BE sprite engine (gates: P3 shipped + transparency ruling)
+
+**Provider-agnostic by design (Ben's ruling 2026-07-19):** sprite generation binds to
+a configurable ImageProfile slot (`spriteProfileId`, following the existing
+portrait/background/reference slot pattern) — si-bridge is the preferred provider
+(FaceID identity, regional, /animate extras) but external services (e.g. NanoGPT,
+OpenRouter image models — the "Nano Banana" profile precedent) must work for basic
+banded sprite generation. An external provider with native transparent-PNG output
+would also satisfy the transparency gate without the bridge matting node.
 
 Per-character FaceID anchor (portrait-reuse vs dedicated approved anchor — OD#3) ·
 new `character_sprites` cache table `(character_id, appearance_hash, band_index,

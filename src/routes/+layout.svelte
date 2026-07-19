@@ -41,7 +41,8 @@
         if (
           ui.activePanel === 'lorebook' ||
           ui.activePanel === 'memory' ||
-          ui.activePanel === 'gallery'
+          ui.activePanel === 'gallery' ||
+          ui.activePanel === 'vn'
         ) {
           ui.setActivePanel('story')
         } else {

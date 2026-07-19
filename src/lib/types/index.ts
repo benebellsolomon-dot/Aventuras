@@ -647,6 +647,7 @@ export interface AgenticSession {
 // UI State types
 export type ActivePanel =
   | 'story'
+  | 'vn'
   | 'library'
   | 'settings'
   | 'templates'
