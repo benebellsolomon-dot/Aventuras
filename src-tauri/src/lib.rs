@@ -230,6 +230,12 @@ pub fn run() {
             description: "character_sprites",
             sql: include_str!("../migrations/036_character_sprites.sql"),
             kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 37,
+            description: "current_visual_descriptors",
+            sql: include_str!("../migrations/037_current_visual_descriptors.sql"),
+            kind: MigrationKind::Up,
         }
     ];
 

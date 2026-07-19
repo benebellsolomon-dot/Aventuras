@@ -937,7 +937,9 @@ class AIService {
       userAction: context.userAction,
       presentCharacters: context.presentCharacters.map((c) => ({
         name: c.name,
-        visualDescriptors: c.visualDescriptors,
+        // Scene analysis wants the CURRENT look (story-tracked) when present;
+        // identity rendering elsewhere always uses the canonical baseline.
+        visualDescriptors: c.currentVisualDescriptors ?? c.visualDescriptors,
         isProtagonist: c.relationship === 'self',
       })),
       currentLocation: context.currentLocation,

@@ -377,6 +377,21 @@
     }
   }
 
+  async function adoptTrackedLook(character: Character) {
+    if (!character.currentVisualDescriptors) return
+    // Deliberate promotion: the tracked look becomes canonical (this changes
+    // the sprite appearance hash → anchor goes stale + sets regenerate).
+    await story.updateCharacter(character.id, {
+      visualDescriptors: character.currentVisualDescriptors,
+      currentVisualDescriptors: null,
+    })
+    editVisualDescriptors = descriptorsToString(character.currentVisualDescriptors)
+  }
+
+  async function clearTrackedLook(character: Character) {
+    await story.updateCharacter(character.id, { currentVisualDescriptors: null })
+  }
+
   async function generateSpriteAnchor(character: Character) {
     anchorError = null
     generatingAnchorId = character.id
@@ -662,6 +677,34 @@
                   placeholder="Appearance (comma separated)"
                   class="h-8 text-xs"
                 />
+                {#if character.currentVisualDescriptors && Object.values(character.currentVisualDescriptors).some((v) => v)}
+                  <div class="border-border bg-muted/20 mt-1 rounded-md border p-2">
+                    <div class="text-muted-foreground mb-1 text-xs font-medium">
+                      Story-tracked look (does not affect images)
+                    </div>
+                    <p class="text-muted-foreground text-xs">
+                      {descriptorsToString(character.currentVisualDescriptors)}
+                    </p>
+                    <div class="mt-1.5 flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-6 px-2 text-xs"
+                        onclick={() => adoptTrackedLook(character)}
+                      >
+                        Adopt as baseline
+                      </Button>
+                      <Button
+                        variant="text"
+                        size="sm"
+                        class="h-6 px-2 text-xs"
+                        onclick={() => clearTrackedLook(character)}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                {/if}
               </div>
 
               <div class="space-y-1">

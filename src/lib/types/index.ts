@@ -167,7 +167,9 @@ export interface Character {
   description: string | null
   relationship: string | null
   traits: string[]
-  visualDescriptors: VisualDescriptors // Visual appearance details for image generation
+  visualDescriptors: VisualDescriptors // CANONICAL baseline appearance (user-owned; identity rendering + sprite hash)
+  /** Story-tracked "current look" — classifier-updated each turn; prose/scene-analysis context, NEVER identity. */
+  currentVisualDescriptors?: VisualDescriptors | null
   portrait: string | null // Data URL (data:image/...) for reference in image generation
   status: 'active' | 'inactive' | 'deceased'
   metadata: Record<string, unknown> | null

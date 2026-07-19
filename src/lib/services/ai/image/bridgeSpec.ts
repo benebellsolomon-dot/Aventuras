@@ -219,11 +219,11 @@ export function buildStructuredImageSpec(
   return spec
 }
 
-/** Portrait framing contract — head-and-shoulders identity renders. */
+/** Portrait framing contract — FULL BODY: portraits double as standees and FaceID/pose sources. */
 export const PORTRAIT_FRAMING_TAGS: readonly string[] = [
   'solo',
-  'upper body',
-  'portrait',
+  'full body',
+  'standing',
   'looking at viewer',
 ]
 

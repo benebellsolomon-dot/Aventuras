@@ -2142,19 +2142,19 @@ class StoryStore {
             const traitMap = new Map(traits.map((t) => [t.toLowerCase(), t]))
             changes.traits = Array.from(traitMap.values())
           }
-          // Handle visual descriptor updates for image generation
-          // New format: visualDescriptors is a structured object that replaces entirely.
-          // BE stories SKIP this: the classifier proposes transient scene state
-          // ("hair spread across soaked linens", scene clothing, size prose) which
-          // wholesale-destroys the CANONICAL identity that portraits/anchors/sprites
-          // render from — and thrashes the sprite appearance hash. Single-writer:
-          // the engine owns the body, the user owns the canonical look.
+          // Visual descriptor updates land on the story-tracked CURRENT look —
+          // never the canonical baseline (Ben's two-layer ruling 2026-07-19).
+          // The classifier proposes transient scene state ("hair spread across
+          // soaked linens", scene clothing, size prose); writing it over the
+          // baseline destroyed the identity that portraits/anchors/sprites
+          // render from and thrashed the sprite appearance hash. The baseline
+          // is user-owned; "Adopt as baseline" in the panel promotes tracked
+          // changes deliberately.
           if (
-            this.currentStory?.settings?.beMode !== true &&
             update.changes.visualDescriptors &&
             Object.keys(update.changes.visualDescriptors).length > 0
           ) {
-            changes.visualDescriptors = update.changes.visualDescriptors
+            changes.currentVisualDescriptors = update.changes.visualDescriptors
           }
           // Merge inline runtime variable values into metadata if present
           const charInlineVars = extractInlineCustomVars(

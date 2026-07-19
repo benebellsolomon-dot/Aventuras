@@ -356,7 +356,7 @@ describe('buildPortraitSpec', () => {
     const spec = buildPortraitSpec(lucy)
     expect(spec.characters[0].tier_index).toBe(47)
     expect(spec.characters[0].identity_tags).toEqual(['silver hair', 'blue eyes'])
-    expect(spec.scene_tags).toEqual(expect.arrayContaining(['upper body', 'portrait']))
+    expect(spec.scene_tags).toEqual(expect.arrayContaining(['full body', 'standing']))
   })
 
   test('tier falls back to descriptor size vocabulary for stateless subjects (wizard)', () => {
