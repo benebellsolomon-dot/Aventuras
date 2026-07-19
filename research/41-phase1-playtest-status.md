@@ -230,3 +230,24 @@ persist fix + cell-invariant guards. Gates: 238 vitest / 0 check / 0 lint.
 **Ben setup:** Settings → Images → Characters tab → pick a Sprite Profile
 (SI Bridge recommended), then per-NPC Generate + Approve in the character
 panel. No VN-visible change until V2b (matting + generation + VnView layer).
+
+## V2b shipped — sprites live on the VN stage (2026-07-19, 0.7.6-be.15)
+
+Full sprite pipeline: swappable matting boundary (native Rust `sprite_finish` —
+ort + CoreML + isnet-anime, matte→resize→WEBP in one command; pass-through when
+the model is absent), lazy per-band generation (5 cells sequential, needed cell
+first, shared deterministic seed, FaceID anchor when approved+current and not
+krea2-pinned, wholesale stale-hash invalidation), BackgroundImagePhase renders
+backgrounds in inline mode when sprites are active, VnView cutout layer with
+overlap crossfade + last-known→portrait→spinner fallback. The 168MB
+isnet-anime model is INSTALLED at app-data/models/isnet-anime.onnx (Ben-
+approved download; Apache-2.0; survives redeploys). be.14 also shipped
+pipeline pinning (profile model = bridge-auto/krea2/illustrious — Ben's
+style-consistency ask; krea2 pins ride prompt+be_tier_index because the
+bridge cannot distinguish a pinned krea2_image from the default).
+**Smoke test:** enter VN view in the Lucy story — first band takes ~2.5 min
+to fill (needed cell first), then crossfades on band/expression changes.
+**Verify in play:** matting edge quality on hair · FaceID expression
+distinctness at faceid_weight 0.55 (OD#S4) · seed-tier anchor identity-hold.
+**Remaining: V2c** — NARR/DIALOG dialogue format + speaking/dimmed
+highlighting (research/37 Spec 4).
