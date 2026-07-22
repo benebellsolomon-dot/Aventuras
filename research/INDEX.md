@@ -25,12 +25,14 @@ are never renumbered (cross-references depend on numbers). ⭐ = load-bearing to
 | [40-calibration-dataset-hunt.md](40-calibration-dataset-hunt.md) | **Calibration dataset hunt** (5 streams): mid-curve gap proven structural (clinical papers record SN-N not girth; augmented figures never publish underbust); 1″/letter CONFIRMED standard-conformant; droop descent-rate VALIDATED vs 12 clinical pairs; density flagged for ruling | No curve change; density ruling open |
 | [41-phase1-playtest-status.md](41-phase1-playtest-status.md) | **Phase 1 playtest + what it shipped**: classifier gate PASS (grok-4.3 ruled), growth chain verified, the lore-outranks-directive root cause → the be.7 cosmology/precedence package; Phase 2 Spec 1 shipped (be.8) with the adversarial-review rulings | ✅ Phases 1–2(Spec 1) SHIPPED |
 | [42-visual-novel-mode.md](42-visual-novel-mode.md) | **Visual Novel mode research** (3-agent pass): client-side view layer over existing pipeline; banded FaceID sprite sets keyed on bandIndex; growth clips gated to big crossings; v1 MVP nearly free; #1 blocker = bridge transparency | Research done; v1 buildable now; v2+ gated on Spec 2 + transparency ruling |
+| ~~43~~ · ~~44~~ · ~~45~~ | **MOVED 2026-07-22 → the Fablekin corpus.** The three Fablekin-era docs (host evaluation, BE plugin design, erotic prose craft) left this repo and were renumbered `01`/`02`/`03`. New home: `Projects/gaming/Fablekin/research/` (private repo `benebellsolomon-dot/fablekin-research`). Rationale: this repo's origin is a **public** fork and the Fablekin work is private. See that corpus's `INDEX.md` | Moved — do not re-add here |
 
 ## Task → read this
 
 | Task | Read |
 |---|---|
-| The current plan / what to build next | **37** (roadmap + file-level specs) |
+| The current plan / what to build next | **37** (engine/VN roadmap) |
+| Anything Fablekin — plugins, BE prose craft, host evaluation | **`Fablekin/research/`** (01–03; separate private repo) |
 | Image gen / accuracy / bridge | 32 → 30 §5 → 36 §5 (the A1111-shim finding) → `bundles/imagegen-handoff/` |
 | BE engine internals (as built) | 31 → 31a → 31b; code at `src/lib/services/be/` |
 | Import/migrate stories & characters | 30 §7 + `bundles/lucys-milk/aventuras-import/README.md` |
