@@ -107,6 +107,14 @@ export interface MemoryConfig {
   maxChaptersPerRetrieval: number // Max chapters to retrieve per query
 }
 
+/**
+ * Content rating for narrative generation.
+ * - standard: default behavior, no extra content guidance injected
+ * - mature: adult themes may occur on-page with scene discretion
+ * - explicit: fully explicit depiction expected when scenes call for it
+ */
+export type ContentRating = 'standard' | 'mature' | 'explicit'
+
 export interface StorySettings {
   model?: string
   temperature?: number
@@ -125,6 +133,8 @@ export interface StorySettings {
   beGrowthCosmology?: string // BE engine: what drives growth in this world — threaded into classifier + narrator instructions (research/41)
   bePacingFlavor?: string // BE engine: free-text pacing note interpolated into the genre rules
   beGrowthEligibleKinds?: string[] // BE engine: which event kinds may land growth (subset of catalyst/contact/attempt); empty/unset = all
+  contentRating?: ContentRating // Content guidance level injected into narrative prompts (default: standard)
+  postHistoryInstructions?: string // Liquid-enabled directives injected after story history, just before generation
 }
 
 export interface StoryEntry {

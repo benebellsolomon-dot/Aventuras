@@ -13,6 +13,7 @@
 
 import { streamNarrative, generateNarrative } from '../sdk/generate'
 import { ContextBuilder } from '$lib/services/context'
+import { getContentGuidelines } from './contentGuidelines'
 import { StyleReviewerService } from './StyleReviewerService'
 import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
@@ -293,7 +294,7 @@ export class NarrativeService {
     })
 
     // Build system prompt via ContextBuilder pipeline
-    const { systemPrompt, primingMessage } = await this.buildPrompts(
+    const { systemPrompt, primingMessage, postHistoryBlock } = await this.buildPrompts(
       story,
       worldState,
       tieredContextBlock,
@@ -305,7 +306,7 @@ export class NarrativeService {
     // Build the user prompt from entries
     const mode = story?.mode ?? 'adventure'
     const inlineImageMode = story?.settings?.imageGenerationMode === 'inline'
-    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode)
+    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode, postHistoryBlock)
 
     try {
       // Stream using the main narrative profile
@@ -353,7 +354,7 @@ export class NarrativeService {
     log('generate', { entriesCount: entries.length })
 
     // Build system prompt via ContextBuilder pipeline
-    const { systemPrompt, primingMessage } = await this.buildPrompts(
+    const { systemPrompt, primingMessage, postHistoryBlock } = await this.buildPrompts(
       story,
       worldState,
       tieredContextBlock,
@@ -363,7 +364,7 @@ export class NarrativeService {
 
     const mode = story?.mode ?? 'adventure'
     const inlineImageMode = story?.settings?.imageGenerationMode === 'inline'
-    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode)
+    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode, postHistoryBlock)
 
     return generateNarrative({
       system: systemPrompt,
@@ -386,7 +387,7 @@ export class NarrativeService {
     styleReview?: StyleReviewResult | null,
     retrievedChapterContext?: string | null,
     timelineFillResult?: TimelineFillResult | null,
-  ): Promise<{ systemPrompt: string; primingMessage: string }> {
+  ): Promise<{ systemPrompt: string; primingMessage: string; postHistoryBlock: string }> {
     const mode = story?.mode ?? 'adventure'
 
     // Create ContextBuilder -- forStory auto-populates mode, pov, tense, genre,
@@ -444,6 +445,10 @@ export class NarrativeService {
       ctx.add({ visualProseInstructions: VISUAL_PROSE_INSTRUCTIONS })
     }
 
+    // Content guidelines based on the story's content rating.
+    // Always set (empty string for 'standard') so templates can safely test it.
+    ctx.add({ contentGuidelines: getContentGuidelines(story?.settings?.contentRating) })
+
     // Render system prompt — use per-story override when set, otherwise fall back to pack template
     let systemPrompt: string
     const customPrompt = story?.settings?.customSystemPrompt
@@ -470,14 +475,28 @@ export class NarrativeService {
       (context.protagonistName as string) ?? 'the protagonist',
     )
 
+    // Render post-history instructions (Liquid-enabled) for injection at the
+    // tail of the user prompt — the strongest steering position, applied after
+    // all story history and immediately before generation.
+    let postHistoryBlock = ''
+    const postHistoryRaw = story?.settings?.postHistoryInstructions?.trim()
+    if (postHistoryRaw) {
+      const rendered = templateEngine.render(postHistoryRaw, ctx.getContext())
+      if (rendered === null) {
+        log('ERROR: post-history instructions render failed, using raw content')
+      }
+      postHistoryBlock = rendered ?? postHistoryRaw
+    }
+
     log('buildPrompts complete', {
       mode,
       usingCustomPrompt: !!customPrompt,
       systemPromptLength: systemPrompt.length,
       primingMessageLength: primingMessage.length,
+      hasPostHistory: postHistoryBlock.length > 0,
     })
 
-    return { systemPrompt, primingMessage }
+    return { systemPrompt, primingMessage, postHistoryBlock }
   }
 
   /**
@@ -489,6 +508,7 @@ export class NarrativeService {
     entries: StoryEntry[],
     mode: 'adventure' | 'creative-writing',
     inlineImageMode: boolean = false,
+    postHistoryBlock: string = '',
   ): string {
     // Use all entries passed - these are already the visible (non-summarized) entries
     // Truncation/context management happens upstream via the memory system
@@ -528,6 +548,11 @@ export class NarrativeService {
     prompt += '## Current Action:\n'
     prompt += currentAction
     prompt += '\n\n'
+
+    if (postHistoryBlock) {
+      prompt += `[Narrative Directives]\n${postHistoryBlock}\n\n`
+    }
+
     prompt += 'Continue the narrative:'
 
     return prompt

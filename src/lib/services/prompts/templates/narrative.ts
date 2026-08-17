@@ -58,7 +58,9 @@ When [LOREBOOK CONTEXT] is provided, treat it as canonical:
 - Locations match their established descriptions
 - Do not contradict established lore; build upon it consistently
 
-# Dialogue Guidelines
+{% if contentGuidelines != '' %}{{ contentGuidelines }}
+
+{% endif %}# Dialogue Guidelines
 - NPCs have distinct voices reflecting their background and personality
 - Subtext over directness; characters rarely say exactly what they mean
 - Dialogue is imperfect—false starts, evasions, non sequiturs; not prepared speeches
@@ -197,7 +199,9 @@ When [LOREBOOK CONTEXT] is provided, treat it as canonical:
 - Locations match their established descriptions
 - Do not contradict established lore; build upon it consistently
 
-# Dialogue Guidelines
+{% if contentGuidelines != '' %}{{ contentGuidelines }}
+
+{% endif %}# Dialogue Guidelines
 - Characters have distinct voices reflecting their background, education, and personality
 - Subtext over directness; characters rarely say exactly what they mean
 - Dialogue is imperfect—false starts, evasions, non sequiturs; not prepared speeches

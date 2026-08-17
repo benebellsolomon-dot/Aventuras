@@ -8,6 +8,8 @@
   import { Textarea } from '$lib/components/ui/textarea'
   import { Button } from '$lib/components/ui/button'
   import { Label } from '$lib/components/ui/label'
+  import * as RadioGroup from '$lib/components/ui/radio-group'
+  import type { ContentRating } from '$lib/types'
 
   // Static — defined at module scope so they aren't re-created per component instance
   const KNOWN_VARIABLES = new Set([
@@ -35,7 +37,15 @@
     'runtimeVars_items',
     'runtimeVars_storyBeats',
     'runtimeVars_protagonist',
+    'contentRating',
+    'contentGuidelines',
   ])
+
+  const CONTENT_RATINGS: Array<{ value: ContentRating; label: string; desc: string }> = [
+    { value: 'standard', label: 'Standard', desc: 'Default behavior, no extra content guidance' },
+    { value: 'mature', label: 'Mature', desc: 'Adult themes on-page with scene discretion' },
+    { value: 'explicit', label: 'Explicit', desc: 'Fully explicit scenes, no fade-to-black' },
+  ]
 
   const VARIABLE_REFERENCE = [
     {
@@ -62,6 +72,13 @@
         { name: 'chapterSummaries', desc: 'Summaries of past chapters' },
         { name: 'retrievedChapterContext', desc: 'Retrieved chapter context from memory' },
         { name: 'styleGuidance', desc: 'Style review guidance (when style reviewer is active)' },
+      ],
+    },
+    {
+      group: 'Content',
+      vars: [
+        { name: 'contentRating', desc: "The story's content rating (standard/mature/explicit)" },
+        { name: 'contentGuidelines', desc: 'Content guidance block for the current rating' },
       ],
     },
     {
@@ -157,6 +174,32 @@
     unknownVars = []
     await story.updateStorySettings({ customSystemPrompt: undefined })
   }
+
+  // ── Post-history instructions ────────────────────────────────────────────────
+
+  const savedPostHistory = $derived(story.currentStory?.settings?.postHistoryInstructions)
+
+  // eslint-disable-next-line svelte/prefer-writable-derived
+  let postHistoryDraft = $state('')
+  $effect(() => {
+    postHistoryDraft = savedPostHistory ?? ''
+  })
+
+  let postHistoryError = $state<string | null>(null)
+  const postHistoryDirty = $derived(postHistoryDraft !== (savedPostHistory ?? ''))
+
+  async function savePostHistory() {
+    const trimmed = postHistoryDraft.trim()
+    if (trimmed) {
+      const result = templateEngine.parseTemplate(trimmed)
+      if (!result.success) {
+        postHistoryError = result.error ?? 'Invalid Liquid template'
+        return
+      }
+    }
+    postHistoryError = null
+    await story.updateStorySettings({ postHistoryInstructions: trimmed || undefined })
+  }
 </script>
 
 <div class="space-y-6">
@@ -198,6 +241,62 @@
     disabledFields={{ pov: true, tense: true, visualProseMode: true }}
     disabledReason="Cannot be changed mid-story. Set during story creation."
   />
+
+  <!-- ── Content Rating ───────────────────────────────────────────────────── -->
+  <div class="border-t pt-4">
+    <Label class="text-sm font-medium">Content Rating</Label>
+    <p class="text-muted-foreground mt-1 mb-3 text-xs">
+      Controls the content guidance injected into narrative prompts. Applies from the next
+      generation.
+    </p>
+    <RadioGroup.Root
+      value={storySettings.contentRating ?? 'standard'}
+      onValueChange={(v) => story.updateStorySettings({ contentRating: v as ContentRating })}
+      class="grid grid-cols-1 gap-2 sm:grid-cols-3"
+    >
+      {#each CONTENT_RATINGS as rating (rating.value)}
+        <Label
+          for={`content-rating-${rating.value}`}
+          class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-start justify-center gap-1 rounded-md border-2 p-3"
+        >
+          <RadioGroup.Item
+            value={rating.value}
+            id={`content-rating-${rating.value}`}
+            class="sr-only"
+          />
+          <span class="font-medium">{rating.label}</span>
+          <span class="text-muted-foreground text-xs font-normal">{rating.desc}</span>
+        </Label>
+      {/each}
+    </RadioGroup.Root>
+  </div>
+
+  <!-- ── Post-History Instructions ────────────────────────────────────────── -->
+  <div class="border-t pt-4">
+    <Label class="text-sm font-medium">Post-History Instructions</Label>
+    <p class="text-muted-foreground mt-1 mb-3 text-xs">
+      Directives injected after the story history, immediately before generation — the strongest
+      position for steering style and behavior. Supports Liquid template variables.
+    </p>
+    <Textarea
+      value={postHistoryDraft}
+      oninput={(e) => {
+        postHistoryDraft = (e.currentTarget as HTMLTextAreaElement).value
+        postHistoryError = null
+      }}
+      class="min-h-[100px] font-mono text-xs"
+      placeholder="e.g. Keep responses grounded in the current scene. Escalate tension gradually."
+    />
+    {#if postHistoryError}
+      <p class="text-destructive mt-2 text-xs">✕ Syntax error: {postHistoryError}</p>
+    {/if}
+    {#if postHistoryDirty}
+      <div class="mt-3 flex items-center justify-between gap-2">
+        <p class="text-muted-foreground text-xs">Unsaved changes</p>
+        <Button size="sm" onclick={savePostHistory}>Save</Button>
+      </div>
+    {/if}
+  </div>
 
   <!-- ── Custom System Prompt ─────────────────────────────────────────────── -->
   <div class="border-t pt-4">

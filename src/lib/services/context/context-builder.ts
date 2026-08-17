@@ -57,6 +57,7 @@ export class ContextBuilder {
       settingDescription: story.description || '',
       visualProseMode: story.settings?.visualProseMode || false,
       inlineImageMode: story.settings?.imageGenerationMode === 'inline',
+      contentRating: story.settings?.contentRating || 'standard',
     })
 
     // Protagonist
