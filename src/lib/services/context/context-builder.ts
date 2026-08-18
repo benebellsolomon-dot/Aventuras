@@ -22,8 +22,7 @@ import {
   buildCheckTaggingInstruction,
   buildPlayerSheetBlock,
   buildPlayerSheetSummary,
-  defaultRpgSheet,
-  readRpgSheet,
+  sheetOrDefault,
 } from '$lib/services/rpg'
 import type { RenderResult } from './types'
 import type { Character, Location, Item, StoryBeat, Story } from '$lib/types'
@@ -252,7 +251,7 @@ export class ContextBuilder {
       let playerSheetSummary = ''
       let checkTaggingInstruction = ''
       if (story.settings?.beMode === true && protagonist) {
-        const sheet = readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+        const sheet = sheetOrDefault(protagonist.metadata)
         playerSheetBlock = buildPlayerSheetBlock(sheet, protagonist.name)
         playerSheetSummary = buildPlayerSheetSummary(sheet)
         checkTaggingInstruction = buildCheckTaggingInstruction(sheet)

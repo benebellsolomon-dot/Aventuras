@@ -5,21 +5,14 @@
   import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
   import { Button } from '$lib/components/ui/button'
   import { cn } from '$lib/utils/cn'
-  import {
-    checkBonus,
-    oddsBand,
-    readRpgSheet,
-    defaultRpgSheet,
-    successOdds,
-    SKILL_BY_ID,
-  } from '$lib/services/rpg'
+  import { checkBonus, oddsBand, sheetOrDefault, successOdds, SKILL_BY_ID } from '$lib/services/rpg'
 
   // RPG DC chips (research/47 Step 11): only in beMode with a protagonist.
   const rpgSheet = $derived.by(() => {
     if (story.currentStory?.settings?.beMode !== true) return null
     const protagonist = story.characters.find((c) => c.relationship === 'self')
     if (!protagonist) return null
-    return readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+    return sheetOrDefault(protagonist.metadata)
   })
 
   const oddsClasses = {

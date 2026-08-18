@@ -14,13 +14,7 @@
 import { createLogger } from '$lib/log'
 import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
 import type { RiskAssessResult } from '$lib/services/ai/sdk/schemas/riskassess'
-import {
-  defaultRpgSheet,
-  readRpgSheet,
-  resolveCheck,
-  type CheckRecord,
-  type RpgSheet,
-} from '$lib/services/rpg'
+import { resolveCheck, sheetOrDefault, type CheckRecord, type RpgSheet } from '$lib/services/rpg'
 import type { ActionInputType } from '$lib/types'
 import type {
   AbortedEvent,
@@ -52,12 +46,13 @@ export class CheckPhase {
     const story = context.story
 
     if (story.settings?.beMode !== true) return null
-    // Checks resolve player DEEDS; say/think/story-direction turns are safe.
+    // Checks resolve player deeds: 'do' actions and free-form input (which may
+    // describe deeds). say/think/story-direction turns are always safe.
     if (actionType !== 'do' && actionType !== 'free') return null
 
     const protagonist = context.worldState.characters.find((c) => c.relationship === 'self')
     if (!protagonist) return null
-    const sheet: RpgSheet = readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+    const sheet: RpgSheet = sheetOrDefault(protagonist.metadata)
 
     yield { type: 'phase_start', phase: 'check' } satisfies PhaseStartEvent
 

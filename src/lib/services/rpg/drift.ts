@@ -51,15 +51,22 @@ function detectCheckContradiction(narrative: string, record: CheckRecord): RpgDr
  */
 const MASTERY_WORDS = '(?:master(?:y|ful|ed)?(?: of)?|expert(?:ise)?(?: in)?|renowned|legendary)'
 
+// Compiled once — the skill registry is static, so per-turn recompilation of
+// ~36 regexes would be pure waste.
+const MASTERY_PATTERNS = SKILLS.map((skill) => ({
+  id: skill.id,
+  label: skill.label,
+  pattern: new RegExp(`\\b${MASTERY_WORDS}\\s+(?:\\w+\\s+)?${skill.label}\\b`, 'i'),
+  reversed: new RegExp(`\\b${skill.label}\\s+${MASTERY_WORDS}\\b`, 'i'),
+}))
+
 function detectStatInvention(narrative: string, sheet: RpgSheet): RpgDriftFinding | null {
-  for (const skill of SKILLS) {
-    if (skillRanks(sheet, skill.id) > 0) continue
-    const pattern = new RegExp(`\\b${MASTERY_WORDS}\\s+(?:\\w+\\s+)?${skill.label}\\b`, 'i')
-    const reversed = new RegExp(`\\b${skill.label}\\s+${MASTERY_WORDS}\\b`, 'i')
+  for (const { id, label, pattern, reversed } of MASTERY_PATTERNS) {
+    if (skillRanks(sheet, id) > 0) continue
     if (pattern.test(narrative) || reversed.test(narrative)) {
       return {
         kind: 'stat_invention',
-        note: `The prose credits mastery of ${skill.label}, but the protagonist has no training in it. Keep his abilities within the sheet.`,
+        note: `The prose credits mastery of ${label}, but the protagonist has no training in it. Keep his abilities within the sheet.`,
       }
     }
   }

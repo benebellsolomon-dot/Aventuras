@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod'
+import { defaultRpgSheet } from './derive'
 import type { RpgSheet } from './types'
 
 export const RPG_SHEET_KEY = 'rpgSheet'
@@ -37,6 +38,15 @@ export const rpgSheetSchema = z
     driftNote: z.object({ note: z.string() }).passthrough().optional(),
   })
   .passthrough()
+
+/**
+ * The sheet every reader resolves against: the stored sheet, or the
+ * deterministic default before the first persisted write. Single definition so
+ * the check pipeline, prompt builder, and UI can never diverge on baseline.
+ */
+export function sheetOrDefault(metadata: Record<string, unknown> | null): RpgSheet {
+  return readRpgSheet(metadata) ?? defaultRpgSheet()
+}
 
 /** Read the sheet out of a character's metadata; null when absent/unparseable. */
 export function readRpgSheet(metadata: Record<string, unknown> | null): RpgSheet | null {

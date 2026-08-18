@@ -550,6 +550,9 @@
 
       const deps = buildPipelineDependencies()
       const pipeline = new GenerationPipeline(deps)
+      // Every turn starts with a clean check slate — a card stranded by a
+      // stopped/failed previous turn must not bleed into this one.
+      ui.setPendingCheckRecord(null)
 
       let fullResponse = ''
       let fullReasoning = ''

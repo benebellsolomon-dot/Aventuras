@@ -9,9 +9,8 @@
     ATTRIBUTE_LABELS,
     attributeMod,
     checkBonus,
-    defaultRpgSheet,
     essenceMax,
-    readRpgSheet,
+    sheetOrDefault,
     SKILLS,
     skillRanks,
     spendPoint,
@@ -24,7 +23,7 @@
   const protagonist = $derived(story.characters.find((c) => c.relationship === 'self') ?? null)
   const sheet = $derived.by<RpgSheet | null>(() => {
     if (!protagonist) return null
-    return readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+    return sheetOrDefault(protagonist.metadata)
   })
 
   let showAllSkills = $state(false)

@@ -3028,21 +3028,12 @@ class StoryStore {
 
       // Widened before-state capture: the reducer touches characters the
       // classifier never flagged, and rollback must cover them too.
-      if (
-        trackingEnabled &&
-        !createdCharacterIds.includes(character.id) &&
-        !charactersBefore.some((cb) => cb.id === character.id)
-      ) {
-        charactersBefore.push({
-          id: character.id,
-          name: character.name,
-          status: character.status,
-          relationship: character.relationship,
-          traits: [...character.traits],
-          visualDescriptors: { ...character.visualDescriptors },
-          metadata: character.metadata ? { ...character.metadata } : null,
-        })
-      }
+      this.captureCharacterBeforeState(
+        character,
+        trackingEnabled,
+        charactersBefore,
+        createdCharacterIds,
+      )
 
       await this.wrapUpdate('BE body state', character.name, async () => {
         const { entity: ownedChar, wasCowed } = await this.cowCharacter(character)
@@ -3078,6 +3069,34 @@ class StoryStore {
    * nothing, mirroring applyBeEvents' no-entryId skip. Do not move this spend
    * pre-narration: it would break rollback and the single-writer rule.
    */
+  /**
+   * Rollback capture shared by applyBeEvents and applyRpgTurn: push a
+   * character's before-state once, unless it was created this turn.
+   */
+  private captureCharacterBeforeState(
+    character: Character,
+    trackingEnabled: boolean,
+    charactersBefore: CharacterBeforeState[],
+    createdCharacterIds: string[],
+  ): void {
+    if (
+      !trackingEnabled ||
+      createdCharacterIds.includes(character.id) ||
+      charactersBefore.some((cb) => cb.id === character.id)
+    ) {
+      return
+    }
+    charactersBefore.push({
+      id: character.id,
+      name: character.name,
+      status: character.status,
+      relationship: character.relationship,
+      traits: [...character.traits],
+      visualDescriptors: { ...character.visualDescriptors },
+      metadata: character.metadata ? { ...character.metadata } : null,
+    })
+  }
+
   private async applyRpgTurn(
     checkRecord: CheckRecord | null,
     entryId: string | undefined,
@@ -3087,9 +3106,11 @@ class StoryStore {
     timeTrackerBefore: TimeTracker | null,
     crossings: string[],
   ): Promise<CheckRecord[]> {
-    if (!this.currentStory || !entryId) return checkRecord ? [checkRecord] : []
+    // Logs nothing on the skip paths — a checkLog row asserts "this spend
+    // landed", which would be false here (mirrors applyBeEvents' skip).
+    if (!this.currentStory || !entryId) return []
     const protagonist = this.characters.find((c) => c.relationship === 'self')
-    if (!protagonist) return checkRecord ? [checkRecord] : []
+    if (!protagonist) return []
 
     const storedSheet = readRpgSheet(protagonist.metadata)
     let sheet = storedSheet ?? defaultRpgSheet()
@@ -3107,7 +3128,12 @@ class StoryStore {
       }
     }
 
-    // 2. Time-period regen: +2 per 6h period crossed this turn, clamped to max.
+    // 2. Milestone level grants (idempotent via awardedMilestones). Grants run
+    //    BEFORE regen so a same-turn level-up raises the max the regen clamps
+    //    against — otherwise the player is shorted the difference.
+    sheet = applyLevelGrants(sheet, crossings).sheet
+
+    // 3. Time-period regen: +2 per 6h period crossed this turn, clamped to max.
     if (timeTrackerBefore && this.currentStory.timeTracker) {
       const periods = periodIndex(this.currentStory.timeTracker) - periodIndex(timeTrackerBefore)
       if (periods > 0) {
@@ -3123,9 +3149,6 @@ class StoryStore {
         }
       }
     }
-
-    // 3. Milestone level grants (idempotent via awardedMilestones).
-    sheet = applyLevelGrants(sheet, crossings).sheet
 
     // 4. Drift: previous turn's note expires; this turn's findings (if any)
     //    ride BOTH carriers — the record (roll-card tag) and the sheet
@@ -3147,21 +3170,12 @@ class StoryStore {
 
     const sheetChanged = storedSheet === null || JSON.stringify(sheet) !== sheetBeforeJson
     if (sheetChanged) {
-      if (
-        trackingEnabled &&
-        !createdCharacterIds.includes(protagonist.id) &&
-        !charactersBefore.some((cb) => cb.id === protagonist.id)
-      ) {
-        charactersBefore.push({
-          id: protagonist.id,
-          name: protagonist.name,
-          status: protagonist.status,
-          relationship: protagonist.relationship,
-          traits: [...protagonist.traits],
-          visualDescriptors: { ...protagonist.visualDescriptors },
-          metadata: protagonist.metadata ? { ...protagonist.metadata } : null,
-        })
-      }
+      this.captureCharacterBeforeState(
+        protagonist,
+        trackingEnabled,
+        charactersBefore,
+        createdCharacterIds,
+      )
 
       await this.wrapUpdate('RPG sheet', protagonist.name, async () => {
         const { entity: owned, wasCowed } = await this.cowCharacter(protagonist)
