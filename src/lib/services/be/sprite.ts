@@ -80,6 +80,8 @@ export interface SpriteAppearanceInput {
     build?: string
     distinguishing?: string
   } | null
+  /** Curated image-tag bank; part of the identity hash so edits invalidate cached sprites. */
+  imageTags?: string | null
   shape: BodyShape
   stylePreset: string
   register: string
@@ -105,7 +107,7 @@ const normalize = (value: string | undefined): string => (value ?? '').trim().to
 /** Hex hash of the identity-stable appearance — sprite-set + anchor validity key. */
 export function spriteAppearanceHash(input: SpriteAppearanceInput): string {
   const d = input.visualDescriptors
-  const canonical = [
+  const fields = [
     normalize(d?.face),
     normalize(d?.hair),
     normalize(d?.eyes),
@@ -114,8 +116,13 @@ export function spriteAppearanceHash(input: SpriteAppearanceInput): string {
     input.shape,
     normalize(input.stylePreset),
     normalize(input.register),
-  ].join(HASH_SEPARATOR)
-  return fnv1a(canonical).toString(16).padStart(8, '0')
+  ]
+  // The image-tag bank participates in identity only when set — appended as a
+  // distinct segment so characters WITHOUT a bank keep their existing hash
+  // (no mass sprite/anchor invalidation), while editing a bank regenerates.
+  const bank = normalize(input.imageTags ?? undefined)
+  if (bank) fields.push(`imgtags:${bank}`)
+  return fnv1a(fields.join(HASH_SEPARATOR)).toString(16).padStart(8, '0')
 }
 
 /** Deterministic per-set seed — every cell of a character's set shares it. */

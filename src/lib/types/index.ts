@@ -180,6 +180,13 @@ export interface Character {
   visualDescriptors: VisualDescriptors // CANONICAL baseline appearance (user-owned; identity rendering + sprite hash)
   /** Story-tracked "current look" — classifier-updated each turn; prose/scene-analysis context, NEVER identity. */
   currentVisualDescriptors?: VisualDescriptors | null
+  /**
+   * Curated image-tag bank (Kazuma-style): physical-only, comma/newline-separated
+   * identity tags that OVERRIDE the derived identity_tags for image generation
+   * (bridge/portrait/sprite). User-owned canonical identity, hidden from the story
+   * LLM. Size vocabulary is stripped at use time — the BE engine owns size.
+   */
+  imageTags?: string | null
   portrait: string | null // Data URL (data:image/...) for reference in image generation
   status: 'active' | 'inactive' | 'deceased'
   metadata: Record<string, unknown> | null

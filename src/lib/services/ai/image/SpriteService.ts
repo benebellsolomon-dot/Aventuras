@@ -62,6 +62,7 @@ function appearanceInput(character: Character): SpriteAppearanceInput {
   const state = readBodyState(character.metadata)
   return {
     visualDescriptors: character.visualDescriptors ?? null,
+    imageTags: character.imageTags ?? null,
     shape: state?.shape ?? 'natural',
     stylePreset: 'semireal',
     register: 'color',
@@ -245,6 +246,7 @@ export class SpriteAnchorService {
       const input: SpriteCellInput = {
         name: character.name,
         visualDescriptors: character.visualDescriptors ?? null,
+        imageTags: character.imageTags ?? null,
         bandIndex,
         expression: cell.expression,
         engorged: cell.engorged,

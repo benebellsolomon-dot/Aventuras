@@ -11,7 +11,7 @@
  */
 
 import type { StructuredImageSpecInput } from './providers/types'
-import { identityTagsFromDescriptors, mapBridgeBuild } from './bridgeSpec'
+import { resolveIdentityTags, mapBridgeBuild } from './bridgeSpec'
 import { bandRepresentativeTier, bandWord, type SpriteExpression } from '$lib/services/be'
 
 export interface SpriteCellInput {
@@ -24,6 +24,8 @@ export interface SpriteCellInput {
     clothing?: string
     distinguishing?: string
   } | null
+  /** Curated image-tag bank; overrides derived identity tags when set. */
+  imageTags?: string | null
   bandIndex: number
   expression: SpriteExpression
   engorged: boolean
@@ -87,7 +89,7 @@ export function buildSpriteSpec(input: SpriteCellInput): StructuredImageSpecInpu
       {
         tier_index: bandRepresentativeTier(input.bandIndex),
         build: mapBridgeBuild(input.visualDescriptors?.build),
-        identity_tags: identityTagsFromDescriptors(input.visualDescriptors),
+        identity_tags: resolveIdentityTags(input.imageTags, input.visualDescriptors),
         appearance_excerpt: identityExcerpt(input.visualDescriptors),
       },
     ],

@@ -236,10 +236,17 @@ pub fn run() {
             description: "current_visual_descriptors",
             sql: include_str!("../migrations/037_current_visual_descriptors.sql"),
             kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 38,
+            description: "character_image_tags",
+            sql: include_str!("../migrations/038_character_image_tags.sql"),
+            kind: MigrationKind::Up,
         }
     ];
 
-    let builder = tauri::Builder::default();
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default();
 
     #[cfg(all(debug_assertions, feature = "devtools"))]
     // only enable instrumentation in development builds

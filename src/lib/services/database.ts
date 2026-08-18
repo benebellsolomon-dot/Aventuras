@@ -844,8 +844,8 @@ class DatabaseService {
   async addCharacter(character: Character): Promise<void> {
     const db = await this.getDb()
     await db.execute(
-      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, current_visual_descriptors, portrait, sprite_anchor, sprite_anchor_status, sprite_anchor_hash, status, metadata, branch_id, overrides_id, deleted, translated_name, translated_description, translated_relationship, translated_traits, translated_visual_descriptors, translation_language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, current_visual_descriptors, image_tags, portrait, sprite_anchor, sprite_anchor_status, sprite_anchor_hash, status, metadata, branch_id, overrides_id, deleted, translated_name, translated_description, translated_relationship, translated_traits, translated_visual_descriptors, translation_language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         character.id,
         character.storyId,
@@ -857,6 +857,7 @@ class DatabaseService {
         character.currentVisualDescriptors
           ? JSON.stringify(character.currentVisualDescriptors)
           : null,
+        character.imageTags || null,
         character.portrait || null,
         // Anchor fields ride every re-persist path (retry-restore, COW copy,
         // branch fork) — omitting them here silently wiped approved anchors.
@@ -910,6 +911,10 @@ class DatabaseService {
       values.push(
         updates.currentVisualDescriptors ? JSON.stringify(updates.currentVisualDescriptors) : null,
       )
+    }
+    if (updates.imageTags !== undefined) {
+      setClauses.push('image_tags = ?')
+      values.push(updates.imageTags || null)
     }
     if (updates.portrait !== undefined) {
       setClauses.push('portrait = ?')
@@ -2773,6 +2778,7 @@ class DatabaseService {
       currentVisualDescriptors: row.current_visual_descriptors
         ? migrateVisualDescriptors(JSON.parse(row.current_visual_descriptors))
         : null,
+      imageTags: row.image_tags || null,
       portrait: row.portrait || null,
       status: row.status,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,

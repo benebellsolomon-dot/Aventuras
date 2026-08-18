@@ -57,6 +57,7 @@
   let editStatus = $state<Character['status']>('active')
   let editTraits = $state('')
   let editVisualDescriptors = $state('')
+  let editImageTags = $state('')
   let pendingProtagonistId = $state<string | null>(null)
   let previousRelationshipLabel = $state('')
   let swapError = $state<string | null>(null)
@@ -216,6 +217,7 @@
     editStatus = character.status
     editTraits = character.traits.join(', ')
     editVisualDescriptors = descriptorsToString(character.visualDescriptors)
+    editImageTags = character.imageTags ?? ''
     editPortrait = character.portrait
     portraitError = null
     // Initialize runtime vars from entity metadata
@@ -230,6 +232,7 @@
     editRelationship = ''
     editTraits = ''
     editVisualDescriptors = ''
+    editImageTags = ''
     editStatus = 'active'
     editPortrait = null
     portraitError = null
@@ -267,6 +270,7 @@
       status: editStatus,
       traits,
       visualDescriptors,
+      imageTags: editImageTags.trim() || null,
       portrait: editPortrait,
       metadata: updatedMetadata,
     })
@@ -498,6 +502,7 @@
       const base64 = await sdkGeneratePortrait(portraitPrompt, {
         name: character.name,
         visualDescriptors: stringToDescriptors(editVisualDescriptors),
+        imageTags: editImageTags.trim() || character.imageTags || null,
         metadata: character.metadata,
       })
 
@@ -692,6 +697,19 @@
                   placeholder="Appearance (comma separated)"
                   class="h-8 text-xs"
                 />
+                <div class="mt-2 space-y-1">
+                  <Label class="text-xs">Image Tag Bank</Label>
+                  <Textarea
+                    bind:value={editImageTags}
+                    placeholder="Locked identity tags for image generation, e.g. long silver hair, violet eyes, elf ears, freckles"
+                    class="min-h-[56px] text-xs"
+                  />
+                  <p class="text-muted-foreground text-xs">
+                    Physical-only tags that lock this character's look across every generated image
+                    (overrides the appearance line above). Leave empty to derive from appearance.
+                    Don't include size — the transformation engine controls that.
+                  </p>
+                </div>
                 {#if character.currentVisualDescriptors && Object.values(character.currentVisualDescriptors).some((v) => v)}
                   <div class="border-border bg-muted/20 mt-1 rounded-md border p-2">
                     <div class="text-muted-foreground mb-1 text-xs font-medium">

@@ -37,6 +37,8 @@ export interface BridgeSpecSubject {
     clothing?: string
     distinguishing?: string
   } | null
+  /** Curated image-tag bank; overrides derived identity tags when set (see resolveIdentityTags). */
+  imageTags?: string | null
   metadata: Record<string, unknown> | null
 }
 
@@ -72,6 +74,36 @@ export function identityTagsFromDescriptors(
   const plain = [...atomicTags(d.hair), ...atomicTags(d.eyes)]
   const tags = [...emphasized, ...plain]
   return tags.length > 0 ? tags : undefined
+}
+
+/**
+ * Parse a curated image-tag bank into atomic identity tags. Splits on comma,
+ * semicolon, and newline; strips size vocabulary (BAND_WORD_PATTERN) so a stray
+ * size word in the bank can never fight the engine's tier authority. Tags are
+ * kept verbatim otherwise — the user curates order and any (tag:weight) emphasis.
+ */
+export function curatedIdentityTags(imageTags: string | null | undefined): string[] | undefined {
+  const tags = (imageTags ?? '')
+    .split(/[;,\n]/)
+    .map((t) =>
+      t
+        .replace(BAND_WORD_PATTERN, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim(),
+    )
+    .filter((t) => t.length >= MIN_TAG_LENGTH)
+  return tags.length > 0 ? tags : undefined
+}
+
+/**
+ * The identity_tags for a subject: the curated bank wins when present, otherwise
+ * fall back to tags derived from the canonical visual descriptors.
+ */
+export function resolveIdentityTags(
+  imageTags: string | null | undefined,
+  d: BridgeSpecSubject['visualDescriptors'],
+): string[] | undefined {
+  return curatedIdentityTags(imageTags) ?? identityTagsFromDescriptors(d)
 }
 
 // Bridge build vocabulary: petite/slim/average/curvy/athletic/full.
@@ -193,7 +225,7 @@ export function buildStructuredImageSpec(
       tier_index: bridgeTierIndex(state.tier),
       breast_shape: state.shape,
       build: mapBridgeBuild(subject.visualDescriptors?.build),
-      identity_tags: identityTagsFromDescriptors(subject.visualDescriptors),
+      identity_tags: resolveIdentityTags(subject.imageTags, subject.visualDescriptors),
       appearance_excerpt: appearanceExcerpt(subject),
     })
     for (const moment of growthMoments(state)) {
@@ -274,7 +306,7 @@ export function buildPortraitSpec(subject: BridgeSpecSubject): StructuredImageSp
         tier_index: bridgeTierIndex(tier),
         breast_shape: state?.shape,
         build: mapBridgeBuild(d?.build),
-        identity_tags: identityTagsFromDescriptors(d),
+        identity_tags: resolveIdentityTags(subject.imageTags, d),
         appearance_excerpt: descriptorText || undefined,
       },
     ],
