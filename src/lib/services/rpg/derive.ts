@@ -56,6 +56,29 @@ export function oddsBand(odds: number): OddsBand {
   return 'longshot'
 }
 
+// ---- Presentation helpers (CheckCard / DC chips / turn log) — pure so the
+// .svelte files stay markup-only (research/47 testability constraint) ----
+
+import type { CheckBand, CheckRecord } from './types'
+import { SKILL_BY_ID as SKILL_DEFS } from './constants'
+
+export const BAND_LABELS: Readonly<Record<CheckBand, string>> = {
+  crit: 'Critical Success',
+  success: 'Success',
+  partial: 'Partial Success',
+  fail: 'Failure',
+}
+
+/** Monospace math line for the roll card / turn log. */
+export function formatCheckMath(record: CheckRecord): string {
+  const label = SKILL_DEFS.get(record.skill)?.label ?? record.skill
+  if (record.insufficientEssence) {
+    return `${label} — not attempted (insufficient essence)`
+  }
+  const sign = record.bonus >= 0 ? '+' : ''
+  return `${label} d20 ${record.nat} ${sign}${record.bonus} = ${record.total} vs DC ${record.dc}`
+}
+
 export function defaultRpgSheet(): RpgSheet {
   const attributes = {} as Record<AttributeId, number>
   for (const id of ATTRIBUTE_IDS) attributes[id] = 10

@@ -5,6 +5,35 @@
   import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
   import { Button } from '$lib/components/ui/button'
   import { cn } from '$lib/utils/cn'
+  import {
+    checkBonus,
+    oddsBand,
+    readRpgSheet,
+    defaultRpgSheet,
+    successOdds,
+    SKILL_BY_ID,
+  } from '$lib/services/rpg'
+
+  // RPG DC chips (research/47 Step 11): only in beMode with a protagonist.
+  const rpgSheet = $derived.by(() => {
+    if (story.currentStory?.settings?.beMode !== true) return null
+    const protagonist = story.characters.find((c) => c.relationship === 'self')
+    if (!protagonist) return null
+    return readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+  })
+
+  const oddsClasses = {
+    favored: 'text-emerald-400 border-emerald-500/40',
+    even: 'text-yellow-400 border-yellow-500/40',
+    longshot: 'text-red-400 border-red-500/40',
+  } as const
+
+  function chipFor(choice: ActionChoice) {
+    if (!rpgSheet || !choice.skill || !choice.dc) return null
+    const label = SKILL_BY_ID.get(choice.skill)?.label ?? choice.skill
+    const odds = successOdds(checkBonus(rpgSheet, choice.skill), choice.dc)
+    return { label, dc: choice.dc, cls: oddsClasses[oddsBand(odds)], cost: choice.essenceCost ?? 0 }
+  }
 
   // Icon mapping for choice types
   const typeIcons = {
@@ -91,6 +120,14 @@
         >
           {choice.text}
         </span>
+        {@const chip = chipFor(choice)}
+        {#if chip}
+          <span
+            class="ml-auto shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] {chip.cls}"
+          >
+            {chip.label} DC {chip.dc}{chip.cost > 0 ? ` · ⬡${chip.cost}` : ''}
+          </span>
+        {/if}
       </Button>
     {/each}
   </div>

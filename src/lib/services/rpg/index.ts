@@ -28,8 +28,10 @@ export {
 } from './constants'
 export {
   attributeMod,
+  BAND_LABELS,
   checkBonus,
   defaultRpgSheet,
+  formatCheckMath,
   essenceMax,
   oddsBand,
   periodIndex,

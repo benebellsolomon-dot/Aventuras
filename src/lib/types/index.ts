@@ -696,7 +696,14 @@ export type ActivePanel =
   | 'memory'
   | 'vault'
   | 'gallery'
-export type SidebarTab = 'characters' | 'locations' | 'inventory' | 'quests' | 'time' | 'branches'
+export type SidebarTab =
+  | 'characters'
+  | 'locations'
+  | 'inventory'
+  | 'quests'
+  | 'time'
+  | 'branches'
+  | 'sheet'
 
 export interface UIState {
   activePanel: ActivePanel

@@ -85,6 +85,45 @@ describe('successOdds / oddsBand', () => {
   })
 })
 
+describe('formatCheckMath', () => {
+  it('renders the labeled monospace math line', async () => {
+    const { formatCheckMath } = await import('./derive')
+    expect(
+      formatCheckMath({
+        action: 'x',
+        skill: 'alchemy',
+        dc: 14,
+        nat: 15,
+        bonusBreakdown: { attribute: 3, ranks: 2, modifiers: [] },
+        bonus: 5,
+        total: 20,
+        margin: 6,
+        band: 'success',
+        essenceSpent: 0,
+      }),
+    ).toBe('Alchemy d20 15 +5 = 20 vs DC 14')
+  })
+
+  it('renders the insufficient-essence variant', async () => {
+    const { formatCheckMath } = await import('./derive')
+    expect(
+      formatCheckMath({
+        action: 'x',
+        skill: 'channeling',
+        dc: 10,
+        nat: 0,
+        bonusBreakdown: { attribute: 0, ranks: 0, modifiers: [] },
+        bonus: 0,
+        total: 0,
+        margin: -10,
+        band: 'fail',
+        essenceSpent: 0,
+        insufficientEssence: true,
+      }),
+    ).toBe('Channeling — not attempted (insufficient essence)')
+  })
+})
+
 describe('defaultRpgSheet', () => {
   it('level 1, all attributes 10, no ranks, essence full', () => {
     const sheet = defaultRpgSheet()

@@ -40,6 +40,7 @@
   import { database } from '$lib/services/database'
   import { onMount } from 'svelte'
   import ReasoningBlock from './ReasoningBlock.svelte'
+  import CheckCard from './CheckCard.svelte'
   import { countTokens } from '$lib/services/tokenizer'
   import { Button } from '$lib/components/ui/button'
   import { Textarea } from '$lib/components/ui/textarea'
@@ -1364,6 +1365,11 @@
 
         {#if entry.type === 'narration'}
           {@const displayContent = entry.translatedContent ?? entry.content}
+          {#if entry.worldStateDelta?.checkLog?.length}
+            {#each entry.worldStateDelta.checkLog as checkRecord, i (i)}
+              <CheckCard record={checkRecord} beLog={entry.worldStateDelta?.beLog ?? []} />
+            {/each}
+          {/if}
           {#if visualProseMode}
             <!-- Visual Prose mode (handles both agentic and inline images) -->
             {@html processVisualProseStoryContent(
