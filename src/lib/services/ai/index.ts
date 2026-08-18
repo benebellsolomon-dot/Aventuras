@@ -67,15 +67,9 @@ import {
 } from './image'
 import type { InlineImageContext, ImageAnalysisContext } from './image'
 import { generateImage as registryGenerateImage } from './image/providers/registry'
-import { sizeBandMarker } from './image/sizeBandMarker'
-import { maybeBuildBridgeSpec } from './image/bridgeSpec'
+import { assembleInlineImage } from './image/inlineAssembly'
+import { type ResolvedLora } from './image/loraBinding'
 import type { StructuredImageSpecInput } from './image/providers/types'
-import {
-  groundImagePromptSize,
-  imageStateCues,
-  soloBodyState,
-  uniformBodyStateTier,
-} from '$lib/services/be'
 import { EntryInjector, MemoryService, NarrativeService } from './generation'
 import type {
   ClassificationContext,
@@ -1071,28 +1065,19 @@ class AIService {
       return
     }
 
-    // Build full prompt with style. BE grounding + cues + marker + structured
-    // spec — the same treatment as the inline path (this was the C7 markerless
-    // gap: analyzed scenes ignored engine state entirely).
+    // Build the request via the shared inline-image assembly (BE grounding +
+    // cues + per-character LoRA trigger words + tier-scaled LoRA file + marker +
+    // style + si-bridge spec) so the analyzed path matches the two inline paths
+    // and can't drift.
     const stylePrompt = await this.getStylePrompt(styleId)
-    const beTier = beMode ? uniformBodyStateTier(presentCharacters, scene.characters) : null
-    const groundedScene =
-      beTier !== null ? groundImagePromptSize(scene.prompt, beTier) : scene.prompt
-    let groundedPrompt = groundedScene
-    if (beMode) {
-      const solo = soloBodyState(presentCharacters, scene.characters)
-      const cues = solo ? imageStateCues(solo) : []
-      if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
-    }
-    const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
-
-    const bridgeSpec: StructuredImageSpecInput | undefined = maybeBuildBridgeSpec({
-      providerType: getImageProfile(profileId)?.providerType,
-      beMode,
+    const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters,
-      tagCharacterNames: scene.characters,
-      sceneText: groundedScene,
+      tagPrompt: scene.prompt,
+      tagCharacters: scene.characters,
+      beMode,
+      stylePrompt,
       narrativeText: scene.sourceText ?? '',
+      providerType: getImageProfile(profileId)?.providerType,
     })
 
     const { width, height } = parseImageSize(sizeToUse)
@@ -1135,6 +1120,7 @@ class AIService {
       presentCharacters,
       referenceImageUrls,
       bridgeSpec,
+      loraOverride,
     ).catch((error) => {
       log('Async analyzed image generation failed', { imageId, error })
     })
@@ -1154,6 +1140,7 @@ class AIService {
     presentCharacters: Character[],
     referenceImageUrls?: string[],
     spec?: StructuredImageSpecInput,
+    loraOverride?: ResolvedLora,
   ): Promise<void> {
     try {
       // Update status to generating
@@ -1165,6 +1152,7 @@ class AIService {
         model,
         sceneType: scene.sceneType,
         hasReference: !!referenceImageUrls?.length,
+        hasLora: !!loraOverride,
       })
 
       // Generate image using SDK
@@ -1175,6 +1163,7 @@ class AIService {
         size,
         referenceImages: referenceImageUrls,
         spec,
+        loraOverride,
       })
 
       if (!result.base64) {
