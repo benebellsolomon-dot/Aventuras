@@ -93,6 +93,31 @@ export {
   type BeCharacterCondition,
 } from './schema'
 export { buildBeStateBlock, type BeStateEntry } from './context'
+export {
+  applyBondEvents,
+  applyExposure,
+  bondCheckModifier,
+  bondOf,
+  bondStance,
+  clampTrack,
+  decayDependence,
+  dependenceOf,
+  dependenceStage,
+  withdrawalCondition,
+  type BondStance,
+  type DependenceStage,
+  type TrackDelta,
+} from './tracks'
+export {
+  assignQuirks,
+  hasQuirk,
+  QUIRK_BY_ID,
+  QUIRK_IDS,
+  QUIRKS,
+  readQuirks,
+  type QuirkDef,
+  type QuirkId,
+} from './quirks'
 export { detectDrift } from './drift'
 export { INTERACTION_MILESTONES, nextMilestone, type InteractionMilestone } from './milestones'
 export {

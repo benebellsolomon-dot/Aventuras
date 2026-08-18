@@ -115,3 +115,24 @@ export function parseGrowthEligibleKinds(
   )
   return kinds.length > 0 ? kinds : undefined
 }
+
+// ---- Phase 2 harem tracks (research/48 R6) ----
+// ⚠ D5: reference defaults — re-derive against real play cadence data.
+
+/** Net absolute bond movement per character per turn — SYMMETRIC (caps warming
+ * AND strain). The primary anti-positivity-bias lever: one gushing scene can't
+ * max the track. */
+export const MAX_BOND_DELTA_PER_TURN = 5
+/** Dependence gain cap per character per turn (gain only; decay is 1/turn). */
+export const MAX_DEPENDENCE_GAIN_PER_TURN = 4
+export const BOND_DELTA_PER_INTENSITY = 2
+export const DEPENDENCE_GAIN_PER_INTENSITY = 2
+export const DEPENDENCE_DECAY_PER_IDLE_BEAT = 1
+export const BOND_DEFAULT = 20
+export const DEPENDENCE_DEFAULT = 0
+export const WITHDRAWAL_DEPENDENCE_THRESHOLD = 60
+/** devoted_heart lowers the withdrawal threshold by this much. */
+export const WITHDRAWAL_THRESHOLD_DEVOTED_DELTA = 15
+export const WITHDRAWAL_IDLE_BEATS = 3
+/** At/above this dependence, an attitude-less turn pulls attitude to craving. */
+export const CRAVING_PULL_DEPENDENCE = 60

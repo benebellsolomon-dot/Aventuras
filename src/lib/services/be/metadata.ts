@@ -47,6 +47,13 @@ export const bodyStateSchema = z
     arousal: z.number().min(0).max(100).optional(),
     growthPressure: z.number().nonnegative().optional(),
     driftNote: z.object({ note: z.string() }).passthrough().optional(),
+    bond: z.number().min(0).max(100).optional(),
+    dependence: z.number().min(0).max(100).optional(),
+    // Plain strings, NOT z.enum(QUIRK_IDS): an unknown future quirk id must
+    // survive a round-trip through this (older) reader — narrowing happens at
+    // read time in quirks.ts (31a lesson 3).
+    quirks: z.array(z.string()).max(3).optional(),
+    beatsSinceExposure: z.number().int().nonnegative().optional(),
   })
   .passthrough()
 
