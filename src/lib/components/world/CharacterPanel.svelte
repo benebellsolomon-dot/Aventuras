@@ -45,6 +45,7 @@
   import IconRow from '$lib/components/ui/icon-row.svelte'
   import { DEFAULT_FALLBACK_STYLE_PROMPT } from '$lib/services/ai/image/constants'
   import { currentAppearanceHash, spriteAnchorService } from '$lib/services/ai/image/SpriteService'
+  import { ImageTagBankService } from '$lib/services/ai/image/ImageTagBankService'
 
   let showAddForm = $state(false)
   let newName = $state('')
@@ -70,6 +71,9 @@
   let uploadingPortraitId = $state<string | null>(null)
   let generatingPortraitId = $state<string | null>(null)
   let portraitError = $state<string | null>(null)
+  // Image tag bank generation state
+  let generatingTagBank = $state(false)
+  let tagBankError = $state<string | null>(null)
   // Sprite anchor state (V2a — dedicated approved anchor render)
   let generatingAnchorId = $state<string | null>(null)
   let anchorError = $state<string | null>(null)
@@ -211,6 +215,23 @@
 
     savedToVaultId = character.id
     setTimeout(() => (savedToVaultId = null), 2000)
+  }
+
+  async function generateTagBank(character: Character) {
+    generatingTagBank = true
+    tagBankError = null
+    try {
+      const service = new ImageTagBankService()
+      // Use the in-form description draft so unsaved edits inform the tags.
+      editImageTags = await service.generateTagBank({
+        ...character,
+        description: editDescription.trim() || character.description,
+      })
+    } catch (e) {
+      tagBankError = e instanceof Error ? e.message : 'Tag generation failed'
+    } finally {
+      generatingTagBank = false
+    }
   }
 
   function startEdit(character: Character) {
@@ -736,16 +757,37 @@
                   class="h-8 text-xs"
                 />
                 <div class="mt-2 space-y-1">
-                  <Label class="text-xs">Image Tag Bank</Label>
+                  <div class="flex items-center justify-between">
+                    <Label class="text-xs">Image Tag Bank</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      class="h-6 gap-1 px-2 text-xs"
+                      disabled={generatingTagBank}
+                      onclick={() => generateTagBank(character)}
+                    >
+                      {#if generatingTagBank}
+                        <Loader2 class="h-3 w-3 animate-spin" />
+                        <span>Generating...</span>
+                      {:else}
+                        <Wand2 class="h-3 w-3" />
+                        <span>Generate</span>
+                      {/if}
+                    </Button>
+                  </div>
                   <Textarea
                     bind:value={editImageTags}
                     placeholder="Locked identity tags for image generation, e.g. long silver hair, violet eyes, elf ears, freckles"
                     class="min-h-[56px] text-xs"
                   />
+                  {#if tagBankError}
+                    <p class="text-destructive text-xs">{tagBankError}</p>
+                  {/if}
                   <p class="text-muted-foreground text-xs">
                     Physical-only tags that lock this character's look across every generated image
                     (overrides the appearance line above). Leave empty to derive from appearance.
-                    Don't include size — the transformation engine controls that.
+                    Don't include size — the transformation engine controls that. Generate drafts
+                    tags from the description; review before saving.
                   </p>
                 </div>
                 <div class="mt-2 space-y-1">

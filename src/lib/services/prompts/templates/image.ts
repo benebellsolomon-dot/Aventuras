@@ -339,6 +339,34 @@ When generating a description, follow these standards:
 {{ currentResponse }}`,
 }
 
+const imageTagBankGenerationTemplate: PromptTemplate = {
+  id: 'image-tag-bank-generation',
+  name: 'Image Tag Bank Generation',
+  category: 'service',
+  description: 'Generates a locked booru identity-tag bank from a character description',
+  content: `You are an expert anime image-prompt engineer. Generate a locked identity tag bank for a character: the canonical Danbooru-style tags that render this character consistently across every generated image.
+
+## Rules
+- 12-20 comma-separated booru tags
+- PHYSICAL IDENTITY ONLY — no clothing, accessories, weapons, background, pose, or expression tags (those change scene to scene; the bank must not)
+- The character MUST read as an adult
+- Do NOT include breast-size tags (flat chest / small breasts / large breasts etc.) — body size is managed separately by the engine
+- EXACT ORDER: anchor (1girl / 1boy / 1other) → hair (length, style, color) → eyes (color, shape) → skin tone → body (height, build) → age appearance (mature female, young adult...) → distinguishing marks (scars, freckles, moles, tattoos, birthmarks, heterochromia, animal ears, horns, tail)
+- Use real Danbooru tag vocabulary as atomic tags: "long hair, wavy hair, red hair" NOT "long wavy red hair"
+- Only include tags the source material supports — never invent marks or features
+
+## Example output
+1girl, long hair, wavy hair, red hair, green eyes, tsurime, fair skin, tall, athletic, mature female, freckles, scar across cheek`,
+  userContent: `## Character
+Name: {{ characterName }}
+Description: {{ characterDescription }}
+
+## Visual Descriptors
+{{ visualDescriptorsBlock }}
+
+Generate the identity tag bank as an array of atomic booru tags.`,
+}
+
 export const imageTemplates: PromptTemplate[] = [
   classicAnimeStyleTemplate,
   softAnimeStyleTemplate,
@@ -349,4 +377,5 @@ export const imageTemplates: PromptTemplate[] = [
   imagePromptAnalysisReferenceTemplate,
   imagePortraitGenerationTemplate,
   backgroundImagePromptAnalysisTemplate,
+  imageTagBankGenerationTemplate,
 ]

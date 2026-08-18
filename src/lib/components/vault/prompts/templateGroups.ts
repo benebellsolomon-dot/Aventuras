@@ -48,6 +48,7 @@ const TEMPLATE_GROUP_MAP: Record<string, string> = {
   'image-prompt-analysis-reference': 'Image',
   'image-portrait-generation': 'Image',
   'background-image-prompt-analysis': 'Image',
+  'image-tag-bank-generation': 'Image',
 
   // Translation
   'translate-narration': 'Translation',
