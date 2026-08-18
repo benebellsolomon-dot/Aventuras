@@ -23,6 +23,7 @@ import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { sizeBandMarker } from './sizeBandMarker'
 import { maybeBuildBridgeSpec } from './bridgeSpec'
+import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
 import {
   groundImagePromptSize,
@@ -192,6 +193,22 @@ export class InlineImageGenerationService {
       const cues = solo ? imageStateCues(solo) : []
       if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
     }
+
+    // Per-character LoRA: trigger words for every tagged character (prompt text,
+    // provider-agnostic) prepended up front; a LoRA file only for a single
+    // unambiguous subject, since one workflow slot can't stack several. The
+    // weight scales with that subject's engine tier.
+    const taggedChars = context.presentCharacters.filter((c) =>
+      tag.characters.some((n) => n.toLowerCase() === c.name.toLowerCase()),
+    )
+    const triggerText = loraTriggerText(taggedChars.map((c) => c.loraConfig))
+    if (triggerText) groundedPrompt = `${triggerText}, ${groundedPrompt}`
+    let loraOverride: ResolvedLora | null = null
+    if (taggedChars.length === 1) {
+      const soloTier = soloBodyState(context.presentCharacters, tag.characters)?.tier ?? 0
+      loraOverride = resolveLora(taggedChars[0].loraConfig, soloTier)
+    }
+
     const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
 
     // si-bridge native path: send structure beside the prompt. The spec (when
@@ -263,6 +280,7 @@ export class InlineImageGenerationService {
       context.entryId,
       referenceImageUrls,
       bridgeSpec,
+      loraOverride,
     ).catch((error) => {
       log('Async inline image generation failed', { imageId, error })
     })
@@ -297,6 +315,7 @@ export class InlineImageGenerationService {
     entryId: string,
     referenceImageUrls?: string[],
     spec?: StructuredImageSpecInput,
+    loraOverride?: ResolvedLora | null,
   ): Promise<void> {
     try {
       // Update status to generating
@@ -307,6 +326,7 @@ export class InlineImageGenerationService {
         profileId,
         model,
         hasReference: !!referenceImageUrls?.length,
+        hasLora: !!loraOverride,
       })
 
       // Generate image using SDK
@@ -317,6 +337,7 @@ export class InlineImageGenerationService {
         size,
         referenceImages: referenceImageUrls,
         spec,
+        loraOverride: loraOverride ?? undefined,
       })
 
       if (!result.base64) {

@@ -102,6 +102,8 @@ export async function generateImage(options: {
   openposeStrength?: number
   /** Deterministic seed (sprite sets); providers without seed support ignore it. */
   seed?: number
+  /** Per-character LoRA (name + tier-scaled weight); merged into providerOptions.lora for LoRA-capable providers, ignored by others. */
+  loraOverride?: { name: string; strengthModel: number; strengthClip: number }
 }): Promise<ImageGenerateResult> {
   const {
     profileId,
@@ -115,6 +117,7 @@ export async function generateImage(options: {
     faceidWeight,
     openposeStrength,
     seed,
+    loraOverride,
   } = options
 
   const profile = settings.getImageProfile(profileId)
@@ -133,10 +136,16 @@ export async function generateImage(options: {
     hasReferences: !!referenceImages?.length,
   })
 
+  // A per-character LoRA overrides the profile's default lora slot. Cloud
+  // providers ignore providerOptions.lora, so this is a no-op for them.
+  const effectiveProviderOptions = loraOverride
+    ? { ...profile.providerOptions, lora: loraOverride }
+    : profile.providerOptions
+
   const config: ImageProviderConfig = {
     apiKey: profile.apiKey,
     baseUrl: profile.baseUrl,
-    providerOptions: profile.providerOptions,
+    providerOptions: effectiveProviderOptions,
     timeoutMs: settings.apiSettings.llmTimeoutMs,
   }
 
@@ -153,7 +162,7 @@ export async function generateImage(options: {
     size,
     referenceImages: cleanRefs,
     signal,
-    providerOptions: profile.providerOptions,
+    providerOptions: effectiveProviderOptions,
     spec,
     poseFaceAnchor,
     faceidWeight,

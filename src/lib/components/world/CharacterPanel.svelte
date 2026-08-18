@@ -19,7 +19,7 @@
     UserPlus,
     Save,
   } from 'lucide-svelte'
-  import type { Character } from '$lib/types'
+  import type { Character, CharacterLoraConfig } from '$lib/types'
   import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
   import {
     hasRequiredCredentials,
@@ -58,6 +58,10 @@
   let editTraits = $state('')
   let editVisualDescriptors = $state('')
   let editImageTags = $state('')
+  let editLoraName = $state('')
+  let editLoraTriggers = $state('')
+  let editLoraBaseWeight = $state('')
+  let editLoraTierScale = $state('')
   let pendingProtagonistId = $state<string | null>(null)
   let previousRelationshipLabel = $state('')
   let swapError = $state<string | null>(null)
@@ -218,6 +222,11 @@
     editTraits = character.traits.join(', ')
     editVisualDescriptors = descriptorsToString(character.visualDescriptors)
     editImageTags = character.imageTags ?? ''
+    const lora = character.loraConfig
+    editLoraName = lora?.name ?? ''
+    editLoraTriggers = lora?.triggerWords ?? ''
+    editLoraBaseWeight = lora?.baseWeight != null ? String(lora.baseWeight) : ''
+    editLoraTierScale = lora?.tierScale != null ? String(lora.tierScale) : ''
     editPortrait = character.portrait
     portraitError = null
     // Initialize runtime vars from entity metadata
@@ -233,10 +242,34 @@
     editTraits = ''
     editVisualDescriptors = ''
     editImageTags = ''
+    editLoraName = ''
+    editLoraTriggers = ''
+    editLoraBaseWeight = ''
+    editLoraTierScale = ''
     editStatus = 'active'
     editPortrait = null
     portraitError = null
     editRuntimeVars = {}
+  }
+
+  /**
+   * Assemble the LoRA config from the edit fields, or null when nothing is set.
+   * Numeric fields fall back to undefined (helper defaults) when blank/invalid.
+   */
+  function buildEditLoraConfig(): CharacterLoraConfig | null {
+    const name = editLoraName.trim()
+    const triggerWords = editLoraTriggers.trim()
+    const base = parseFloat(editLoraBaseWeight)
+    const scale = parseFloat(editLoraTierScale)
+    if (!name && !triggerWords && !Number.isFinite(base) && !Number.isFinite(scale)) {
+      return null
+    }
+    return {
+      name: name || undefined,
+      triggerWords: triggerWords || undefined,
+      baseWeight: Number.isFinite(base) ? base : undefined,
+      tierScale: Number.isFinite(scale) ? scale : undefined,
+    }
   }
 
   async function saveEdit(character: Character) {
@@ -271,6 +304,7 @@
       traits,
       visualDescriptors,
       imageTags: editImageTags.trim() || null,
+      loraConfig: buildEditLoraConfig(),
       portrait: editPortrait,
       metadata: updatedMetadata,
     })
@@ -506,6 +540,7 @@
         // from within the edit form): an emptied field means no bank, not "fall
         // back to the saved value".
         imageTags: editImageTags.trim() || null,
+        loraConfig: buildEditLoraConfig(),
         metadata: character.metadata,
       })
 
@@ -711,6 +746,42 @@
                     Physical-only tags that lock this character's look across every generated image
                     (overrides the appearance line above). Leave empty to derive from appearance.
                     Don't include size — the transformation engine controls that.
+                  </p>
+                </div>
+                <div class="mt-2 space-y-1">
+                  <Label class="text-xs">Character LoRA</Label>
+                  <Input
+                    type="text"
+                    bind:value={editLoraName}
+                    placeholder="ComfyUI LoRA filename (optional)"
+                    class="h-8 text-xs"
+                  />
+                  <Input
+                    type="text"
+                    bind:value={editLoraTriggers}
+                    placeholder="Trigger words (comma separated)"
+                    class="h-8 text-xs"
+                  />
+                  <div class="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.05"
+                      bind:value={editLoraBaseWeight}
+                      placeholder="Base weight (1)"
+                      class="h-8 text-xs"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      bind:value={editLoraTierScale}
+                      placeholder="Per-tier scale (0)"
+                      class="h-8 text-xs"
+                    />
+                  </div>
+                  <p class="text-muted-foreground text-xs">
+                    Trigger words are added to every image prompt (all providers). The LoRA file +
+                    weight apply on ComfyUI; per-tier scale raises the weight as this character
+                    grows (weight = base + scale × tier).
                   </p>
                 </div>
                 {#if character.currentVisualDescriptors && Object.values(character.currentVisualDescriptors).some((v) => v)}

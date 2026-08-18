@@ -39,6 +39,8 @@ export interface BridgeSpecSubject {
   } | null
   /** Curated image-tag bank; overrides derived identity tags when set (see resolveIdentityTags). */
   imageTags?: string | null
+  /** Per-character LoRA binding (trigger words + tier-scaled weight); consumed by the portrait/inline paths. */
+  loraConfig?: import('$lib/types').CharacterLoraConfig | null
   metadata: Record<string, unknown> | null
 }
 

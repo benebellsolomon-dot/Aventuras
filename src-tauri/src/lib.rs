@@ -242,6 +242,12 @@ pub fn run() {
             description: "character_image_tags",
             sql: include_str!("../migrations/038_character_image_tags.sql"),
             kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 39,
+            description: "character_lora_config",
+            sql: include_str!("../migrations/039_character_lora_config.sql"),
+            kind: MigrationKind::Up,
         }
     ];
 

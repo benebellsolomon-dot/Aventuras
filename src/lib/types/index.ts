@@ -4,6 +4,22 @@ export type POV = 'first' | 'second' | 'third'
 export type Tense = 'past' | 'present'
 
 // Visual descriptors for character appearance (used for image generation)
+/**
+ * Per-character LoRA binding for image generation.
+ * - triggerWords are prepended to the image prompt (provider-agnostic).
+ * - name + weight feed a LoRA-capable provider (ComfyUI); ignored by cloud.
+ * - the effective weight scales with the BE engine tier:
+ *     weight = clamp(baseWeight + tierScale * tier, 0, maxWeight)
+ *   so a size LoRA can strengthen as a character grows (tierScale 0 = flat).
+ */
+export interface CharacterLoraConfig {
+  name?: string // ComfyUI LoRA filename (empty = trigger-words only, no LoRA file)
+  triggerWords?: string // injected into the image prompt
+  baseWeight?: number // strength at tier 0 (default 1)
+  tierScale?: number // strength added per engine tier (default 0 = flat)
+  maxWeight?: number // upper clamp for the scaled weight (default 1.5)
+}
+
 export interface VisualDescriptors {
   face?: string // Skin tone, facial features, expression, age indicators
   hair?: string // Color, length, style, texture
@@ -187,6 +203,8 @@ export interface Character {
    * LLM. Size vocabulary is stripped at use time — the BE engine owns size.
    */
   imageTags?: string | null
+  /** Per-character LoRA binding for image generation (trigger words + tier-scaled weight). */
+  loraConfig?: CharacterLoraConfig | null
   portrait: string | null // Data URL (data:image/...) for reference in image generation
   status: 'active' | 'inactive' | 'deceased'
   metadata: Record<string, unknown> | null
