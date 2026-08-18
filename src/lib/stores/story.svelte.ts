@@ -29,10 +29,13 @@ import { settings } from './settings.svelte'
 import {
   DEFAULT_BE_STORY_CONFIG,
   INTERACTION_MILESTONES,
+  assignQuirks,
   beConditionsFromResult,
   beEventsFromResult,
   beSoftStatesFromResult,
+  bondEventsFromResult,
   defaultBodyState,
+  exposureEventsFromResult,
   detectDrift,
   measurements,
   parseGrowthEligibleKinds,
@@ -43,6 +46,8 @@ import {
   type BeLogRecord,
   type BeSoftState,
   type BodyCondition,
+  type BondEvent,
+  type ExposureEvent,
 } from '$lib/services/be'
 import {
   ESSENCE_REGEN_PER_PERIOD,
@@ -2872,6 +2877,8 @@ class StoryStore {
     const events = beEventsFromResult(result as unknown as Record<string, unknown>)
     const softStates = beSoftStatesFromResult(result as unknown as Record<string, unknown>)
     const softConditions = beConditionsFromResult(result as unknown as Record<string, unknown>)
+    const bondEvents = bondEventsFromResult(result as unknown as Record<string, unknown>)
+    const exposureEvents = exposureEventsFromResult(result as unknown as Record<string, unknown>)
 
     // Group events by resolved character (same case-insensitive matching as the entity loops).
     const eventsByCharacterId = new SvelteMap<string, typeof events>()
@@ -2893,6 +2900,27 @@ class StoryStore {
       )
       if (!target || target.relationship === 'self') continue
       softStateByCharacterId.set(target.id, soft)
+    }
+    // Track events resolve the same way (research/48 Step 5).
+    const bondEventsByCharacterId = new SvelteMap<string, BondEvent[]>()
+    for (const event of bondEvents) {
+      const target = this.characters.find(
+        (c) => c.name.toLowerCase() === event.character.toLowerCase(),
+      )
+      if (!target || target.relationship === 'self') continue
+      const bucket = bondEventsByCharacterId.get(target.id) ?? []
+      bucket.push(event)
+      bondEventsByCharacterId.set(target.id, bucket)
+    }
+    const exposureEventsByCharacterId = new SvelteMap<string, ExposureEvent[]>()
+    for (const event of exposureEvents) {
+      const target = this.characters.find(
+        (c) => c.name.toLowerCase() === event.character.toLowerCase(),
+      )
+      if (!target || target.relationship === 'self') continue
+      const bucket = exposureEventsByCharacterId.get(target.id) ?? []
+      bucket.push(event)
+      exposureEventsByCharacterId.set(target.id, bucket)
     }
     // Classifier-proposed conditions resolve the same way (Spec 1 Task 4).
     const conditionsByCharacterId = new SvelteMap<string, BodyCondition[]>()
@@ -2939,6 +2967,8 @@ class StoryStore {
       const charEvents = eventsByCharacterId.get(character.id) ?? []
       const charSoftState = softStateByCharacterId.get(character.id)
       const charConditions = conditionsByCharacterId.get(character.id)
+      const charBondEvents = bondEventsByCharacterId.get(character.id) ?? []
+      const charExposureEvents = exposureEventsByCharacterId.get(character.id) ?? []
       const isPresent = presentNames.has(character.name.toLowerCase())
       let state = readBodyState(character.metadata)
 
@@ -2954,7 +2984,12 @@ class StoryStore {
           character.description ?? '',
         ].join('\n')
         const sniffedTier = sniffTierFromText(sniffSource)
-        state = defaultBodyState(sniffedTier ?? undefined, this.currentStory?.settings?.beFluidType)
+        state = {
+          ...defaultBodyState(sniffedTier ?? undefined, this.currentStory?.settings?.beFluidType),
+          // Quirks are identity: keyed on story+character ONLY (never entryId,
+          // or a retry rerolls her personality — research/48 R3).
+          quirks: assignQuirks(`${storyId}:${character.id}:quirks`),
+        }
         seeded = true
         pendingLog.push({
           character: character.name,
@@ -2962,13 +2997,30 @@ class StoryStore {
           outcome: 'none',
           delta: 0,
           tierAfter: state.tier,
-          note: sniffedTier !== null ? 'tier sniffed from descriptors' : 'default tier',
+          note: `${sniffedTier !== null ? 'tier sniffed from descriptors' : 'default tier'}; quirks: ${state.quirks?.join(', ')}`,
+        })
+      } else if (state.quirks === undefined) {
+        // Lazy backfill for pre-Phase-2 saves: same seed → same quirks, and the
+        // undefined guard makes it idempotent across replays. Must happen
+        // BEFORE the reduce or the first post-upgrade turn applies no quirk
+        // effects while the prompt already advertises them.
+        state = { ...state, quirks: assignQuirks(`${storyId}:${character.id}:quirks`) }
+        seeded = true // force the write even if the reduce is otherwise a no-op
+        pendingLog.push({
+          character: character.name,
+          kind: 'seed',
+          outcome: 'none',
+          delta: 0,
+          tierAfter: state.tier,
+          note: `quirks assigned: ${state.quirks?.join(', ')}`,
         })
       } else if (
         !isPresent &&
         charEvents.length === 0 &&
         !charSoftState &&
         !charConditions &&
+        charBondEvents.length === 0 &&
+        charExposureEvents.length === 0 &&
         state.cooldown === 0 &&
         !state.lastGrowth &&
         !state.pendingGrowth &&
@@ -3001,6 +3053,8 @@ class StoryStore {
           ticksEnabled: isPresent || charEvents.length > 0,
           ...(charConditions ? { softConditions: charConditions } : {}),
           ...(driftFindings.length > 0 ? { driftFindings } : {}),
+          ...(charBondEvents.length > 0 ? { bondEvents: charBondEvents } : {}),
+          ...(charExposureEvents.length > 0 ? { exposureEvents: charExposureEvents } : {}),
         },
       )
       pendingLog.push(...reducerLog)

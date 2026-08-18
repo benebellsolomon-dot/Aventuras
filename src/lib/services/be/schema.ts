@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 import { MAX_BE_CONDITIONS } from './constants'
-import type { BeEvent, BeSoftState } from './types'
+import type { BeEvent, BeSoftState, BondEvent, ExposureEvent } from './types'
 
 export const beEventSchema = z.object({
   character: z.string().describe('Exact name of the affected female character'),
@@ -66,6 +66,27 @@ export const beConditionSchema = z.object({
 const BE_CONDITIONS_DESCRIPTION =
   'Transient body conditions the scene ESTABLISHED this response (enchantments, states, afflictions affecting her transformation). Empty array when none.'
 
+export const bondEventSchema = z.object({
+  character: z.string().describe('Exact name of the female character'),
+  direction: z
+    .enum(['warm', 'strain'])
+    .describe(
+      'warm=the moment drew her closer to him; strain=it pushed her away or past her comfort',
+    ),
+  intensity: z.number().describe('1=a small moment, 2=a meaningful beat, 3=scene-defining'),
+})
+
+const BOND_EVENTS_DESCRIPTION =
+  'Relationship movement between the protagonist and a female character that this response EVIDENCED. Report strain as readily as warmth — a scene where he pushed her past her comfort is a strain event, not an omission. Report what happened between them, never how much she now likes him; the engine owns the number. Empty array when the scene moved no relationship.'
+
+export const exposureEventSchema = z.object({
+  character: z.string().describe('Exact name of the female character'),
+  intensity: z.number().describe('1=trace dose, 2=a full dose, 3=heavy or prolonged exposure'),
+})
+
+const EXPOSURE_EVENTS_DESCRIPTION =
+  'Catalyst exposure this response: one event per scene in which she took the catalyst into her body (drank, absorbed, was infused), intensity by dose/duration. Distinct from beEvents — this feeds her dependence, not her growth. Empty array when no one was exposed.'
+
 /**
  * Extend a classification schema (base or runtime-vars-extended — both are object
  * schemas with entryUpdates + scene) with the top-level beEvents array.
@@ -92,6 +113,16 @@ export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.Zod
       .max(MAX_BE_CONDITIONS)
       .default([])
       .describe(BE_CONDITIONS_DESCRIPTION),
+    bondEvents: z
+      .array(bondEventSchema)
+      .max(MAX_BE_EVENTS_PER_TURN)
+      .default([])
+      .describe(BOND_EVENTS_DESCRIPTION),
+    exposureEvents: z
+      .array(exposureEventSchema)
+      .max(MAX_BE_EVENTS_PER_TURN)
+      .default([])
+      .describe(EXPOSURE_EVENTS_DESCRIPTION),
   })
 }
 
@@ -120,7 +151,15 @@ Omit fields without evidence; empty array when nothing changed.
 
 Also fill the top-level \`beConditions\` array with transient body conditions the scene ESTABLISHED (enchantments, blessings/curses, physical states affecting her transformation — e.g. "buoyancy charm", "lactation surge"):
 - \`label\` = a short reusable name; \`note\` = one-phrase detail when given; \`ttl\` = how many turns it should persist, omitted for until-resolved.
-- Report only conditions the prose actually established; empty array when none.`
+- Report only conditions the prose actually established; empty array when none.
+
+Also fill the top-level \`bondEvents\` array with relationship movement this response evidenced:
+- \`direction\`: warm (the moment drew her closer to him) or strain (it pushed her away or past her comfort). Report strain as readily as warmth — a scene where he pushed her past her comfort is a strain event, not an omission.
+- Report what HAPPENED between them, never how much she now likes him — the engine owns the number. \`intensity\` = 1 (small moment) to 3 (scene-defining).
+
+Also fill the top-level \`exposureEvents\` array with catalyst exposure:
+- One event per scene in which she took the catalyst into her body (drank, absorbed, was infused). \`intensity\` by dose/duration: 1 trace, 2 full dose, 3 heavy/prolonged.
+- Distinct from beEvents: exposure feeds her dependence, not her growth. Empty array when no one was exposed.`
 
   // Settings JSON is unvalidated at load — a non-string here must not throw
   // (this runs in the classification hot path, outside its try/catch).
@@ -166,6 +205,30 @@ export function beConditionsFromResult(result: Record<string, unknown>): BeChara
     if (parsed.success) conditions.push(parsed.data)
   }
   return conditions
+}
+
+/** Pull validated bond events off a classification result (same tolerance rules). */
+export function bondEventsFromResult(result: Record<string, unknown>): BondEvent[] {
+  const raw = result['bondEvents']
+  if (!Array.isArray(raw)) return []
+  const events: BondEvent[] = []
+  for (const candidate of raw.slice(0, MAX_BE_EVENTS_PER_TURN)) {
+    const parsed = bondEventSchema.safeParse(candidate)
+    if (parsed.success) events.push(parsed.data)
+  }
+  return events
+}
+
+/** Pull validated exposure events off a classification result (same tolerance rules). */
+export function exposureEventsFromResult(result: Record<string, unknown>): ExposureEvent[] {
+  const raw = result['exposureEvents']
+  if (!Array.isArray(raw)) return []
+  const events: ExposureEvent[] = []
+  for (const candidate of raw.slice(0, MAX_BE_EVENTS_PER_TURN)) {
+    const parsed = exposureEventSchema.safeParse(candidate)
+    if (parsed.success) events.push(parsed.data)
+  }
+  return events
 }
 
 /** Pull validated soft-state reads off a classification result (same tolerance rules). */

@@ -88,7 +88,11 @@ export {
   beEventsFromResult,
   beSoftStateSchema,
   beSoftStatesFromResult,
+  bondEventSchema,
+  bondEventsFromResult,
   buildBeEventInstructions,
+  exposureEventSchema,
+  exposureEventsFromResult,
   extendClassificationSchemaWithBeEvents,
   type BeCharacterCondition,
 } from './schema'
