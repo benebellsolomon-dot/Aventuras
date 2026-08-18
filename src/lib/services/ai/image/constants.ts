@@ -7,4 +7,4 @@ export const DEFAULT_AVG_IMAGE_TOKENS = 1000
 
 export const IMAGE_STUCK_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes
 
-export const DEFAULT_FALLBACK_STYLE_PROMPT = `Soft cel-shaded anime illustration. Muted pastel color palette with low saturation. Diffused ambient lighting, subtle linework blending into colors. Smooth gradients, slight bloom effect on highlights. Dreamy, airy atmosphere. Studio Ghibli-inspired. Soft shadows, watercolor texture hints in background.`
+export const DEFAULT_FALLBACK_STYLE_PROMPT = `Crisp cel-shaded anime illustration in the style of a modern anime TV series key frame. Clean confident linework with bold outlines. Flat cel shading with hard-edged two-tone shadows. Vibrant saturated colors. Glossy hair with sheen bands, large expressive anime eyes with bright catchlights. Painted background slightly softer than the characters. Looks like an official anime screencap.`

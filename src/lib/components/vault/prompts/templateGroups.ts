@@ -40,6 +40,7 @@ const TEMPLATE_GROUP_MAP: Record<string, string> = {
   'timeline-fill-answer': 'Suggestions & Actions',
 
   // Image
+  'image-style-classic-anime': 'Image',
   'image-style-soft-anime': 'Image',
   'image-style-semi-realistic': 'Image',
   'image-style-photorealistic': 'Image',

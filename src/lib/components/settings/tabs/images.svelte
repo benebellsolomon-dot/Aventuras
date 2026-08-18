@@ -35,6 +35,7 @@
   import IconRow from '$lib/components/ui/icon-row.svelte'
 
   const imageStyles = [
+    { value: 'image-style-classic-anime', label: 'Classic Anime' },
     { value: 'image-style-soft-anime', label: 'Soft Anime' },
     { value: 'image-style-semi-realistic', label: 'Semi-realistic Anime' },
     { value: 'image-style-photorealistic', label: 'Photorealistic' },

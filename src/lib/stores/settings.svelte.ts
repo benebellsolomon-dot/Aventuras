@@ -559,8 +559,8 @@ export function getDefaultUpdateSettings(): UpdateSettings {
 export function getDefaultImageGenerationSettings(): ImageGenerationServiceSettings {
   return {
     profileId: null, // User must select an image-capable profile
-    styleId: 'image-style-soft-anime',
-    portraitStyleId: 'image-style-soft-anime',
+    styleId: 'image-style-classic-anime',
+    portraitStyleId: 'image-style-classic-anime',
     size: '1024x1024',
     referenceSize: '1024x1024',
     portraitSize: '512x512',
