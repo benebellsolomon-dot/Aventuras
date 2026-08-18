@@ -126,10 +126,10 @@ Each phase ships with vitest coverage extending the existing suite (272 tests); 
 - Schema round-trips: `rpgSheet` + extended `BodyState` through zod passthrough with legacy saves.
 - Drift detectors: fixture narratives per detector.
 
-## 8. Open items (deliberately deferred)
+## 8. Open items — RESOLVED (2026-08-18, same session)
 
-- Essence regen pacing ("rest" definition) and pool-size curve — tune in Phase 1 playtest.
-- Quirk registry contents (ship ~8, grow later).
-- Milk inventory item vs log-only — decide in Phase 3 (depends on InventoryPanel fit).
-- Non-protagonist male NPCs: out of scope; the sheet is protagonist-only.
-- Combat: still parked (per research/37).
+- **Essence curve/regen:** `max = 6 + 2×level`; +2 whenever story time advances a period (TimePanel-driven); full restore on explicit rest/sleep scenes. Numbers remain balance-tunable constants.
+- **Quirk registry v1 (10, ship all in Phase 2):** growth — `fast_metabolizer` (+1 catalyst intensity), `slow_burn` (growth lands a beat late, +1 tier at milestones), `greedy_flesh` (cooldown −1, pressure builds faster), `stubborn_frame` (intensity −1, tier never drifts down); lactation — `early_bloomer` (induction DC −4, supply climbs fast), `pressure_prone` (engorges at lower fill, bigger temporary swell); social/mental — `skittish` (social DCs +2 until bond ≥ 50), `devoted_heart` (bond +1/event, harsher withdrawal), `needy_nipples` (Handling/Milking DCs −2, arousal climbs faster), `proud` (Persuasion +2 harder, Seduction unaffected).
+- **Milk = inventory item** (Phase 3): quantity-stacked item with quality grade from the Milking check, via the existing inventory system; Alchemy checks may consume it for +1 intensity or reduced essence cost.
+- **Non-protagonist male NPCs:** out of scope; `rpgSheet` is protagonist-only. (Confirmed.)
+- **Combat: stays parked.** Physical conflict resolves as ordinary checks (Athletics/Fortitude/spells) with conditions as consequences; no HP/initiative subsystem.
