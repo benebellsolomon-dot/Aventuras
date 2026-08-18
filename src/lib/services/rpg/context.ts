@@ -110,5 +110,6 @@ export function buildCheckTaggingInstruction(sheet: RpgSheet): string {
     'DC rubric: 8 trivial-but-fumblable · 11 easy · 14 moderate · 17 hard · 20 very hard · 24 near-impossible. Judge from the fiction, not the player convenience.',
     "If a choice channels the player's catalytic power (growth influence, transformation magic), also set `essenceCost` 1-3 by potency. Do not tag more than 3 of the choices.",
     'When the action targets a specific character, set `targetCharacter` to her exact name — her trust and traits modify the check.',
+    '`induce_lactation` and `milking` actions use the `milking` skill and must set `targetCharacter`.',
   ].join('\n')
 }

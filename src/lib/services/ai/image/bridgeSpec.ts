@@ -18,6 +18,7 @@
 
 import type { BridgeSpecCharacter, StructuredImageSpecInput } from './providers/types'
 import {
+  apparentTier,
   BAND_WORD_THRESHOLDS,
   imageStateCues,
   readBodyState,
@@ -25,6 +26,9 @@ import {
   soloBodyState,
 } from '$lib/services/be'
 import { combineSceneIntimacy, inferBridgeLocation, inferSceneIntimacy } from './sceneInference'
+import { createLogger } from '$lib/log'
+
+const log = createLogger('BridgeSpec')
 
 /** Minimal structural slice of Character that spec assembly needs. */
 export interface BridgeSpecSubject {
@@ -227,7 +231,9 @@ export function buildStructuredImageSpec(
     const state = readBodyState(subject.metadata)
     if (!state) continue
     characters.push({
-      tier_index: bridgeTierIndex(state.tier),
+      // Apparent tier (research/49 R6): engorgement renders a size larger than
+      // she taped. PRESENTATION only — nothing writes this back to her state.
+      tier_index: bridgeTierIndex(apparentTier(state)),
       breast_shape: state.shape,
       build: mapBridgeBuild(subject.visualDescriptors?.build),
       identity_tags: resolveIdentityTags(subject.imageTags, subject.visualDescriptors),
@@ -317,6 +323,46 @@ export function buildPortraitSpec(subject: BridgeSpecSubject): StructuredImageSp
     ],
     scene_tags: [...(clothing ? [`wearing ${clothing}`] : []), ...PORTRAIT_FRAMING_TAGS],
   }
+}
+
+/** `data:<mediatype>;base64,` — the only data-URL form carrying a payload. */
+const BASE64_DATA_URL_PREFIX = /^data:[^,]*;base64,/i
+/** A bare payload (what the bridge field wants); a URL never matches — ':' and '.' are not base64. */
+const RAW_BASE64 = /^[A-Za-z0-9+/\s]+={0,2}$/
+
+export interface BridgeAnchorInput {
+  /** Active image provider for THIS request (the reference profile, when one is in play). */
+  providerType: string | undefined
+  /** Pipeline pin from the same profile — a krea2 pin cannot carry an anchor. */
+  model: string | undefined
+  /** Portrait/anchor references the caller gathered, data URL or raw base64. */
+  referenceImages?: ReadonlyArray<string>
+}
+
+/**
+ * The si-bridge identity anchor for a reference-carrying request (Spec 4 B1).
+ *
+ * The bridge has no img2img reference list: identity travels on the FaceID/
+ * OpenPose channel as a single `pose_face_anchor_b64`, so the first reference
+ * becomes the anchor and any further ones are the caller's to report. A krea2
+ * pin yields none — image conditioning forces the Illustrious route, which the
+ * pin exists to prevent (the provider drops it there anyway).
+ *
+ * The field is `pose_face_anchor_b64` — a PAYLOAD, not a locator. A portrait
+ * stored as an http(s) URL (or any other non-base64 reference) is therefore
+ * skipped rather than sent, which the bridge would reject or, worse, hash into
+ * a garbage anchor.
+ */
+export function bridgeIdentityAnchor(input: BridgeAnchorInput): string | undefined {
+  if (input.providerType !== 'si-bridge' || input.model === 'krea2') return undefined
+  const first = (input.referenceImages ?? []).map((ref) => ref.trim()).find((ref) => ref.length > 0)
+  if (!first) return undefined
+  if (BASE64_DATA_URL_PREFIX.test(first)) return first.replace(BASE64_DATA_URL_PREFIX, '')
+  if (RAW_BASE64.test(first)) return first
+  log('reference is not a base64 payload — sending no identity anchor', {
+    reference: first.slice(0, 24),
+  })
+  return undefined
 }
 
 /**

@@ -149,7 +149,48 @@ describe('quirk hooks in isolation', () => {
     expect(falling.state.arousal).toBe(30)
   })
 
-  it('phase-3 quirks produce zero state difference', () => {
+  // R10 (research/49): the Phase-2 "these do nothing" guard is REPLACED by
+  // positive assertions now that the lactation axis reads them.
+  it('early_bloomer halves the supply adapt-up threshold', () => {
+    const lactation = { active: true, supplyTier: 0 }
+    const milking: BeEvent = { character: 'Mira', kind: 'milking', intensity: 1 }
+    const plain = reduceCharacterBody(
+      stateWith({ lactation, fluids: { fillPercent: 100, fluidType: 'milk' } }),
+      [milking],
+      config,
+      's',
+      'Mira',
+    )
+    const eager = reduceCharacterBody(
+      stateWith({
+        quirks: ['early_bloomer'],
+        lactation,
+        fluids: { fillPercent: 100, fluidType: 'milk' },
+      }),
+      [milking],
+      config,
+      's',
+      'Mira',
+    )
+    expect(plain.state.lactation?.supplyTier).toBe(0)
+    expect(eager.state.lactation?.supplyTier).toBe(1)
+  })
+
+  it('pressure_prone engorges at a lower fill than everyone else', () => {
+    const fluids = { fillPercent: 65, fluidType: 'milk' }
+    const plain = reduceCharacterBody(stateWith({ fluids }), [], config, 's', 'Mira')
+    const prone = reduceCharacterBody(
+      stateWith({ quirks: ['pressure_prone'], fluids }),
+      [],
+      config,
+      's',
+      'Mira',
+    )
+    expect(plain.state.conditions.some((c) => c.label === 'Engorged')).toBe(false)
+    expect(prone.state.conditions.some((c) => c.label === 'Engorged')).toBe(true)
+  })
+
+  it('neither phase-3 quirk changes a growth roll', () => {
     const seed = seedFor((r) => resolveGrowthOutcome(r, 2) === 'success')
     const plain = reduceCharacterBody(stateWith(), [catalyst(2)], config, seed, 'Mira')
     const lact = reduceCharacterBody(

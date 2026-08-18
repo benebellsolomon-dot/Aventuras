@@ -136,3 +136,29 @@ export const WITHDRAWAL_THRESHOLD_DEVOTED_DELTA = 15
 export const WITHDRAWAL_IDLE_BEATS = 3
 /** At/above this dependence, an attitude-less turn pulls attitude to craving. */
 export const CRAVING_PULL_DEPENDENCE = 60
+
+// ---- Phase 3 lactation axis (research/49 Step 1) ----
+// ⚠ D5: reference defaults stacked on still-untuned Phase 1-2 numbers — re-derive from play.
+
+/** Highest supply tier; SUPPLY_LABELS indexes 0..SUPPLY_TIER_MAX. */
+export const SUPPLY_TIER_MAX = 3
+export const SUPPLY_LABELS: ReadonlyArray<string> = ['light', 'steady', 'heavy', 'torrential']
+/** Consecutive milked beats before supply adapts UP one tier (early_bloomer halves it). */
+export const SUPPLY_ADAPT_UP_BEATS = 2
+/** Beats without milking before supply eases DOWN one tier. */
+export const SUPPLY_EASE_IDLE_BEATS = 4
+/** Passive fill tick multiplier per supply tier (R4: 1 + tier × bonus). */
+export const SUPPLY_FILL_RATE_BONUS = 0.5
+/** At or above this supply tier, sustained beats accumulate toward a growth proposal. */
+export const CHRONIC_SUPPLY_TIER = 2
+/** Sustained high-supply beats before the chronic growth roll fires (then resets). */
+export const CHRONIC_SUPPLY_BEATS = 6
+/** pressure_prone engorges early (R6). */
+export const ENGORGED_FILL_THRESHOLD_PRESSURE_PRONE = 60
+/** early_bloomer's induction-attempt check bonus (a DC −4 expressed as +4). */
+export const EARLY_BLOOMER_INDUCTION_BONUS = 4
+/** Milk is inventoried in whole units of this volume (R7). */
+export const MILK_UNIT_ML = 100
+/** Apparent (presentation-only) tier bump while Engorged — never a real tier write. */
+export const APPARENT_TIER_ENGORGED = 1
+export const APPARENT_TIER_PRESSURE_PRONE = 2

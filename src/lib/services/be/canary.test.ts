@@ -234,3 +234,58 @@ describe('Phase 2 full-turn canary', () => {
     `)
   })
 })
+
+// ---- Phase 3 golden canary (research/49 Step 9): a full-turn lactation fixture ----
+// An actively-lactating heavy-supply pressure_prone girl at high fill takes one
+// milking event in ONE reduce. Asserts the exact end state, log kinds, and
+// milkYield so any step-order or supply-math change surfaces here first.
+describe('Phase 3 full-turn canary', () => {
+  test('pressure_prone lactating girl: milking at high fill in one reduce', () => {
+    const state = {
+      ...defaultBodyState(20),
+      quirks: ['pressure_prone'],
+      lactation: { active: true, supplyTier: 2, beatsSinceMilked: 1, demandBeats: 1 },
+      fluids: { fillPercent: 80, fluidType: 'milk' },
+    }
+    const config = { ...DEFAULT_BE_STORY_CONFIG, enabled: true }
+    const result = reduceCharacterBody(
+      state,
+      [{ character: 'Nyra', kind: 'milking', intensity: 2 }],
+      config,
+      'p3-canary',
+      'Nyra',
+    )
+    // Pin the observed goldens (harvested at implementation time; identical
+    // forever after — do NOT update to make a refactor pass).
+    expect({
+      lactation: result.state.lactation,
+      fillPercent: result.state.fluids.fillPercent,
+      conditionLabels: result.state.conditions.map((c) => c.label),
+      milkYield: result.milkYield ?? null,
+      kinds: result.log.map((r) => r.kind),
+      tier: result.state.tier,
+    }).toMatchInlineSnapshot(`
+      {
+        "conditionLabels": [],
+        "fillPercent": 16,
+        "kinds": [
+          "fill",
+          "milking",
+          "supply",
+        ],
+        "lactation": {
+          "active": true,
+          "beatsSinceMilked": 0,
+          "chronicBeats": 1,
+          "demandBeats": 0,
+          "supplyTier": 3,
+        },
+        "milkYield": {
+          "drainedPercent": 80,
+          "units": 14,
+        },
+        "tier": 20,
+      }
+    `)
+  })
+})

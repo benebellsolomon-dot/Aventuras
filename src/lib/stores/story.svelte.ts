@@ -37,7 +37,12 @@ import {
   defaultBodyState,
   exposureEventsFromResult,
   detectDrift,
+  findMilkItem,
+  lactationOf,
   measurements,
+  milkItemMetadata,
+  milkItemName,
+  qualityFromBand,
   parseGrowthEligibleKinds,
   readBodyState,
   reduceCharacterBody,
@@ -47,8 +52,10 @@ import {
   type BeLogRecord,
   type BeSoftState,
   type BodyCondition,
+  type BodyState,
   type BondEvent,
   type ExposureEvent,
+  type MilkQuality,
 } from '$lib/services/be'
 import {
   ESSENCE_REGEN_PER_PERIOD,
@@ -2749,6 +2756,11 @@ class StoryStore {
         trackingEnabled,
         charactersBefore,
         createdCharacterIds,
+        // Read-only here (milk quality, research/49 R8) — applyRpgTurn stays the
+        // single writer of the check's effects.
+        checkRecord,
+        itemsBefore,
+        createdItemIds,
       )
       beLog = beResult.beLog
       // RPG layer: protagonist sheet apply (essence/regen/leveling/drift) —
@@ -2860,6 +2872,11 @@ class StoryStore {
     trackingEnabled: boolean,
     charactersBefore: CharacterBeforeState[],
     createdCharacterIds: string[],
+    checkRecord: CheckRecord | null,
+    // Required, not defaulted: an omitted array would silently collect
+    // un-rollbackable item writes into a throwaway, with no signal at all.
+    itemsBefore: ItemBeforeState[],
+    createdItemIds: string[],
   ): Promise<{ beLog: BeLogRecord[]; crossings: string[] }> {
     const beLog: BeLogRecord[] = []
     // Milestone crossings this turn (`${characterId}:${massKg}`) — the RPG
@@ -3030,6 +3047,11 @@ class StoryStore {
         !state.lastGrowth &&
         !state.pendingGrowth &&
         !state.driftNote &&
+        // A lactating girl is never "settled": her supply counters keep moving,
+        // and a milking/induction event must always reach the reducer
+        // (research/49 Step 4). The no-op-write guard below still suppresses
+        // the write when nothing actually changed.
+        lactationOf(state)?.active !== true &&
         state.conditions.every((c) => c.ttl === undefined)
       ) {
         // Absent, untargeted, and fully settled: skip the no-op write. Present
@@ -3044,25 +3066,40 @@ class StoryStore {
         isPresent && narrativeContent ? detectDrift(narrativeContent, character.name, state) : []
 
       const seed = `${storyId}:${entryId}:${character.id}`
-      const { state: nextState, log: reducerLog } = reduceCharacterBody(
-        state,
-        charEvents,
-        config,
-        seed,
-        character.name,
-        charSoftState,
-        {
-          // Present-only ruling: off-screen characters keep time but never
-          // change size unseen (fill/pressure/pity/pending all held). Events
-          // imply presence even when the classifier's scene list misses her.
-          ticksEnabled: isPresent || charEvents.length > 0,
-          ...(charConditions ? { softConditions: charConditions } : {}),
-          ...(driftFindings.length > 0 ? { driftFindings } : {}),
-          ...(charBondEvents.length > 0 ? { bondEvents: charBondEvents } : {}),
-          ...(charExposureEvents.length > 0 ? { exposureEvents: charExposureEvents } : {}),
-        },
-      )
+      const {
+        state: nextState,
+        log: reducerLog,
+        milkYield,
+      } = reduceCharacterBody(state, charEvents, config, seed, character.name, charSoftState, {
+        // Present-only ruling: off-screen characters keep time but never
+        // change size unseen (fill/pressure/pity/pending all held). Events
+        // imply presence even when the classifier's scene list misses her.
+        ticksEnabled: isPresent || charEvents.length > 0,
+        ...(charConditions ? { softConditions: charConditions } : {}),
+        ...(driftFindings.length > 0 ? { driftFindings } : {}),
+        ...(charBondEvents.length > 0 ? { bondEvents: charBondEvents } : {}),
+        ...(charExposureEvents.length > 0 ? { exposureEvents: charExposureEvents } : {}),
+      })
       pendingLog.push(...reducerLog)
+
+      // Milk becomes inventory (research/49 R7). Declared here because BOTH the
+      // no-op-write path and the normal path have to bottle it: a drain is real
+      // even on the (rare) turn whose reduced state stringifies identically.
+      const bottleMilkYield = async (): Promise<void> => {
+        if (!milkYield) return
+        await this.applyMilkYield({
+          character,
+          state: nextState,
+          units: milkYield.units,
+          checkRecord,
+          fluidType: config.fluidType,
+          trackingEnabled,
+          itemsBefore,
+          createdItemIds,
+          beLog,
+          entryId,
+        })
+      }
 
       // A targeted-but-muzzled (locked/cooldown) character can come out unchanged:
       // keep her outcome records for the cadence log, skip the no-op write and the
@@ -3070,6 +3107,10 @@ class StoryStore {
       const stateChanged = seeded || JSON.stringify(nextState) !== JSON.stringify(state)
       if (!stateChanged) {
         beLog.push(...pendingLog)
+        // Defensive only: a non-empty milkYield implies the fill dropped, so
+        // this path should never carry one — but if it ever does (no body
+        // write to gate behind), the milk still left her, so it still bottles.
+        await bottleMilkYield()
         continue
       }
 
@@ -3094,6 +3135,11 @@ class StoryStore {
         createdCharacterIds,
       )
 
+      // wrapUpdate SWALLOWS the failure (it only counts toward the abort
+      // threshold), so the yield below cannot infer success from the await
+      // returning — it reads this flag, set last inside the closure exactly
+      // like the pendingLog push.
+      let bodyWriteLanded = false
       await this.wrapUpdate('BE body state', character.name, async () => {
         const { entity: ownedChar, wasCowed } = await this.cowCharacter(character)
         const metadata = writeBodyState(ownedChar.metadata, nextState)
@@ -3109,10 +3155,166 @@ class StoryStore {
           const idx = charactersBefore.findIndex((cb) => cb.id === character.id)
           if (idx !== -1) charactersBefore.splice(idx, 1)
         }
+        bodyWriteLanded = true
       })
+
+      // Milk becomes inventory (research/49 R7) — ONLY after her body state
+      // actually landed. A swallowed body-write failure leaves her fill
+      // un-drained in the database, so bottling anyway would duplicate the
+      // milk on every retry of the same turn.
+      if (bodyWriteLanded) await bottleMilkYield()
     }
 
     return { beLog, crossings }
+  }
+
+  /**
+   * Turn one turn's expressed milk into inventory (research/49 R7/R8): quality
+   * comes from THIS turn's Milking check against THIS girl, then the units
+   * stack onto her existing row of that quality or create a new one. Both paths
+   * ride the existing delta machinery (`ItemBeforeState` on a bump,
+   * `createdEntities.itemIds` on a create), so undo is inherited rather than
+   * re-implemented.
+   *
+   * REPLAY SAFETY: the quantity stack is the only non-idempotent write in the
+   * pipeline, so every yield stamps `lastYieldEntryId` on the stack and a
+   * second yield for the SAME entry is refused. A retried turn mints a new
+   * entry id, so retries still yield by design.
+   */
+  private async applyMilkYield(input: {
+    character: Character
+    state: BodyState
+    units: number
+    checkRecord: CheckRecord | null
+    fluidType: string
+    trackingEnabled: boolean
+    itemsBefore: ItemBeforeState[]
+    createdItemIds: string[]
+    beLog: BeLogRecord[]
+    /** This turn's entry id — the replay key stamped onto the milk stack. */
+    entryId: string
+  }): Promise<void> {
+    const { character, state, units, checkRecord, trackingEnabled, beLog, entryId } = input
+    const storyId = this.currentStory?.id
+    if (!storyId) return
+
+    // An unaffordable check never happened: no essence was spent, so no
+    // milking occurred, so nothing is bottled. Falling through to the ungraded
+    // `plain` path would make failing to AFFORD a check out-yield failing it.
+    // A record with NO resolved target still suppresses — the LLM omitting
+    // `targetCharacter` must not turn an unaffordable milking into free milk;
+    // only a check explicitly targeting a DIFFERENT girl leaves this one alone.
+    if (
+      checkRecord?.insufficientEssence === true &&
+      checkRecord.skill === 'milking' &&
+      (checkRecord.target === undefined ||
+        checkRecord.target.toLowerCase() === character.name.toLowerCase())
+    ) {
+      beLog.push({
+        character: character.name,
+        kind: 'yield',
+        outcome: 'fail',
+        delta: 0,
+        tierAfter: state.tier,
+        note: 'not enough essence — the milking never happened',
+      })
+      return
+    }
+
+    // Only a milking check against THIS girl grades her milk; anything else
+    // (no check, someone else's check, another skill) is ungraded `plain`.
+    const graded =
+      checkRecord &&
+      checkRecord.skill === 'milking' &&
+      !checkRecord.insufficientEssence &&
+      (checkRecord.target ?? '').toLowerCase() === character.name.toLowerCase()
+        ? checkRecord.band
+        : null
+    const quality: MilkQuality | null = qualityFromBand(graded)
+    if (!quality) {
+      // A botched check yields nothing even though the scene evidenced
+      // expression — the dice say it went wrong. Log why, write nothing.
+      beLog.push({
+        character: character.name,
+        kind: 'yield',
+        outcome: 'fail',
+        delta: 0,
+        tierAfter: state.tier,
+        note: 'milking botched — nothing worth keeping',
+      })
+      return
+    }
+
+    const existing = findMilkItem(this.items, character.id, quality)
+    // Same entry already bottled into this stack: a replayed apply must not
+    // re-stack the units (the retry path mints a new entry id and so passes).
+    if (existing && existing.metadata?.lastYieldEntryId === entryId) {
+      log('applyMilkYield: entry already yielded into this stack, skipping', {
+        entryId,
+        itemId: existing.id,
+      })
+      return
+    }
+    await this.wrapUpdate('Milk yield', character.name, async () => {
+      if (existing) {
+        if (
+          trackingEnabled &&
+          !input.createdItemIds.includes(existing.id) &&
+          !input.itemsBefore.some((ib) => ib.id === existing.id)
+        ) {
+          input.itemsBefore.push({
+            id: existing.id,
+            name: existing.name,
+            quantity: existing.quantity,
+            equipped: existing.equipped,
+            location: existing.location,
+            metadata: existing.metadata ? { ...existing.metadata } : null,
+          })
+        }
+        const { entity: ownedItem, wasCowed } = await this.cowItem(existing)
+        const quantity = ownedItem.quantity + units
+        // Merge, never replace: milkOf/quality (the stack's identity) and any
+        // runtimeVars must survive the stamp.
+        const metadata = { ...(ownedItem.metadata ?? {}), lastYieldEntryId: entryId }
+        await database.updateItem(ownedItem.id, { quantity, metadata })
+        this.items = this.items.map((i) =>
+          i.id === ownedItem.id ? { ...i, quantity, metadata } : i,
+        )
+        if (wasCowed && trackingEnabled) {
+          input.createdItemIds.push(ownedItem.id)
+          const idx = input.itemsBefore.findIndex((ib) => ib.id === existing.id)
+          if (idx !== -1) input.itemsBefore.splice(idx, 1)
+        }
+      } else {
+        const item: Item = {
+          id: crypto.randomUUID(),
+          storyId,
+          name: milkItemName(character.name, input.fluidType),
+          description: `${quality} ${input.fluidType} expressed from ${character.name}.`,
+          quantity: units,
+          equipped: false,
+          location: 'inventory',
+          metadata: {
+            source: 'be-engine',
+            ...milkItemMetadata(character.id, quality),
+            lastYieldEntryId: entryId,
+          },
+          branchId: this.currentStory?.currentBranchId ?? null,
+        }
+        await database.addItem(item)
+        this.items = [...this.items, item]
+        if (trackingEnabled) input.createdItemIds.push(item.id)
+      }
+      // Log only after the write landed (same discipline as the body write).
+      beLog.push({
+        character: character.name,
+        kind: 'yield',
+        outcome: 'success',
+        delta: units,
+        tierAfter: state.tier,
+        note: `+${units} unit${units === 1 ? '' : 's'} of ${input.fluidType} (${quality})`,
+      })
+    })
   }
 
   /**

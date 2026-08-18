@@ -8,7 +8,15 @@
  * quirk in modifiers.test.ts.
  */
 
-import { bondCheckModifier, bondOf, bondStance, hasQuirk, type BodyState } from '$lib/services/be'
+import {
+  bondCheckModifier,
+  bondOf,
+  bondStance,
+  EARLY_BLOOMER_INDUCTION_BONUS,
+  hasQuirk,
+  lactationOf,
+  type BodyState,
+} from '$lib/services/be'
 import { INTIMATE_SKILLS, SOCIAL_SKILLS } from './constants'
 import type { CheckModifier, SkillId } from './types'
 
@@ -42,6 +50,18 @@ export function buildTargetCheckModifiers(
   // needy_nipples: Handling/Milking DCs −2 → bonus +2.
   if (hasQuirk(state, 'needy_nipples') && (skill === 'handling' || skill === 'milking')) {
     modifiers.push({ label: 'needy nipples (responsive)', value: 2 })
+  }
+
+  // early_bloomer (research/49 R10): her body takes to induction easily —
+  // Milking DCs −4 → bonus +4, but ONLY while she is not yet lactating. Once
+  // supply is established the induction attempt is done; expression checks are
+  // unmodified.
+  if (
+    hasQuirk(state, 'early_bloomer') &&
+    skill === 'milking' &&
+    lactationOf(state)?.active !== true
+  ) {
+    modifiers.push({ label: 'early bloomer (DC −4)', value: EARLY_BLOOMER_INDUCTION_BONUS })
   }
 
   // proud: Persuasion +2 harder → bonus −2; Seduction explicitly untouched.

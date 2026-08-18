@@ -18,8 +18,9 @@ import {
   buildBeStateBlock,
   buildHaremStateBlock,
   dependenceOf,
-  measurements,
+  lactationOf,
   readBodyState,
+  selectScenePresent,
   type BeStateEntry,
 } from '$lib/services/be'
 import {
@@ -31,10 +32,32 @@ import {
   type GateInput,
 } from '$lib/services/rpg'
 import type { RenderResult } from './types'
-import type { Character, Location, Item, StoryBeat, Story } from '$lib/types'
+import type { Branch, Character, Location, Item, StoryBeat, Story, StoryEntry } from '$lib/types'
 import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
 
 const log = createLogger('ContextBuilder')
+
+/**
+ * Raw entries pulled for the BE scene-presence read. A turn is roughly one user
+ * action plus one narration, so this comfortably covers the presence lookback
+ * (10 narration entries) without loading the whole story.
+ */
+const BE_PRESENCE_ENTRY_FETCH = 30
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Candidate names the pending user action names outright, case-insensitively
+ * and on word boundaries (so "Mira" does not match "Miranda's letter").
+ */
+function namesMentionedIn(text: string, candidates: ReadonlyArray<{ name: string }>): string[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+  return candidates
+    .filter((c) => c.name.trim().length > 0)
+    .filter((c) => new RegExp(`\\b${escapeRegExp(c.name.trim())}\\b`, 'i').test(trimmed))
+    .map((c) => c.name)
+}
 
 export class ContextBuilder {
   private context: Record<string, any> = {}
@@ -47,8 +70,17 @@ export class ContextBuilder {
   /**
    * Convenience factory: create a ContextBuilder pre-populated from a story.
    * Loads story settings, protagonist, location, time, and pack custom variables.
+   *
+   * `actionText` is THIS turn's pending user action. It is optional (every
+   * service prompt but the narrative one has none) and only feeds scene
+   * presence: a character the player addresses by name is in the scene now,
+   * even though the previous narration's presence list predates her return.
    */
-  static async forStory(storyId: string, packIdOverride?: string): Promise<ContextBuilder> {
+  static async forStory(
+    storyId: string,
+    packIdOverride?: string,
+    actionText: string = '',
+  ): Promise<ContextBuilder> {
     const story = await database.getStory(storyId)
     if (!story) {
       log('forStory: story not found', { storyId })
@@ -108,7 +140,7 @@ export class ContextBuilder {
     await builder.loadRuntimeVariableContext(characters, locations, items, storyBeats, protagonist)
 
     // BE engine: the body-state narrative block (empty string for non-BE stories)
-    builder.loadBeStateContext(story, characters)
+    await builder.loadBeStateContext(story, characters, protagonist, actionText)
     // BE engine: the static genre-rules pack (research/41 precedence contract)
     builder.loadBeGenreRules(story)
     // RPG layer: player sheet block + service summaries (empty strings when off)
@@ -203,8 +235,18 @@ export class ContextBuilder {
    * Build the `beStateBlock` context variable for BE-mode stories: engine-tracked
    * body state rendered as the authoritative narrative block (be/context.ts owns
    * the wording). Empty string when beMode is off or nothing carries bodyState.
+   *
+   * Scoped to the current scene: a full body-state block for every tracked girl
+   * in the story — including ones nowhere near the scene — was pure token bloat.
+   * Presence comes from the classifier signal already persisted on narration
+   * entries (be/presence.ts); when it can't be read, everyone is included.
    */
-  private loadBeStateContext(story: Story, characters: Character[]): void {
+  private async loadBeStateContext(
+    story: Story,
+    characters: Character[],
+    protagonist?: Character,
+    actionText: string = '',
+  ): Promise<void> {
     try {
       let beStateBlock = ''
       if (story.settings?.beMode === true) {
@@ -213,9 +255,20 @@ export class ContextBuilder {
           const state = readBodyState(character.metadata)
           if (state) entries.push({ name: character.name, state })
         }
+        const onBranch = await this.loadPresenceEntries(story)
+        // The PC is always in her own scene; so is anyone the player just named
+        // in her action — presence otherwise comes from the PREVIOUS narration,
+        // so a girl re-entering the scene would lose her [BODY STATE] block on
+        // the exact turn she is addressed.
+        const scoped = selectScenePresent(entries, onBranch, {
+          alwaysInclude: [
+            ...(protagonist ? [protagonist.name] : []),
+            ...namesMentionedIn(actionText, entries),
+          ],
+        })
         // [HAREM STATE] concatenates AFTER [BODY STATE] (research/48 R9): no
         // template edit, and the cache prefix stays byte-identical.
-        beStateBlock = [buildBeStateBlock(entries), buildHaremStateBlock(entries)]
+        beStateBlock = [buildBeStateBlock(scoped), buildHaremStateBlock(scoped)]
           .filter(Boolean)
           .join('\n\n')
       }
@@ -224,6 +277,57 @@ export class ContextBuilder {
       log('loadBeStateContext failed', { error })
       this.add({ beStateBlock: '' })
     }
+  }
+
+  /**
+   * Recent entries that actually happened in THIS branch's scene, oldest first.
+   *
+   * Branches share one position space, so the raw recent-entry fetch mixes in
+   * sibling-branch narration — presence for a scene that never happened here.
+   * This resolves the branch lineage the way reloadEntriesForCurrentBranch
+   * does: an ancestor's (or main's) entries count only up to the position its
+   * child forked at, and only lineage branches count at all.
+   */
+  private async loadPresenceEntries(story: Story): Promise<StoryEntry[]> {
+    const recent = await database.getRecentStoryEntries(story.id, BE_PRESENCE_ENTRY_FETCH)
+    const branchId = story.currentBranchId ?? null
+    if (branchId === null) return recent.filter((e) => e.branchId === null)
+
+    const branches = await database.getBranches(story.id)
+    const lineage: Branch[] = []
+    const visited = new Set<string>()
+    let current = branches.find((b) => b.id === branchId) ?? null
+    while (current) {
+      if (visited.has(current.id)) break
+      visited.add(current.id)
+      lineage.unshift(current)
+      const parentId: string | null = current.parentBranchId
+      current = parentId ? (branches.find((b) => b.id === parentId) ?? null) : null
+    }
+    // Unknown branch record: keep only entries this branch owns rather than
+    // guessing at inheritance — an over-narrow presence list degrades to
+    // "include everyone", an over-wide one narrates the wrong scene.
+    if (lineage.length === 0) return recent.filter((e) => e.branchId === branchId)
+
+    const forkEntries = await Promise.all(
+      lineage.map((branch) => database.getStoryEntry(branch.forkEntryId)),
+    )
+    // Position cap per lineage member: everything before the point its child
+    // diverged. The current branch (last) is uncapped.
+    const capByBranchId = new Map<string | null, number | undefined>()
+    capByBranchId.set(null, forkEntries[0]?.position)
+    lineage.forEach((branch, i) => {
+      capByBranchId.set(
+        branch.id,
+        i < lineage.length - 1 ? forkEntries[i + 1]?.position : undefined,
+      )
+    })
+
+    return recent.filter((entry) => {
+      if (!capByBranchId.has(entry.branchId)) return false
+      const cap = capByBranchId.get(entry.branchId)
+      return cap === undefined || entry.position <= cap
+    })
   }
 
   /**
@@ -275,12 +379,16 @@ export class ContextBuilder {
           if (character.relationship === 'self') continue
           const state = readBodyState(character.metadata)
           if (!state) continue
+          // Lactation gates (research/49 Step 4) read the same block the
+          // reducer writes — offers and engine state can never disagree.
+          const lactation = lactationOf(state)
           gateInputs.push({
             name: character.name,
             bond: bondOf(state),
             dependence: dependenceOf(state),
-            massKg: measurements(state).nowTotalKg,
             quirks: state.quirks ?? [],
+            lactationActive: lactation?.active === true,
+            supplyTier: lactation?.supplyTier ?? 0,
           })
         }
         checkTaggingInstruction = [

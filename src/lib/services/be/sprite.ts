@@ -10,7 +10,7 @@
  * This module never imports from ai/image/ (the dependency runs the other way).
  */
 
-import { ENGORGED_FILL_THRESHOLD } from './constants'
+import { engorgeThreshold } from './lactation'
 import { bandIndex } from './ladder'
 import type { BodyShape, BodyState } from './types'
 
@@ -45,7 +45,11 @@ export function bandRepresentativeTier(band: number): number {
 export function selectSprite(state: BodyState): SpriteSelection {
   const band = bandIndex(state.tier)
 
-  if (state.fluids.fillPercent >= ENGORGED_FILL_THRESHOLD) {
+  // Per-girl threshold (research/49 R6 / trickiest point 4): the sprite reads the
+  // SAME function the reducer's condition does, so the engorged cell can never
+  // disagree with the Engorged condition. The apparent-size bonus deliberately
+  // does NOT feed bandIndex — the engorged cell already is the swollen look.
+  if (state.fluids.fillPercent >= engorgeThreshold(state)) {
     return { bandIndex: band, expression: 'distressed', engorged: true }
   }
   if ((state.lastGrowth?.delta ?? 0) > 0) {

@@ -9,6 +9,7 @@
  */
 
 import { cupLetter, tierForCupLetter } from './ladder'
+import { lactationOf, supplyLabel } from './lactation'
 import type { BodyState, DriftFinding } from './types'
 
 /** Era-1 attribution window: a mention within this many chars after the name. */
@@ -36,6 +37,66 @@ const NON_BREAST_GROWTH =
 const GROWTH_LANGUAGE =
   /\b(grew|grow(?:ing|s|th)?|swell(?:ing|ed|s)?|expand(?:ing|ed|s)?|bigger|larger|fuller|heavier|stretch(?:ing|ed)\b[^.!?]{0,40}\b(?:skin|mark))\b/i
 
+/**
+ * Milk ACTS (research/49 Step 7, direction 1). Every pattern is verb-adjacent:
+ * the bare noun "milk" is groceries, an ingredient, a colour — flagging it would
+ * fire on half the kitchen scenes in the game. "nurse" likewise only counts with
+ * breast/milk context, or every ward scene trips it.
+ */
+const MILK_ACT: ReadonlyArray<RegExp> = [
+  /\bnurs(?:e|es|ing|ed)\b[^.!?]{0,40}\b(?:milk|breasts?|nipples?)\b/i,
+  /\b(?:milk|breasts?|nipples?)\b[^.!?]{0,40}\bnurs(?:e|es|ing|ed)\b/i,
+  /\bleak(?:s|ing|ed)?\b[^.!?]{0,40}\bmilk\b/i,
+  /\bmilk\b[^.!?]{0,40}\bleak(?:s|ing|ed)?\b/i,
+  /\bmilk\s+(?:beads?|beaded|drips?|dripped|dripping|sprays?|sprayed|spurts?|spurted|flows?|flowed|flowing|wells?|welled)\b/i,
+  /\bexpress(?:es|ing|ed)?\b[^.!?]{0,40}\bmilk\b/i,
+  /\bmilk\b[^.!?]{0,40}\bexpress(?:es|ing|ed)\b/i,
+  /\bmilk\b[^.!?]{0,20}\blet(?:s|ting)?\s+down\b/i,
+  /\blet(?:s|ting)?\s+down\b[^.!?]{0,20}\bmilk\b/i,
+  /\bletdown\b/i,
+]
+
+/**
+ * Written-dry assertions (direction 2). Bare "dry" is a shirt, a mouth, a laugh —
+ * so it only counts adjacent to breasts/nipples, and "nothing came" only counts
+ * when something came OUT OF or FROM her.
+ */
+const WRITTEN_DRY: ReadonlyArray<RegExp> = [
+  /\b(?:breasts?|nipples?|she|they)\b[^.!?]{0,30}\b(?:were|was|are|is|ran|run|stayed|remained|came up|come up|went)\s+dry\b/i,
+  /\bdry\b[^.!?]{0,20}\b(?:breasts?|nipples?)\b/i,
+  /\bno milk\b/i,
+  /\bmilkless\b/i,
+  /\bnothing\s+(?:came|come|comes)\s+(?:out|from)\b/i,
+  /\b(?:not|isn'?t|wasn'?t|aren'?t|doesn'?t|does not|never)\s+(?:lactating|lactated|producing)\b/i,
+]
+
+/**
+ * The dry rule sleeps below this tier: at `light` supply a beat that comes up
+ * empty is honest fiction. research/49 Step 7 sketches `>= 2`; steady (1) is the
+ * shipped floor — once the engine tracks steady supply, "she is dry" is a
+ * contradiction of tracked state, which is exactly what this detector is for.
+ */
+const DRY_DRIFT_MIN_TIER = 1
+
+/**
+ * The milk-act direction sleeps when her tracked fluid IS milk and she is
+ * visibly full of it: the [BODY STATE] block itself instructs the narrator to
+ * render that fullness, so milk prose is legitimate fill narration, not drift.
+ * Without this, every pre-Phase-3 save (fluidType 'milk', no lactation block)
+ * gets corrected for following the game's own body block. The rung is the
+ * visible-swelling one the image cues use.
+ */
+const MILK_FILL_LEGITIMATE_PERCENT = 40
+
+function isMilkFullnessLegitimate(state: BodyState): boolean {
+  const fluidType = state.fluids.fluidType
+  return (
+    typeof fluidType === 'string' &&
+    fluidType.trim().toLowerCase() === 'milk' &&
+    state.fluids.fillPercent >= MILK_FILL_LEGITIMATE_PERCENT
+  )
+}
+
 const stripHtml = (text: string): string => text.replace(/<[^>]+>/g, ' ')
 
 /** Character positions of every name occurrence (case-insensitive). */
@@ -56,6 +117,18 @@ function nameOffsets(text: string, name: string): number[] {
 
 const isAttributed = (offsets: ReadonlyArray<number>, index: number): boolean =>
   offsets.some((offset) => index >= offset && index - offset <= ATTRIBUTION_WINDOW)
+
+/** True when the pattern matches somewhere inside her attribution window. */
+function matchAttributed(pattern: RegExp, text: string, offsets: ReadonlyArray<number>): boolean {
+  const scan = new RegExp(
+    pattern.source,
+    pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`,
+  )
+  for (const match of text.matchAll(scan)) {
+    if (match.index !== undefined && isAttributed(offsets, match.index)) return true
+  }
+  return false
+}
 
 /**
  * Run every detector over one character's finalized narrative. `state` is the
@@ -115,6 +188,28 @@ export function detectDrift(narrative: string, name: string, state: BodyState): 
       kind: 'growth_omitted',
       note: `${name}'s recent growth landed but was never rendered — render the visible change now, at her current tracked size`,
     })
+  }
+
+  // 5. Lactation contradiction, both directions (research/49 Step 7). Exactly one
+  // of the two can apply — the guard is `active`, so they are mutually exclusive.
+  const lactation = lactationOf(state)
+  if (!lactation?.active) {
+    if (
+      !isMilkFullnessLegitimate(state) &&
+      MILK_ACT.some((pattern) => matchAttributed(pattern, text, offsets))
+    ) {
+      findings.push({
+        kind: 'lactation_drift',
+        note: `${name} is not lactating — render fullness or arousal, not milk, until induction actually happens`,
+      })
+    }
+  } else if (lactation.supplyTier >= DRY_DRIFT_MIN_TIER) {
+    if (WRITTEN_DRY.some((pattern) => matchAttributed(pattern, text, offsets))) {
+      findings.push({
+        kind: 'lactation_drift',
+        note: `${name}'s supply is engine-tracked at ${supplyLabel(lactation.supplyTier)} — do not write her dry`,
+      })
+    }
   }
 
   return findings

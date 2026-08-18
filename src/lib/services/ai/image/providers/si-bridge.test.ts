@@ -17,7 +17,12 @@ vi.mock('./fetchAdapter', () => ({
 
 import { createSiBridgeProvider } from './si-bridge'
 import { createA1111Provider } from './a1111'
-import { bridgeTierIndex, buildPortraitSpec, buildStructuredImageSpec } from '../bridgeSpec'
+import {
+  bridgeIdentityAnchor,
+  bridgeTierIndex,
+  buildPortraitSpec,
+  buildStructuredImageSpec,
+} from '../bridgeSpec'
 import { writeBodyState, defaultBodyState } from '$lib/services/be'
 import type { BodyState } from '$lib/services/be'
 
@@ -663,5 +668,97 @@ describe('buildStructuredImageSpec', () => {
       narrativeText: '',
     })
     expect(spec!.characters).toHaveLength(1)
+  })
+})
+
+describe('bridgeIdentityAnchor (B1 inline portrait references)', () => {
+  const DATA_URL = 'data:image/png;base64,QUJD'
+
+  test('routes a portrait reference onto the FaceID anchor channel, prefix stripped', () => {
+    expect(
+      bridgeIdentityAnchor({
+        providerType: 'si-bridge',
+        model: 'bridge-auto',
+        referenceImages: [DATA_URL],
+      }),
+    ).toBe('QUJD')
+  })
+
+  test('accepts raw base64 references unchanged', () => {
+    expect(
+      bridgeIdentityAnchor({
+        providerType: 'si-bridge',
+        model: 'illustrious',
+        referenceImages: ['QUJD'],
+      }),
+    ).toBe('QUJD')
+  })
+
+  test('uses the first reference only — the bridge has a single anchor slot', () => {
+    expect(
+      bridgeIdentityAnchor({
+        providerType: 'si-bridge',
+        model: 'illustrious',
+        referenceImages: ['data:image/png;base64,QUJD', 'data:image/png;base64,WFla'],
+      }),
+    ).toBe('QUJD')
+  })
+
+  // pose_face_anchor_b64 is a PAYLOAD field: a URL-backed portrait used to pass
+  // straight through and be sent as if it were base64.
+  test('skips URL-backed references instead of sending a locator as base64', () => {
+    for (const url of [
+      'https://cdn.example.com/lucy.png',
+      'http://localhost:8080/lucy.png',
+      'data:image/svg+xml,<svg/>',
+    ]) {
+      expect(
+        bridgeIdentityAnchor({
+          providerType: 'si-bridge',
+          model: 'illustrious',
+          referenceImages: [url],
+        }),
+      ).toBeUndefined()
+    }
+  })
+
+  test('krea2 pin carries no anchor (image conditioning would force Illustrious)', () => {
+    expect(
+      bridgeIdentityAnchor({
+        providerType: 'si-bridge',
+        model: 'krea2',
+        referenceImages: [DATA_URL],
+      }),
+    ).toBeUndefined()
+  })
+
+  test('non-bridge providers keep using the img2img reference path', () => {
+    expect(
+      bridgeIdentityAnchor({
+        providerType: 'nanogpt',
+        model: 'some-model',
+        referenceImages: [DATA_URL],
+      }),
+    ).toBeUndefined()
+  })
+
+  test('no references, empty references, or blank entries yield no anchor', () => {
+    expect(
+      bridgeIdentityAnchor({ providerType: 'si-bridge', model: 'illustrious' }),
+    ).toBeUndefined()
+    expect(
+      bridgeIdentityAnchor({
+        providerType: 'si-bridge',
+        model: 'illustrious',
+        referenceImages: [],
+      }),
+    ).toBeUndefined()
+    expect(
+      bridgeIdentityAnchor({
+        providerType: 'si-bridge',
+        model: 'illustrious',
+        referenceImages: ['   '],
+      }),
+    ).toBeUndefined()
   })
 })

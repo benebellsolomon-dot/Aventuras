@@ -224,4 +224,52 @@ describe('image state cues', () => {
     const aroused = imageStateCues(at({ arousal: 85 }))
     expect(aroused.join(' ')).toContain('aroused')
   })
+
+  // research/49 R6: apparent swell is PRESENTATION — it rides the cue text and
+  // never the tape (measurements() is untouched by it).
+  test('engorged cues carry the apparent-swell magnitude; calm ones do not', () => {
+    const calm = imageStateCues(at({ fluids: { fillPercent: 50, fluidType: 'milk' } }))
+    expect(calm[0]).not.toContain('past her usual size')
+
+    const engorged = imageStateCues(at({ fluids: { fillPercent: 80, fluidType: 'milk' } }))
+    expect(engorged).toHaveLength(1)
+    expect(engorged[0]).toContain('swollen a full cup past her usual size')
+
+    const prone = imageStateCues(
+      at({ quirks: ['pressure_prone'], fluids: { fillPercent: 65, fluidType: 'milk' } }),
+    )
+    expect(prone[0]).toContain('swollen two full cups past her usual size')
+  })
+
+  // Review fix 5: the register must follow HER engorge threshold. At fill 62 a
+  // pressure_prone girl used to read "subtly swollen … , swollen two full cups
+  // past her usual size" — the flat rung contradicting the per-girl swell.
+  test('a pressure_prone girl past her own threshold gets the engorged register, not the subtle rung', () => {
+    const prone = imageStateCues(
+      at({ quirks: ['pressure_prone'], fluids: { fillPercent: 62, fluidType: 'milk' } }),
+    )
+    expect(prone).toHaveLength(1)
+    expect(prone[0]).toContain('breasts visibly engorged')
+    expect(prone[0]).not.toContain('subtly swollen')
+    expect(prone[0]).toContain('swollen two full cups past her usual size')
+  })
+
+  test('below her own threshold she is back on the flat ladder, swell-free', () => {
+    const prone = imageStateCues(
+      at({ quirks: ['pressure_prone'], fluids: { fillPercent: 50, fluidType: 'milk' } }),
+    )
+    expect(prone).toEqual(['breasts subtly swollen with milk, skin gently taut'])
+  })
+
+  test('flat-threshold girls keep byte-identical cues at every rung', () => {
+    const cueAt = (fillPercent: number): string[] =>
+      imageStateCues(at({ fluids: { fillPercent, fluidType: 'milk' } }))
+    expect(cueAt(50)).toEqual(['breasts subtly swollen with milk, skin gently taut'])
+    expect(cueAt(75)).toEqual([
+      'breasts visibly engorged, taut and heavy with milk, swollen a full cup past her usual size',
+    ])
+    expect(cueAt(95)).toEqual([
+      'breasts hugely engorged with milk, skin stretched shiny-taut, visibly leaking, swollen a full cup past her usual size',
+    ])
+  })
 })

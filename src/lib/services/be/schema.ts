@@ -14,9 +14,9 @@ import type { BeEvent, BeSoftState, BondEvent, ExposureEvent } from './types'
 export const beEventSchema = z.object({
   character: z.string().describe('Exact name of the affected female character'),
   kind: z
-    .enum(['catalyst', 'contact', 'milking', 'attempt', 'stabilize'])
+    .enum(['catalyst', 'contact', 'milking', 'attempt', 'stabilize', 'induction'])
     .describe(
-      'catalyst=magical/alchemical growth influence, contact=intimate physical escalation, attempt=explicit growth attempt that may fail, milking=draining, stabilize=calming/settling',
+      'catalyst=magical/alchemical growth influence, contact=intimate physical escalation, attempt=explicit growth attempt that may fail, milking=draining, stabilize=calming/settling, induction=her body BEGINS producing milk (report only when the prose shows it happening)',
     ),
   intensity: z
     .number()
@@ -142,6 +142,11 @@ This story tracks breast-expansion events mechanically. Additionally fill the to
 - Report each transformation-relevant act in this response: catalyst (magical/alchemical/supernatural growth influence), contact (intimate escalation), attempt (explicit growth attempt), milking (draining), stabilize (settling).
 - \`character\` = the affected female character's exact name. \`intensity\` = 1 (incidental) to 3 (scene-defining).
 - Report the ATTEMPT, not the outcome — the engine rolls outcomes. Do not invent events; empty array is correct for scenes without transformation content.
+
+One kind is the exception to "report the attempt": \`induction\`.
+- Report \`induction\` once for a scene in which her body BEGINS producing — a first letdown, a successful induction working, milk arriving where there was none.
+- Report the event only when the prose evidences it happening, never because it was attempted: a failed attempt is NOT an induction event, and neither is wanting, planning, or massaging toward it.
+- A girl who is already producing needs no further induction events; report her expressing as \`milking\`.
 
 Also fill the top-level \`beStates\` array with per-character soft-state reads the scene evidenced:
 - \`attitude\`: her current emotional stance toward her transformation (craving/accepting/conflicted/fearful/resentful) — only when the scene shows it.

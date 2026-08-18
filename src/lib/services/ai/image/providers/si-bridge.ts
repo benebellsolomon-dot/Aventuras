@@ -12,10 +12,10 @@
  * specs on the Krea2 base). Auth is X-API-Key — never Authorization: Bearer.
  * The A1111 shim path (a1111.ts pointed at the bridge) stays as fallback.
  *
- * B1 identity-anchor extension point: POST /image also accepts
- * pose_face_anchor_b64 + FaceID/OpenPose weights (server half shipped). Caller
- * support means storing a per-character anchor render and adding it to the
- * request body here — nothing else in this file changes.
+ * B1 identity anchor: POST /image also accepts pose_face_anchor_b64 +
+ * FaceID/OpenPose weights. There is no img2img reference LIST — a single anchor
+ * is the whole identity channel, so callers holding portrait/anchor references
+ * pick one via bridgeIdentityAnchor() (bridgeSpec.ts) and send it here.
  */
 
 import type {

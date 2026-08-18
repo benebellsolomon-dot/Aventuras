@@ -11,10 +11,12 @@
  */
 
 import {
+  apparentTier,
   bandPosition,
   bandWord,
   groundImagePromptSize,
   imageStateCues,
+  readBodyState,
   soloBodyState,
   uniformBodyStateTier,
 } from '$lib/services/be'
@@ -60,12 +62,41 @@ export interface InlineAssemblyResult {
 export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyResult {
   const { presentCharacters, tagPrompt, tagCharacters, beMode, stylePrompt, narrativeText } = input
 
+  const taggedChars = presentCharacters.filter((c) =>
+    tagCharacters.some((n) => n.toLowerCase() === c.name.toLowerCase()),
+  )
+
   // BE size-grounding: only when the tagged bodyState-carrying characters share
   // one band (mixed-band multi-character prompts stay ungrounded — one size
   // would render the others wrong). The cue-less grounded scene is what the
   // spec builder sees; cues ride the spec's extra_tags.
   const beTier = beMode ? uniformBodyStateTier(presentCharacters, tagCharacters) : null
-  const groundedScene = beTier !== null ? groundImagePromptSize(tagPrompt, beTier) : tagPrompt
+
+  // Grounding runs at the APPARENT tier (research/49 R6), not the real one:
+  // the prompt writer's reinforcement block already advertised the apparent
+  // band word plus its size anchor, so re-grounding at the real tier rewrote
+  // the band word smaller while the apparent anchor stayed — one prompt, two
+  // sizes. Presentation only; the LoRA weight and si-bridge spec keep their
+  // own authority (the spec reads apparentTier per character already).
+  // The bump keeps the same uniformity contract as beTier itself: it applies
+  // only when every tagged bodyState carrier lands on ONE apparent band word.
+  // A mixed pair (one engorged across a band boundary, one not) falls back to
+  // the shared real tier — otherwise the single scene band word would render
+  // the non-engorged co-subject a band too large.
+  const apparentTiers =
+    beTier === null
+      ? []
+      : taggedChars
+          .map((c) => readBodyState(c.metadata))
+          .filter((state): state is NonNullable<typeof state> => state !== null)
+          .map((state) => apparentTier(state))
+  const apparentUniform =
+    apparentTiers.length > 0 &&
+    apparentTiers.every((t) => bandWord(t) === bandWord(apparentTiers[0]))
+  const renderTier =
+    beTier === null ? null : apparentUniform ? Math.max(beTier, ...apparentTiers) : beTier
+  const groundedScene =
+    renderTier !== null ? groundImagePromptSize(tagPrompt, renderTier) : tagPrompt
   let groundedPrompt = groundedScene
 
   // State cues (engorgement/arousal) apply only for a single unambiguous
@@ -83,9 +114,6 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   // provider-agnostic) prepended up front; a LoRA file only for a single
   // unambiguous subject, since one workflow slot can't stack several. Weight
   // scales with that subject's engine tier.
-  const taggedChars = presentCharacters.filter((c) =>
-    tagCharacters.some((n) => n.toLowerCase() === c.name.toLowerCase()),
-  )
   const triggerText = loraTriggerText(taggedChars.map((c) => c.loraConfig))
   if (triggerText) groundedPrompt = `${triggerText}, ${groundedPrompt}`
   let loraOverride: ResolvedLora | undefined
@@ -99,8 +127,12 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   // When the engine tier is known it goes in directly (exact); the text-derived
   // marker is the fallback for band words the LLM wrote on its own.
   const markerConsumers: ReadonlyArray<ImageProviderType | undefined> = ['si-bridge', 'a1111']
+  // The marker carries the RENDER tier: it is the bridge's authoritative size
+  // lever and must agree with the grounded band word / spec, or the engorgement
+  // swell is silently discarded on exactly the providers R6 targets. Portrait/
+  // anchor paths compute their own marker from the real tier and never pass here.
   const marker = markerConsumers.includes(input.providerType)
-    ? tierMarker(beTier) || sizeBandMarker(groundedPrompt)
+    ? tierMarker(renderTier) || sizeBandMarker(groundedPrompt)
     : ''
 
   // Booru-trained models (Illustrious/Pony/...) get a tag quality prefix and NO
@@ -110,9 +142,11 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   // Within-band tier reinforcement (booru only): the band word alone flattens
   // an 8-tier range into one string; A1111 emphasis scaled by the tier's
   // position inside its band pushes the render toward the right end of it.
-  if (dialect === 'booru' && beTier !== null) {
-    const word = bandWord(beTier)
-    const weight = 1 + 0.2 * bandPosition(beTier)
+  // Reads renderTier, not beTier: the word actually sitting in the grounded
+  // prompt is the apparent one, so the real-tier word would match nothing.
+  if (dialect === 'booru' && renderTier !== null) {
+    const word = bandWord(renderTier)
+    const weight = 1 + 0.2 * bandPosition(renderTier)
     if (weight > 1.01) {
       groundedPrompt = groundedPrompt.replace(
         new RegExp(word, 'i'),

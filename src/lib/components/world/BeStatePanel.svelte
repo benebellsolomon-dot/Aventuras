@@ -15,6 +15,8 @@
     readBodyState,
     sizingString,
     sniffTierFromText,
+    supplyLabel,
+    SUPPLY_TIER_MAX,
     writeBodyState,
   } from '$lib/services/be'
 
@@ -47,6 +49,31 @@
 
   async function toggleLock() {
     if (bodyState) await persist({ ...bodyState, locked: !bodyState.locked })
+  }
+
+  // Lactation editor (research/49 Step 8) — a USER-INITIATED write, the `locked`
+  // pattern. This is also the backfill tool for pre-Phase-3 saves; the engine
+  // itself never writes the block until an induction event lands, so an untouched
+  // girl's metadata stays key-identical.
+  async function toggleLactation() {
+    if (!bodyState) return
+    const current = bodyState.lactation
+    await persist({
+      ...bodyState,
+      lactation: current
+        ? { ...current, active: !current.active }
+        : { active: true, supplyTier: 0 },
+    })
+  }
+
+  async function stepSupply(delta: number) {
+    if (!bodyState?.lactation) return
+    const supplyTier = Math.min(
+      SUPPLY_TIER_MAX,
+      Math.max(0, bodyState.lactation.supplyTier + delta),
+    )
+    if (supplyTier === bodyState.lactation.supplyTier) return
+    await persist({ ...bodyState, lactation: { ...bodyState.lactation, supplyTier } })
   }
 
   function startTierEdit() {
@@ -186,6 +213,37 @@
         </span>
       </div>
     {/if}
+    <div class="flex items-center gap-2">
+      <span class="text-muted-foreground text-xs">Lactation</span>
+      <button
+        class="border-muted rounded border px-1.5 py-0.5 text-[10px] {bodyState.lactation?.active
+          ? 'text-primary'
+          : 'text-muted-foreground'}"
+        title={bodyState.lactation?.active
+          ? 'Lactating — click to stop (supply eases on its own, but never switches off)'
+          : 'Not lactating — click to induce manually'}
+        onclick={toggleLactation}
+      >
+        {bodyState.lactation?.active ? 'active' : 'inactive'}
+      </button>
+      {#if bodyState.lactation?.active}
+        <span class="text-muted-foreground text-xs">
+          supply {supplyLabel(bodyState.lactation.supplyTier)}
+        </span>
+        <button
+          class="border-muted text-muted-foreground hover:text-foreground rounded border px-1.5 text-xs"
+          title="Lower supply"
+          disabled={bodyState.lactation.supplyTier <= 0}
+          onclick={() => stepSupply(-1)}>−</button
+        >
+        <button
+          class="border-muted text-muted-foreground hover:text-foreground rounded border px-1.5 text-xs"
+          title="Raise supply"
+          disabled={bodyState.lactation.supplyTier >= SUPPLY_TIER_MAX}
+          onclick={() => stepSupply(1)}>+</button
+        >
+      {/if}
+    </div>
     <div class="flex items-center gap-2">
       <label class="text-muted-foreground text-xs" for="be-attitude-{character.id}">Attitude</label>
       <select

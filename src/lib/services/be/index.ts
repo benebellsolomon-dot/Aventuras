@@ -9,20 +9,32 @@
 export * from './types'
 export {
   ANTICIPATION_THRESHOLD,
+  APPARENT_TIER_ENGORGED,
+  APPARENT_TIER_PRESSURE_PRONE,
+  CHRONIC_SUPPLY_BEATS,
+  CHRONIC_SUPPLY_TIER,
   DEFAULT_BE_STORY_CONFIG,
   DEFAULT_FLUID_PROFILE,
   DEFAULT_GROWTH_COOLDOWN_BEATS,
+  EARLY_BLOOMER_INDUCTION_BONUS,
   ENGORGED_FILL_THRESHOLD,
+  ENGORGED_FILL_THRESHOLD_PRESSURE_PRONE,
   ENGORGED_TTL,
   FLUID_REGISTRY,
   GROWTH_DELTA_BY_OUTCOME,
   GROWTH_EVENT_KINDS,
   MAX_BE_CONDITIONS,
+  MILK_UNIT_ML,
   OVERFILL_ADD_BASE,
   OVERFILL_FILL_THRESHOLD,
   PRESSURE_ACCRUAL,
   PRESSURE_FIRE,
   PRESSURE_RELEASE,
+  SUPPLY_ADAPT_UP_BEATS,
+  SUPPLY_EASE_IDLE_BEATS,
+  SUPPLY_FILL_RATE_BONUS,
+  SUPPLY_LABELS,
+  SUPPLY_TIER_MAX,
   fluidProfile,
   parseGrowthEligibleKinds,
   type FluidProfile,
@@ -105,6 +117,12 @@ export {
   type BeStateEntry,
 } from './context'
 export {
+  PRESENCE_LOOKBACK,
+  readScenePresence,
+  selectScenePresent,
+  type PresenceEntrySource,
+} from './presence'
+export {
   applyBondEvents,
   applyExposure,
   bondCheckModifier,
@@ -129,6 +147,28 @@ export {
   type QuirkDef,
   type QuirkId,
 } from './quirks'
+export {
+  adaptSupply,
+  apparentTier,
+  apparentTierBonus,
+  engorgeThreshold,
+  findMilkItem,
+  isEngorged,
+  lactationOf,
+  milkItemMetadata,
+  milkItemName,
+  milkYieldUnits,
+  qualityFromBand,
+  supplyFillMultiplier,
+  supplyLabel,
+  supplyMeter,
+  tickChronic,
+  type ChronicTick,
+  type MilkItemLike,
+  type MilkQuality,
+  type SupplyAdapt,
+  type SupplyMeterView,
+} from './lactation'
 export { detectDrift } from './drift'
 export { INTERACTION_MILESTONES, nextMilestone, type InteractionMilestone } from './milestones'
 export {

@@ -24,6 +24,7 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { assembleInlineImage } from './inlineAssembly'
+import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import type { StructuredImageSpecInput } from './providers/types'
@@ -159,10 +160,18 @@ export class InlineImageTracker {
         regional: bridgeSpec.regional ?? false,
       })
     }
+    // si-bridge has no img2img reference list — identity rides the FaceID/
+    // OpenPose anchor channel instead (B1), one portrait per request.
+    const poseFaceAnchor = bridgeIdentityAnchor({
+      providerType: profile.providerType,
+      model: modelToUse,
+      referenceImages: referenceImageUrls,
+    })
     if (profile.providerType === 'si-bridge' && referenceImageUrls?.length) {
-      // B1 anchor path not wired yet — portrait references cannot be consumed.
-      log('si-bridge ignores portrait references (B1 identity anchors not yet wired)', {
-        droppedReferences: referenceImageUrls.length,
+      log('si-bridge portrait reference routed to the FaceID anchor', {
+        anchored: !!poseFaceAnchor,
+        // A krea2 pin cannot carry an anchor at all; extra portraits have no slot.
+        droppedReferences: referenceImageUrls.length - (poseFaceAnchor ? 1 : 0),
       })
     }
 
@@ -182,6 +191,7 @@ export class InlineImageTracker {
       referenceImageUrls,
       bridgeSpec,
       loraOverride,
+      poseFaceAnchor,
     )
 
     this.pendingImages.push({
@@ -207,6 +217,7 @@ export class InlineImageTracker {
     referenceImageUrls?: string[],
     spec?: StructuredImageSpecInput,
     loraOverride?: ResolvedLora,
+    poseFaceAnchor?: string,
   ): Promise<{ base64: string | null; error?: string }> {
     try {
       const result = await registryGenerateImage({
@@ -216,6 +227,7 @@ export class InlineImageTracker {
         size,
         referenceImages: referenceImageUrls,
         spec,
+        poseFaceAnchor,
         loraOverride,
       })
 

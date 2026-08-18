@@ -7,12 +7,16 @@
  * is the drift risk research/48 warns about.
  */
 
+import { supplyLabel } from '$lib/services/be'
+
 export interface GateInput {
   name: string
   bond: number
   dependence: number
-  massKg: number
   quirks: ReadonlyArray<string>
+  /** research/49 R2: engine-tracked supply, not carried mass, gates expression. */
+  lactationActive: boolean
+  supplyTier: number
 }
 
 interface GateDef {
@@ -31,10 +35,19 @@ export const GATED_INTERACTIONS: ReadonlyArray<GateDef> = [
     requirement: 'bond: bonded or deeper',
   },
   {
+    id: 'induce_lactation',
+    label: 'inducing lactation',
+    available: (i) => i.bond >= 45 && !i.lactationActive,
+    requirement: 'bond: bonded, and she is not already lactating',
+  },
+  // research/49 risk 8: the mass floor was a pre-lactation proxy for "full
+  // enough to express". Supply is now tracked for real, so it is the gate — a
+  // big but uninduced girl LOSES this offer until induction actually happens.
+  {
     id: 'milking',
     label: 'milking',
-    available: (i) => i.bond >= 45 && i.massKg >= 2.7,
-    requirement: 'bond: bonded, and enough fullness to express',
+    available: (i) => i.bond >= 45 && i.lactationActive,
+    requirement: 'bond: bonded, and an established milk supply',
   },
   {
     id: 'advanced_catalyst',
@@ -73,12 +86,16 @@ export function buildGatedActionsInstruction(inputs: ReadonlyArray<GateInput>): 
   if (inputs.length === 0) return ''
   const lines = inputs.map((input) => {
     const { available } = availableInteractions(input)
-    return `- ${input.name}: ${available.length > 0 ? available.join(', ') : 'no gated interactions yet'}`
+    const offers = available.length > 0 ? available.join(', ') : 'no gated interactions yet'
+    // Supply band rides the same line: a torrential girl wants a different
+    // milking scene than a light one, and the generator only reads this text.
+    const supply = input.lactationActive ? ` (milk supply: ${supplyLabel(input.supplyTier)})` : ''
+    return `- ${input.name}: ${offers}${supply}`
   })
   return [
     '## Gated Interactions',
     'Some interactions unlock per character as trust, dependence, and her body develop. Currently available:',
     ...lines,
-    'Do not offer a gated interaction (intimate handling, milking, advanced catalysts, deep rituals) that is not listed as available for that character.',
+    'Do not offer a gated interaction (intimate handling, inducing lactation, milking, advanced catalysts, deep rituals) that is not listed as available for that character.',
   ].join('\n')
 }

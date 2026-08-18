@@ -46,10 +46,7 @@
   import { Textarea } from '$lib/components/ui/textarea'
   import { Input } from '$lib/components/ui/input'
   import * as ResponsiveModal from '$lib/components/ui/responsive-modal'
-  import {
-    IMAGE_STUCK_THRESHOLD_MS,
-    DEFAULT_FALLBACK_STYLE_PROMPT,
-  } from '$lib/services/ai/image/constants'
+  import { IMAGE_STUCK_THRESHOLD_MS } from '$lib/services/ai/image/constants'
   import { SvelteSet } from 'svelte/reactivity'
   import { escapeRegex, extractSentenceAt, expandRangeBidirectional } from '$lib/utils/text'
 
@@ -583,19 +580,6 @@
     return stripStyleSuffix(image.prompt)
   }
 
-  async function fetchCurrentStylePrompt(): Promise<string> {
-    const styleId = settings.systemServicesSettings.imageGeneration.styleId
-    try {
-      const template = await database.getPackTemplate('default-pack', styleId)
-      if (template?.content) {
-        return template.content
-      }
-    } catch {
-      // Template not found, use fallback
-    }
-    return DEFAULT_FALLBACK_STYLE_PROMPT
-  }
-
   // Open the image view/edit modal
   function openImageViewModal(image: (typeof embeddedImages)[0]) {
     viewingImage = image
@@ -611,12 +595,12 @@
     if (viewingImagePromptMode === 'chat') {
       await regenerateInlineImage(imageId, viewingImage.prompt)
     } else {
-      const stylePrompt = await fetchCurrentStylePrompt()
-      await regenerateInlineImage(
-        imageId,
-        `${viewingImagePrompt.trim().replace(/\.+$/, '')}. ${stylePrompt}`,
-        true,
-      )
+      // The edited text is the raw <pic> prompt for inline images (assembly adds
+      // the style); non-inline records have no assembly, so retryImageGeneration
+      // appends the current style itself — from the one template fetch it
+      // already makes, instead of a second one here.
+      const custom = viewingImagePrompt.trim().replace(/\.+$/, '')
+      await regenerateInlineImage(imageId, custom, custom)
     }
   }
 
@@ -701,43 +685,27 @@
     }
   }
 
-  // Regenerate an inline image with a new or existing prompt.
-  // Pass usePassedPromptAsIs=true when the caller has already built the final prompt
-  // (e.g. a user-edited custom prompt) and the sourceText reconstruction should be skipped.
-  async function regenerateInlineImage(
-    imageId: string,
-    prompt: string,
-    usePassedPromptAsIs = false,
-  ) {
+  // Regenerate an inline image. Inline (<pic>) records are rebuilt through the
+  // canonical assembly pipeline inside retryImageGeneration — same grounding,
+  // trigger words/LoRA, dialect handling and current style as first-time
+  // generation. `promptOverride` carries a user-edited raw prompt; `prompt` is
+  // the fallback used for non-inline records.
+  async function regenerateInlineImage(imageId: string, prompt: string, promptOverride?: string) {
     const image = embeddedImages.find((img) => img.id === imageId)
     if (!image) return
 
     // Mark as regenerating (shows loading overlay)
     regeneratingImageIds = new Set([...regeneratingImageIds, imageId])
 
-    let finalPrompt = prompt
-
-    // If it's an inline image, try to reconstruct prompt with CURRENT style
-    // This allows style changes in settings to apply when retrying/regenerating.
-    // Skip when usePassedPromptAsIs is true so a custom user prompt is honoured.
-    if (
-      !usePassedPromptAsIs &&
-      image.generationMode === 'inline' &&
-      image.sourceText &&
-      image.sourceText.startsWith('<pic')
-    ) {
-      // Extract raw prompt from sourceText
-      const rawPrompt = matchAttribute(image.sourceText, 'prompt')
-      if (rawPrompt) {
-        const stylePrompt = await fetchCurrentStylePrompt()
-        finalPrompt = `${rawPrompt.replace(/\.+$/, '')}. ${stylePrompt}`
-        console.log('[StoryEntry] Reconstructed prompt with new style:', finalPrompt)
-      }
-    }
-
     try {
       // Use centralized retry logic from ImageGenerationService
-      await retryImageGeneration(imageId, finalPrompt)
+      await retryImageGeneration(imageId, prompt, {
+        presentCharacters: story.characters,
+        beMode: story.currentStory?.settings?.beMode === true,
+        narrativeText: entry.translatedContent ?? entry.content,
+        promptOverride,
+        referenceMode: story.currentStory?.settings?.referenceMode ?? false,
+      })
 
       // Reload images to show updated state
       await loadEmbeddedImages()

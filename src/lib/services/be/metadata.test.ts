@@ -68,6 +68,58 @@ describe('absent / corrupt metadata', () => {
   })
 })
 
+describe('lactation block (research/49 R1 — neutral passthrough)', () => {
+  test('a legacy state with no lactation key round-trips WITHOUT gaining one', () => {
+    const legacy = defaultBodyState(9)
+    const parsed = readBodyState(writeBodyState(null, legacy))
+
+    expect(parsed).toEqual(legacy)
+    expect(parsed).not.toHaveProperty('lactation')
+    expect(Object.keys(parsed as object)).toEqual(Object.keys(legacy))
+  })
+
+  test('a full lactation block round-trips with every counter intact', () => {
+    const state = {
+      ...defaultBodyState(9),
+      lactation: {
+        active: true,
+        supplyTier: 2,
+        beatsSinceMilked: 1,
+        demandBeats: 3,
+        chronicBeats: 5,
+      },
+    }
+    expect(readBodyState(writeBodyState(null, state))).toEqual(state)
+  })
+
+  test('counters are optional — the minimal activation shape parses', () => {
+    const state = { ...defaultBodyState(9), lactation: { active: true, supplyTier: 0 } }
+    expect(readBodyState(writeBodyState(null, state))?.lactation).toEqual({
+      active: true,
+      supplyTier: 0,
+    })
+  })
+
+  test('a supplyTier from a newer build survives an older reader (no max)', () => {
+    const parsed = readBodyState({
+      [BODY_STATE_KEY]: {
+        ...defaultBodyState(9),
+        lactation: { active: true, supplyTier: 7, futureCounter: 2 },
+      },
+    })
+    expect(parsed?.lactation?.supplyTier).toBe(7)
+    expect((parsed?.lactation as unknown as Record<string, unknown>).futureCounter).toBe(2)
+  })
+
+  test('a corrupt lactation block fails the whole parse rather than being silently dropped', () => {
+    expect(
+      readBodyState({
+        [BODY_STATE_KEY]: { ...defaultBodyState(9), lactation: { active: 'yes', supplyTier: 0 } },
+      }),
+    ).toBeNull()
+  })
+})
+
 describe('seeding from a card cup letter', () => {
   test('a known letter seeds its anchor tier', () => {
     const state = seedBodyStateFromCup('X')

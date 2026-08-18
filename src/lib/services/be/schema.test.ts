@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import {
+  beEventsFromResult,
   bondEventsFromResult,
   buildBeEventInstructions,
   exposureEventsFromResult,
@@ -60,6 +61,37 @@ describe('coercers (tolerant, Phase-1-compatible)', () => {
   })
 })
 
+describe('induction events (research/49 Step 3)', () => {
+  it('an induction event parses through the beEvents coercer', () => {
+    const result = { beEvents: [{ character: 'Mira', kind: 'induction', intensity: 2 }] }
+    expect(beEventsFromResult(result)).toEqual([
+      { character: 'Mira', kind: 'induction', intensity: 2 },
+    ])
+  })
+
+  it('the kind enum still rejects invented kinds', () => {
+    const result = {
+      beEvents: [
+        { character: 'Mira', kind: 'lactation', intensity: 1 },
+        { character: 'Mira', kind: 'milking', intensity: 1 },
+      ],
+    }
+    expect(beEventsFromResult(result)).toEqual([
+      { character: 'Mira', kind: 'milking', intensity: 1 },
+    ])
+  })
+
+  it('a legacy result carrying only growth kinds still coerces unchanged', () => {
+    const legacy = {
+      beEvents: [
+        { character: 'Mira', kind: 'catalyst', intensity: 2 },
+        { character: 'Sable', kind: 'contact', intensity: 1 },
+      ],
+    }
+    expect(beEventsFromResult(legacy)).toEqual(legacy.beEvents)
+  })
+})
+
 describe('instruction copy', () => {
   it('carries the anti-positivity strain rule and the exposure/growth distinction', () => {
     const instructions = buildBeEventInstructions()
@@ -68,5 +100,20 @@ describe('instruction copy', () => {
     expect(instructions).toContain('the engine owns the number')
     expect(instructions).toContain('exposureEvents')
     expect(instructions).toContain('dependence, not her growth')
+  })
+
+  it('renders the induction section exactly once, with the failed-attempt rule', () => {
+    const instructions = buildBeEventInstructions()
+    expect(instructions.match(/induction/g)?.length).toBeGreaterThan(0)
+    expect(instructions).toContain('her body BEGINS producing')
+    expect(instructions).toContain('never because it was attempted')
+    // One section, not one per array — the copy must not duplicate.
+    expect(instructions.match(/a failed attempt is NOT an induction/g)?.length).toBe(1)
+  })
+
+  it('the cosmology suffix does not duplicate the induction copy', () => {
+    const withCosmology = buildBeEventInstructions('Ambrosia drives every change here.')
+    expect(withCosmology.match(/a failed attempt is NOT an induction/g)?.length).toBe(1)
+    expect(withCosmology).toContain('Growth Cosmology')
   })
 })

@@ -45,6 +45,36 @@ describe('buildTargetCheckModifiers (research/48 R4 sign contract)', () => {
     expect(sum(girl({ quirks: ['proud'] }), 'seduction')).toBe(0)
   })
 
+  // research/49 R10: the induction bonus, sign-pinned like every other quirk.
+  it('early_bloomer: Milking bonus +4 (DC −4) while she is NOT yet lactating', () => {
+    const mods = buildTargetCheckModifiers(girl({ quirks: ['early_bloomer'] }), 'milking')
+    expect(mods).toContainEqual({ label: 'early bloomer (DC −4)', value: 4 })
+    expect(sum(girl({ quirks: ['early_bloomer'] }), 'milking')).toBe(4)
+  })
+
+  it('early_bloomer: the row is gone once her supply is active (induction is done)', () => {
+    const active = girl({
+      quirks: ['early_bloomer'],
+      lactation: { active: true, supplyTier: 0 },
+    })
+    expect(sum(active, 'milking')).toBe(0)
+    // An inactive block (editor toggle off) is the same as no block at all.
+    const toggledOff = girl({
+      quirks: ['early_bloomer'],
+      lactation: { active: false, supplyTier: 2 },
+    })
+    expect(sum(toggledOff, 'milking')).toBe(4)
+  })
+
+  it('early_bloomer touches nothing but milking checks', () => {
+    expect(sum(girl({ quirks: ['early_bloomer'] }), 'handling')).toBe(0)
+    expect(sum(girl({ quirks: ['early_bloomer'] }), 'alchemy')).toBe(0)
+  })
+
+  it('stacks with needy_nipples on the same milking check', () => {
+    expect(sum(girl({ quirks: ['early_bloomer', 'needy_nipples'] }), 'milking')).toBe(6)
+  })
+
   it('stacking is deterministic and labeled', () => {
     const mods = buildTargetCheckModifiers(
       girl({ quirks: ['skittish', 'proud'], bond: 10 }),

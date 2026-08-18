@@ -22,6 +22,7 @@ import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/s
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { assembleInlineImage } from './inlineAssembly'
+import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
@@ -189,11 +190,18 @@ export class InlineImageGenerationService {
         regional: bridgeSpec.regional ?? false,
       })
     }
+    // si-bridge has no img2img reference list — identity rides the FaceID/
+    // OpenPose anchor channel instead (B1), one portrait per request.
+    const poseFaceAnchor = bridgeIdentityAnchor({
+      providerType: activeProviderType,
+      model: modelToUse,
+      referenceImages: referenceImageUrls,
+    })
     if (activeProviderType === 'si-bridge' && referenceImageUrls?.length) {
-      // B1 anchor path not wired yet — the native provider cannot consume
-      // portrait references; the render proceeds spec/prompt-only.
-      log('si-bridge ignores portrait references (B1 identity anchors not yet wired)', {
-        droppedReferences: referenceImageUrls.length,
+      log('si-bridge portrait reference routed to the FaceID anchor', {
+        anchored: !!poseFaceAnchor,
+        // A krea2 pin cannot carry an anchor at all; extra portraits have no slot.
+        droppedReferences: referenceImageUrls.length - (poseFaceAnchor ? 1 : 0),
       })
     }
 
@@ -237,6 +245,7 @@ export class InlineImageGenerationService {
       referenceImageUrls,
       bridgeSpec,
       loraOverride,
+      poseFaceAnchor,
     ).catch((error) => {
       log('Async inline image generation failed', { imageId, error })
     })
@@ -272,6 +281,7 @@ export class InlineImageGenerationService {
     referenceImageUrls?: string[],
     spec?: StructuredImageSpecInput,
     loraOverride?: ResolvedLora | null,
+    poseFaceAnchor?: string,
   ): Promise<void> {
     try {
       // Update status to generating
@@ -282,6 +292,7 @@ export class InlineImageGenerationService {
         profileId,
         model,
         hasReference: !!referenceImageUrls?.length,
+        hasAnchor: !!poseFaceAnchor,
         hasLora: !!loraOverride,
       })
 
@@ -293,6 +304,7 @@ export class InlineImageGenerationService {
         size,
         referenceImages: referenceImageUrls,
         spec,
+        poseFaceAnchor,
         loraOverride: loraOverride ?? undefined,
       })
 
