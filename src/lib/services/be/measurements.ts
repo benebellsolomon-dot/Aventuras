@@ -31,6 +31,7 @@ import {
   saneWeightKg,
 } from './curves'
 import { SHAPE_SUPPORT, SUPPORT_FROM_CONDITIONS, fluidProfile } from './constants'
+import { apparentTierBonus, isEngorged } from './lactation'
 import { cupLetter } from './ladder'
 import type { BodyShape, BodyState } from './types'
 
@@ -215,14 +216,25 @@ export function measurements(state: BodyState): BodyMeasurements {
 export function imageStateCues(state: BodyState): string[] {
   const cues: string[] = []
   const fill = state.fluids.fillPercent
-  // Graduated fill rungs — one cue, strongest wins (avoid prompt bloat).
-  if (fill >= 90) {
+  // Apparent swell (research/49 R6): PRESENTATION magnitude only — it rides the
+  // cue text and the render tier, never the tape above.
+  const swell = apparentTierBonus(state, isEngorged(state))
+  const swellCue =
+    swell > 0 ? `, swollen ${swell >= 2 ? 'two full cups' : 'a full cup'} past her usual size` : ''
+  // One cue, strongest wins (avoid prompt bloat). The engorged register is keyed
+  // on HER threshold, not the flat rung — a pressure_prone girl at 62% is
+  // genuinely engorged, and the old flat ladder called her "subtly swollen" in
+  // the same breath as "swollen two full cups past her usual size". Under the
+  // flat threshold engorgement starts at exactly 75, so the 75/90 rungs are
+  // unchanged for everyone else.
+  if (isEngorged(state)) {
     cues.push(
-      `breasts hugely engorged with ${state.fluids.fluidType}, skin stretched shiny-taut, visibly leaking`,
+      fill >= 90
+        ? `breasts hugely engorged with ${state.fluids.fluidType}, skin stretched shiny-taut, visibly leaking${swellCue}`
+        : `breasts visibly engorged, taut and heavy with ${state.fluids.fluidType}${swellCue}`,
     )
-  } else if (fill >= 75) {
-    cues.push(`breasts visibly engorged, taut and heavy with ${state.fluids.fluidType}`)
   } else if (fill >= 40) {
+    // No swell clause here by construction: the bonus is zero unless Engorged.
     cues.push(`breasts subtly swollen with ${state.fluids.fluidType}, skin gently taut`)
   }
   if ((state.arousal ?? 0) >= 70) {

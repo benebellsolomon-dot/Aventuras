@@ -21,6 +21,7 @@ import {
   fluidPressureLabel,
   measurements,
 } from './measurements'
+import { apparentTierBonus, isEngorged, lactationOf, supplyLabel } from './lactation'
 import { nextMilestone } from './milestones'
 import { QUIRK_BY_ID, readQuirks, type QuirkDef } from './quirks'
 import { bondOf, bondStance, dependenceOf, dependenceStage } from './tracks'
@@ -106,6 +107,26 @@ function characterLines(entry: BeStateEntry): string {
     lines.push(`${line}.`)
   }
 
+  // Lactation (research/49 R11): gated on `active`, so a non-lactating,
+  // non-engorged girl's block stays byte-identical to the pre-Phase-3 string
+  // (cache guard). It is NOT byte-identical once she is Engorged — the swell
+  // line below is fill-gated by design (R6) and applies to any girl at her
+  // threshold, lactating or not.
+  const lactation = lactationOf(state)
+  if (lactation?.active) {
+    lines.push(
+      `Lactation: active — ${supplyLabel(lactation.supplyTier)} supply; regular expression sustains it, neglect will ease it.`,
+    )
+  }
+  // Apparent swell is temporary presentation, NOT growth — the parenthetical is
+  // load-bearing: without it the narrator writes the swell as a new size.
+  const swell = apparentTierBonus(state, isEngorged(state))
+  if (swell > 0) {
+    lines.push(
+      `Engorgement swell: she presently looks ${swell >= 2 ? 'two full cups' : 'a full cup'} larger than her letter (temporary — do not treat as growth).`,
+    )
+  }
+
   if (state.conditions.length > 0) {
     const rendered = state.conditions
       .map((c) => {
@@ -166,7 +187,8 @@ export function buildHaremStateBlock(entries: BeStateEntry[]): string {
     (e) =>
       e.state.bond !== undefined ||
       e.state.dependence !== undefined ||
-      (e.state.quirks?.length ?? 0) > 0,
+      (e.state.quirks?.length ?? 0) > 0 ||
+      lactationOf(e.state)?.active === true,
   )
   if (tracked.length === 0) return ''
   const lines = tracked.map((entry) => {
@@ -175,6 +197,8 @@ export function buildHaremStateBlock(entries: BeStateEntry[]): string {
     parts.push(`bond: ${bondStance(bond)}`)
     const dependence = dependenceOf(entry.state)
     if (dependence > 0) parts.push(`dependence: ${dependenceStage(dependence)}`)
+    const lactation = lactationOf(entry.state)
+    if (lactation?.active) parts.push(`milk: ${supplyLabel(lactation.supplyTier)}`)
     const quirkBlurbs = readQuirks(entry.state)
       .map((id) => QUIRK_BY_ID.get(id))
       .filter((def): def is QuirkDef => def !== undefined)

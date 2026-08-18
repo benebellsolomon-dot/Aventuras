@@ -18,6 +18,7 @@ import {
   extendClassificationSchemaWithBeEvents,
 } from './schema'
 import { parseGrowthEligibleKinds } from './constants'
+import { findMilkItem, milkItemMetadata, milkItemName, type MilkItemLike } from './lactation'
 import type { BodyState } from './types'
 
 describe('classifier schema extension', () => {
@@ -320,6 +321,49 @@ describe('[BODY STATE] precedence over lore', () => {
   test('preamble declares the block outranks world lore on growth', () => {
     const block = buildBeStateBlock([{ name: 'Lucy', state: defaultBodyState(20) }])
     expect(block).toContain('THIS BLOCK WINS')
+  })
+})
+
+describe('milk item identity (research/49 R7 — the store stacks on THIS rule)', () => {
+  const row = (over: Partial<MilkItemLike> = {}): MilkItemLike => ({
+    id: 'i1',
+    name: "Lucy's milk",
+    quantity: 1,
+    metadata: milkItemMetadata('char-lucy', 'rich'),
+    ...over,
+  })
+
+  test('display name is per-character and fluid-typed', () => {
+    expect(milkItemName('Lucy', 'milk')).toBe("Lucy's milk")
+    expect(milkItemName('Zaria', 'nectar')).toBe("Zaria's nectar")
+  })
+
+  test('metadata carries the stable identity the match keys on', () => {
+    expect(milkItemMetadata('char-lucy', 'prime')).toEqual({
+      milkOf: 'char-lucy',
+      quality: 'prime',
+    })
+  })
+
+  test('matches on metadata, never on the (translatable, editable) display name', () => {
+    const renamed = row({ name: 'bottled treasure' })
+    expect(findMilkItem([renamed], 'char-lucy', 'rich')).toBe(renamed)
+    const impostor = row({ id: 'i2', metadata: { source: 'classifier' } })
+    expect(findMilkItem([impostor], 'char-lucy', 'rich')).toBeNull()
+  })
+
+  test('a different girl or a different quality is a different stack', () => {
+    const rich = row()
+    expect(findMilkItem([rich], 'char-zaria', 'rich')).toBeNull()
+    expect(findMilkItem([rich], 'char-lucy', 'prime')).toBeNull()
+    const prime = row({ id: 'i2', metadata: milkItemMetadata('char-lucy', 'prime') })
+    expect(findMilkItem([rich, prime], 'char-lucy', 'prime')).toBe(prime)
+  })
+
+  test('tolerates null/garbage metadata rows without throwing', () => {
+    expect(findMilkItem([row({ metadata: null }), row({ metadata: undefined })], 'x', 'rich')).toBe(
+      null,
+    )
   })
 })
 

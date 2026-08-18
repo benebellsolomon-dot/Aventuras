@@ -1,7 +1,7 @@
 <script lang="ts">
   // Harem tab turn log (research/48 Step 9): interleaved checkLog + beLog rows,
   // ordering ruled in rpg/turnlog.ts. Markup only — logic stays testable.
-  import { BAND_LABELS, buildTurnLog, formatCheckMath } from '$lib/services/rpg'
+  import { BAND_LABELS, beLogStyle, buildTurnLog, formatCheckMath } from '$lib/services/rpg'
   import { story } from '$lib/stores/story.svelte'
 
   const rows = $derived(buildTurnLog(story.entries, 30))
@@ -32,10 +32,9 @@
               >{/if}
           </div>
         {:else}
-          <div
-            class="bg-card rounded border-l-2 border-l-pink-400/70 px-2 py-1 font-mono text-[10px]"
-          >
-            {row.record.character}: {row.record.kind} → {row.record.outcome}{row.record.delta > 0
+          {@const style = beLogStyle(row.record.kind)}
+          <div class="bg-card rounded border-l-2 px-2 py-1 font-mono text-[10px] {style.tint}">
+            {row.record.character}: {style.label} → {row.record.outcome}{row.record.delta > 0
               ? ` (+${row.record.delta} → ${row.record.tierAfter})`
               : ''}{row.record.note ? ` · ${row.record.note}` : ''}
           </div>

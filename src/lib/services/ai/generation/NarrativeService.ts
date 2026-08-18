@@ -21,6 +21,7 @@ import { stripPicTags } from '$lib/utils/inlineImageParser'
 import { settings } from '$lib/stores/settings.svelte'
 import { detectPromptDialect } from '../image/dialect'
 import {
+  apparentTier,
   bandWord,
   cupLetter,
   imageSizeAnchor,
@@ -190,8 +191,12 @@ function buildBodyStateReinforcementBlock(characters: Character[]): string {
     .map((c) => {
       const state = readBodyState(c.metadata)
       if (!state) return null
-      const parts = [`${bandWord(state.tier)} (${cupLetter(state.tier)}-cup)`]
-      const anchor = imageSizeAnchor(state.tier)
+      // Apparent tier (research/49 R6): while she is engorged the IMAGE reads a
+      // size larger. Prompt-facing only — her engine tier is untouched, and the
+      // [BODY STATE] block still states her real letter.
+      const renderTier = apparentTier(state)
+      const parts = [`${bandWord(renderTier)} (${cupLetter(renderTier)}-cup)`]
+      const anchor = imageSizeAnchor(renderTier)
       if (anchor) parts.push(anchor)
       parts.push(...imageStateCues(state))
       return `- ${c.name}: ${parts.join('; ')}`
@@ -293,6 +298,17 @@ export interface WorldStateContext {
  */
 export interface NarrativeWorldState extends WorldStateContext {
   lorebookEntries?: Entry[]
+}
+
+/**
+ * This turn's pending player action — the same "last user_action" the user
+ * prompt renders as `## Current Action`. Empty string when there is none.
+ */
+export function lastUserActionText(entries: ReadonlyArray<StoryEntry>): string {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].type === 'user_action') return entries[i].content ?? ''
+  }
+  return ''
 }
 
 /**
@@ -451,6 +467,7 @@ export class NarrativeService {
       styleReview,
       retrievedChapterContext,
       timelineFillResult,
+      lastUserActionText(entries),
     )
 
     // Build the user prompt from entries
@@ -516,6 +533,8 @@ export class NarrativeService {
       tieredContextBlock,
       styleReview,
       retrievedChapterContext,
+      null,
+      lastUserActionText(entries),
     )
 
     const mode = story?.mode ?? 'adventure'
@@ -543,6 +562,7 @@ export class NarrativeService {
     styleReview?: StyleReviewResult | null,
     retrievedChapterContext?: string | null,
     timelineFillResult?: TimelineFillResult | null,
+    actionText: string = '',
   ): Promise<{ systemPrompt: string; primingMessage: string; postHistoryBlock: string }> {
     const mode = story?.mode ?? 'adventure'
 
@@ -551,7 +571,10 @@ export class NarrativeService {
     let ctx: ContextBuilder
 
     if (story?.id) {
-      ctx = await ContextBuilder.forStory(story.id)
+      // The pending action goes in so scene presence can pin a character the
+      // player just addressed — the previous narration's presence list cannot
+      // know she is back yet.
+      ctx = await ContextBuilder.forStory(story.id, undefined, actionText)
     } else {
       // Fallback for edge cases where story doesn't exist yet
       ctx = new ContextBuilder()

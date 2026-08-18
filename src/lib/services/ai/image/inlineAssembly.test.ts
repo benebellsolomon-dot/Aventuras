@@ -146,4 +146,86 @@ describe('assembleInlineImage', () => {
     expect(bridge.fullPrompt).toMatch(/^__betier_\d+__ /)
     expect(nano.fullPrompt).not.toContain('__betier_')
   })
+
+  // research/49 R6: the prompt writer's reinforcement block advertises the
+  // APPARENT band word + anchor for an engorged girl. Grounding at the real
+  // tier used to rewrite that word smaller while the apparent anchor stayed —
+  // one prompt, two sizes.
+  it('grounds an engorged subject at her apparent tier, matching the reinforcement block', () => {
+    const engorged = {
+      name: 'Lucy',
+      loraConfig: null,
+      metadata: writeBodyState(null, {
+        ...defaultBodyState(21),
+        fluids: { fillPercent: 90, fluidType: 'milk' },
+      }),
+      visualDescriptors: {},
+    } as unknown as Character
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: '',
+      providerType: 'comfyui' as const,
+      presentCharacters: [engorged],
+      tagPrompt: 'a woman with large breasts in a garden',
+      tagCharacters: ['Lucy'],
+    })
+    // Tier 21 is the top of "large"; engorged reads one tier larger → "huge".
+    expect(result.fullPrompt).toContain('huge breasts')
+    expect(result.fullPrompt).not.toContain('large breasts')
+  })
+
+  it('leaves a non-engorged subject grounded at her real tier', () => {
+    const settled = {
+      name: 'Lucy',
+      loraConfig: null,
+      metadata: writeBodyState(null, defaultBodyState(21)),
+      visualDescriptors: {},
+    } as unknown as Character
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: '',
+      providerType: 'comfyui' as const,
+      presentCharacters: [settled],
+      tagPrompt: 'a woman with huge breasts in a garden',
+      tagCharacters: ['Lucy'],
+    })
+    expect(result.fullPrompt).toContain('large breasts')
+    expect(result.fullPrompt).not.toContain('huge breasts')
+  })
+
+  // The apparent bump keeps beTier's uniformity contract: one engorged girl
+  // crossing the band boundary must not inflate her non-engorged co-subject —
+  // a mixed pair falls back to the shared real band word.
+  it('falls back to the real band when one of two co-subjects engorges across the boundary', () => {
+    const engorged = {
+      name: 'Lucy',
+      loraConfig: null,
+      metadata: writeBodyState(null, {
+        ...defaultBodyState(21),
+        fluids: { fillPercent: 90, fluidType: 'milk' },
+      }),
+      visualDescriptors: {},
+    } as unknown as Character
+    const settled = {
+      name: 'Mira',
+      loraConfig: null,
+      metadata: writeBodyState(null, defaultBodyState(21)),
+      visualDescriptors: {},
+    } as unknown as Character
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: '',
+      providerType: 'si-bridge' as const,
+      presentCharacters: [engorged, settled],
+      tagPrompt: 'two women with large breasts in a garden',
+      tagCharacters: ['Lucy', 'Mira'],
+    })
+    expect(result.fullPrompt).toContain('large breasts')
+    expect(result.fullPrompt).not.toContain('huge breasts')
+    // The marker agrees with the grounded word (real tier 21, not apparent 22+).
+    expect(result.fullPrompt).toContain('__betier_21__')
+  })
 })

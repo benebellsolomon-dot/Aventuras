@@ -54,6 +54,19 @@ export const bodyStateSchema = z
     // read time in quirks.ts (31a lesson 3).
     quirks: z.array(z.string()).max(3).optional(),
     beatsSinceExposure: z.number().int().nonnegative().optional(),
+    // Optional block, optional counters (research/49 R1): a save with no
+    // `lactation` key parses back key-identical. `supplyTier` has NO max — an
+    // unknown future tier must survive a round-trip through this older reader.
+    lactation: z
+      .object({
+        active: z.boolean(),
+        supplyTier: z.number().int().min(0),
+        beatsSinceMilked: z.number().int().nonnegative().optional(),
+        demandBeats: z.number().int().nonnegative().optional(),
+        chronicBeats: z.number().int().nonnegative().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough()
 

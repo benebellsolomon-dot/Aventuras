@@ -49,7 +49,7 @@ export {
 export { applyLevelGrants, crossingKey, spendPoint, type SpendTarget } from './leveling'
 export { detectRpgDrift } from './drift'
 export { buildTargetCheckModifiers } from './modifiers'
-export { buildTurnLog, type TurnLogRow } from './turnlog'
+export { beLogStyle, buildTurnLog, type BeLogStyle, type TurnLogRow } from './turnlog'
 export {
   availableInteractions,
   buildGatedActionsInstruction,

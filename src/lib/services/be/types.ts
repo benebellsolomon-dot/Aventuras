@@ -96,10 +96,33 @@ export interface BodyState {
   quirks?: string[]
   /** Beats since her last exposure event — the withdrawal clock (research/48 R8). */
   beatsSinceExposure?: number
+  /**
+   * The lactation axis (research/49 R1 — ONE optional block, counters inside).
+   * Materializes only on activation: a girl who has never been induced keeps a
+   * key-identical state, which is what the store's no-op-write skip depends on.
+   */
+  lactation?: LactationState
+}
+
+/**
+ * Lactation state (research/46 §2.4, research/49 R1). `active` flips on via an
+ * evidenced `induction` event (or the editor toggle) and off ONLY by the editor —
+ * supply eases toward 0 with neglect but never switches itself off.
+ */
+export interface LactationState {
+  active: boolean
+  /** 0..SUPPLY_TIER_MAX = light / steady / heavy / torrential. */
+  supplyTier: number
+  /** Neglect clock: beats since she was last milked (supply ease). */
+  beatsSinceMilked?: number
+  /** Consecutive recently-milked beats driving supply up. */
+  demandBeats?: number
+  /** Sustained high-supply beats toward a growth proposal (R5). */
+  chronicBeats?: number
 }
 
 /** Classifier-extracted event kinds (research/31 §2.2). The LLM proposes EVENTS, not values. */
-export type BeEventKind = 'catalyst' | 'contact' | 'milking' | 'attempt' | 'stabilize'
+export type BeEventKind = 'catalyst' | 'contact' | 'milking' | 'attempt' | 'stabilize' | 'induction'
 
 export interface BeEvent {
   /** Character name as the classifier saw it; resolution to an id happens at the apply site. */
@@ -167,6 +190,8 @@ export interface BeLogRecord {
     | 'bond'
     | 'exposure'
     | 'withdrawal'
+    | 'supply'
+    | 'yield'
   outcome: GrowthOutcome
   delta: number
   tierAfter: number
@@ -175,7 +200,12 @@ export interface BeLogRecord {
 
 /** Output-side drift finding (Spec 1 Task 6; produced by drift.ts, consumed by the reducer). */
 export interface DriftFinding {
-  kind: 'cup_contradiction' | 'size_overshoot' | 'non_breast_growth' | 'growth_omitted'
+  kind:
+    | 'cup_contradiction'
+    | 'size_overshoot'
+    | 'non_breast_growth'
+    | 'growth_omitted'
+    | 'lactation_drift'
   note: string
 }
 
@@ -200,6 +230,12 @@ export interface BeStoryConfig {
 export interface ReducerResult {
   state: BodyState
   log: BeLogRecord[]
+  /**
+   * Milk expressed this turn (research/49 R7). Set ONLY when she is lactating
+   * and the drain rounded to at least one whole unit — the reducer owns the
+   * arithmetic, the store owns turning it into an inventory item.
+   */
+  milkYield?: { units: number; drainedPercent: number }
 }
 
 /** Grounding facts derived for prose honesty (D4-thin; see derive.ts). */

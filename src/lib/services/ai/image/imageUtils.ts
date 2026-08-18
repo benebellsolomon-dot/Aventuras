@@ -6,15 +6,19 @@
 
 import { generateImage, supportsImageGeneration } from './providers/registry'
 import { sizeBandMarker, tierMarker } from './sizeBandMarker'
-import { buildPortraitSpec, type BridgeSpecSubject } from './bridgeSpec'
-import { resolveLora, loraTriggerText } from './loraBinding'
+import { bridgeIdentityAnchor, buildPortraitSpec, type BridgeSpecSubject } from './bridgeSpec'
+import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
+import { assembleInlineImage } from './inlineAssembly'
+import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { readBodyState } from '$lib/services/be'
 import { database } from '$lib/services/database'
 import { settings } from '$lib/stores/settings.svelte'
-import type { StorySettings } from '$lib/types'
+import type { Character, ImageProviderType, StorySettings } from '$lib/types'
+import type { StructuredImageSpecInput } from './providers/types'
 import { emitImageReady, emitImageAnalysisFailed } from '$lib/services/events'
+import { matchAttribute } from '$lib/utils/inlineImageParser'
 import { createLogger } from '$lib/log'
-import { parseImageSize } from '$lib/utils/image'
+import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 
 const log = createLogger('ImageUtils')
 
@@ -94,9 +98,112 @@ export function getProviderDisplayName(): string {
 }
 
 /**
- * Retry image generation for a failed/existing image using current settings.
+ * Scene context needed to rebuild an inline (<pic>) image request. Supplying it
+ * routes a regenerate/retry through the canonical inline assembly pipeline
+ * instead of re-sending the stored prompt, so a regenerated image keeps the
+ * per-character trigger words/LoRA, BE size grounding + `__betier__` marker,
+ * booru dialect handling and the CURRENT style prompt.
  */
-export async function retryImageGeneration(imageId: string, prompt: string): Promise<void> {
+export interface InlineRegenerationContext {
+  /** Characters present in the scene (identity + bodyState + loraConfig source). */
+  presentCharacters: Character[]
+  /** BE grounding gate — mirrors the story's beMode setting. */
+  beMode: boolean
+  /** Narrative beat the image belongs to — signal for the bridge spec gates. */
+  narrativeText: string
+  /** User-edited raw <pic> prompt; defaults to the prompt recorded on the tag. */
+  promptOverride?: string
+  /**
+   * Story's portrait-reference setting. Mirrors InlineImageContext.referenceMode:
+   * with it on, a regenerate re-gathers the tagged characters' portraits so the
+   * identity anchor survives the retry.
+   */
+  referenceMode?: boolean
+}
+
+/** Character names written on a <pic> tag, in tag order. */
+function tagCharacterNames(sourceText: string): string[] {
+  return (matchAttribute(sourceText, 'characters') ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name)
+}
+
+/**
+ * The portraits a retry should send as references — the same gather the
+ * first-generation path does (InlineImageService.generateImageForTag): portrait
+ * mode on, characters named on the tag, at most three.
+ */
+function collectReferenceImages(
+  sourceText: string,
+  context: InlineRegenerationContext,
+): string[] | undefined {
+  if (!context.referenceMode) return undefined
+  const urls: string[] = []
+  for (const name of tagCharacterNames(sourceText).slice(0, 3)) {
+    const character = context.presentCharacters.find(
+      (c) => c.name.toLowerCase() === name.toLowerCase(),
+    )
+    const portraitUrl = normalizeImageDataUrl(character?.portrait)
+    if (portraitUrl) urls.push(portraitUrl)
+  }
+  return urls.length > 0 ? urls : undefined
+}
+
+/** Resolve the configured image style prompt, falling back to the built-in one. */
+export async function resolveStylePrompt(styleId: string): Promise<string> {
+  try {
+    const template = await database.getPackTemplate('default-pack', styleId)
+    if (template?.content) return template.content
+  } catch {
+    // Template not found, use fallback
+  }
+  return DEFAULT_FALLBACK_STYLE_PROMPT
+}
+
+/**
+ * Rebuild an inline image's request through the shared assembly. Returns null
+ * when the record is not an inline <pic> image (nothing to reassemble).
+ */
+async function assembleInlineRetry(
+  image: { generationMode?: string; sourceText?: string },
+  context: InlineRegenerationContext,
+  providerType: ImageProviderType | undefined,
+  model: string,
+  styleId: string,
+): Promise<{
+  fullPrompt: string
+  bridgeSpec?: StructuredImageSpecInput
+  loraOverride?: ResolvedLora
+} | null> {
+  const sourceText = image.sourceText ?? ''
+  if (image.generationMode !== 'inline' || !sourceText.startsWith('<pic')) return null
+
+  const tagPrompt = context.promptOverride?.trim() || matchAttribute(sourceText, 'prompt')
+  if (!tagPrompt) return null
+
+  return assembleInlineImage({
+    presentCharacters: context.presentCharacters,
+    tagPrompt,
+    tagCharacters: tagCharacterNames(sourceText),
+    beMode: context.beMode,
+    stylePrompt: await resolveStylePrompt(styleId),
+    narrativeText: context.narrativeText,
+    providerType,
+    model,
+  })
+}
+
+/**
+ * Retry image generation for a failed/existing image using current settings.
+ * Pass `inlineContext` for inline <pic> images so the request is rebuilt via
+ * the same assembly pipeline as first-time inline generation.
+ */
+export async function retryImageGeneration(
+  imageId: string,
+  prompt: string,
+  inlineContext?: InlineRegenerationContext,
+): Promise<void> {
   if (!isImageGenerationEnabled()) {
     log('Cannot retry - image generation not enabled')
     return
@@ -109,20 +216,64 @@ export async function retryImageGeneration(imageId: string, prompt: string): Pro
   }
 
   const imageSettings = settings.systemServicesSettings.imageGeneration
-  const profileId = imageSettings.profileId
+  let profileId = imageSettings.profileId
 
   if (!profileId) {
     log('Cannot retry - no profile configured')
     return
   }
 
+  let size = imageSettings.size
+
+  // Portrait references (Spec 4 B1): first-time generation swaps to the
+  // reference profile/size when the tagged characters have portraits, and
+  // routes si-bridge identity through the FaceID anchor. A retry that skipped
+  // this re-rendered the image with no identity anchor at all.
+  const isInlineRecord =
+    image.generationMode === 'inline' && (image.sourceText ?? '').startsWith('<pic')
+  const referenceImageUrls =
+    inlineContext && isInlineRecord
+      ? collectReferenceImages(image.sourceText ?? '', inlineContext)
+      : undefined
+  if (referenceImageUrls && imageSettings.referenceProfileId) {
+    profileId = imageSettings.referenceProfileId
+    size = imageSettings.referenceSize
+  }
+
   const profile = settings.getImageProfile(profileId)
   const model = profile?.model ?? ''
-  const size = imageSettings.size
   const { width, height } = parseImageSize(size)
 
+  // Inline images go back through the canonical assembly so a regenerate picks
+  // up trigger words/LoRA, BE grounding + marker, dialect handling and the
+  // current style — the stored prompt alone would drop all of it.
+  const assembled = inlineContext
+    ? await assembleInlineRetry(
+        image,
+        inlineContext,
+        profile?.providerType,
+        model,
+        imageSettings.styleId,
+      )
+    : null
+  // Non-inline records have no assembly, so a user-edited prompt still needs
+  // the current style appended. That happens here, from the one style fetch,
+  // rather than in the caller (which then fetched the same template twice and
+  // handed inline records a prompt the assembly discarded).
+  const finalPrompt =
+    assembled?.fullPrompt ??
+    (inlineContext?.promptOverride?.trim()
+      ? `${inlineContext.promptOverride.trim().replace(/\.+$/, '')}. ${await resolveStylePrompt(imageSettings.styleId)}`
+      : prompt)
+
+  const poseFaceAnchor = bridgeIdentityAnchor({
+    providerType: profile?.providerType,
+    model,
+    referenceImages: referenceImageUrls,
+  })
+
   await database.updateEmbeddedImage(imageId, {
-    prompt,
+    prompt: finalPrompt,
     model,
     status: 'generating',
     errorMessage: undefined,
@@ -130,10 +281,27 @@ export async function retryImageGeneration(imageId: string, prompt: string): Pro
     height,
   })
 
-  log('Retrying image generation', { imageId, profileId, model, size })
+  log('Retrying image generation', {
+    imageId,
+    profileId,
+    model,
+    size,
+    reassembled: !!assembled,
+    references: referenceImageUrls?.length ?? 0,
+    anchored: !!poseFaceAnchor,
+  })
 
   try {
-    const result = await generateImage({ profileId, model, prompt, size })
+    const result = await generateImage({
+      profileId,
+      model,
+      prompt: finalPrompt,
+      size,
+      referenceImages: referenceImageUrls,
+      spec: assembled?.bridgeSpec,
+      loraOverride: assembled?.loraOverride,
+      poseFaceAnchor,
+    })
 
     if (!result.base64) {
       throw new Error('No image data returned')

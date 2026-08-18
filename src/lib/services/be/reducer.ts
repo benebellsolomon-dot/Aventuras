@@ -10,16 +10,17 @@
  * step's output; auto-conditions MUST read post-tick fill or Engorged lags):
  *   1. decay conditions          2. cooldown tick
  *   3. land pendingGrowth        4. apply softState
- *   5. passive fill tick         6. events loop (quirk-adjusted, anticipation split)
- *   7. tracks: bond + exposure/dependence + attitude pull
- *   8. pressure accrual/pity (quirk-scaled)
- *   9. conditions: derive (Engorged, Withdrawal) + classifier merge
- *   10. drift note
+ *   5. passive fill tick (supply-scaled)
+ *   6. events loop (quirk-adjusted, anticipation split; induction activates)
+ *   7. lactation: supply adapt + chronic-supply growth roll
+ *   8. tracks: bond + exposure/dependence + attitude pull
+ *   9. pressure accrual/pity (quirk-scaled)
+ *   10. conditions: derive (Engorged @ per-girl threshold, Withdrawal) + classifier merge
+ *   11. drift note
  */
 
 import {
   ANTICIPATION_THRESHOLD,
-  ENGORGED_FILL_THRESHOLD,
   ENGORGED_TTL,
   GROWTH_DELTA_BY_OUTCOME,
   MAX_BE_CONDITIONS,
@@ -33,7 +34,15 @@ import {
   fluidProfile,
 } from './constants'
 import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
-import { measurements } from './measurements'
+import { capacityMlPerSide, measurements } from './measurements'
+import {
+  adaptSupply,
+  engorgeThreshold,
+  milkYieldUnits,
+  supplyFillMultiplier,
+  supplyLabel,
+  tickChronic,
+} from './lactation'
 import { INTERACTION_MILESTONES } from './milestones'
 import { hasQuirk } from './quirks'
 import {
@@ -59,6 +68,7 @@ import type {
   DriftFinding,
   ExposureEvent,
   GrowthOutcome,
+  LactationState,
   ReducerResult,
 } from './types'
 
@@ -132,10 +142,18 @@ export function reduceCharacterBody(
   let grewThisTurn = false
   let dryBeats = 0
   const ticksEnabled = extras?.ticksEnabled !== false
+  // Lactation (research/49): the block materializes ONLY on activation — an
+  // untouched girl's state must stay key-identical (R1 neutral passthrough).
+  let lactation: LactationState | undefined = state.lactation
+  let inducedThisTurn = false
+  let milkedThisTurn = false
+  let drainedPercent = 0
+  let tierAtDrain: number | undefined
 
-  // Quirk flags (research/48 Step 3 hook table). Phase-3 quirks (early_bloomer,
-  // pressure_prone) are deliberately never read here — data-only until the
-  // lactation axis lands (R10).
+  // Quirk flags (research/48 Step 3 hook table; the lactation pair per research/49 R10).
+  // pressure_prone is read through engorgeThreshold()/apparentTierBonus() rather
+  // than a local, so the sprite and the condition can never disagree.
+  const isEarlyBloomer = hasQuirk(state, 'early_bloomer')
   const isFastMetabolizer = hasQuirk(state, 'fast_metabolizer')
   const isSlowBurn = hasQuirk(state, 'slow_burn')
   const isGreedyFlesh = hasQuirk(state, 'greedy_flesh')
@@ -252,9 +270,12 @@ export function reduceCharacterBody(
     }
   }
 
-  // ---- Step 5: passive fill tick (the FIL loop's intake side) ----
+  // ---- Step 5: passive fill tick (the FIL loop's intake side, supply-scaled) ----
   if (config.passiveFillEnabled && ticksEnabled && fillPercent < 100) {
-    const tick = profile.fillRate * (1 + profile.growthFactor)
+    // supplyFillMultiplier reads the PRIOR turn's supply (deterministic, and the
+    // natural physics: this beat fills at the supply she woke with). It is
+    // EXACTLY 1 for a non-lactating girl — no change to the old arithmetic.
+    const tick = profile.fillRate * (1 + profile.growthFactor) * supplyFillMultiplier(state)
     const next = clampPercent(fillPercent + tick)
     log.push({
       character: characterName,
@@ -283,10 +304,48 @@ export function reduceCharacterBody(
       return
     }
 
+    if (event.kind === 'induction') {
+      // R2: evidence beats intent — the classifier saw her body begin producing,
+      // so the engine applies it regardless of what the dice said this turn.
+      if (lactation?.active) {
+        log.push({
+          character: event.character,
+          kind: event.kind,
+          outcome: 'none',
+          delta: 0,
+          tierAfter: tier,
+          note: 'already lactating',
+        })
+        return
+      }
+      // Spread, never replace: the block is `.passthrough()`-persisted, so a
+      // wholesale rewrite would drop unknown future fields and the neglect/
+      // demand counters a toggled-off block still carries.
+      lactation = { ...lactation, active: true, supplyTier: lactation?.supplyTier ?? 0 }
+      inducedThisTurn = true
+      log.push({
+        character: event.character,
+        kind: event.kind,
+        outcome: 'success',
+        delta: 0,
+        tierAfter: tier,
+        note: 'lactation begins',
+      })
+      return
+    }
+
     if (event.kind === 'milking') {
       // Drain nets against the observed/ticked fill (FIL inversion is intentional
       // genre physics: full→pressure→growth→capacity→refill — do not "fix" it).
+      // The yield rides the ACTUAL diff, 0-floor clamped (risk 4): a drain from
+      // 30% yields 30 points of milk, never the nominal 40.
+      const fillBefore = fillPercent
       fillPercent = Math.max(0, fillPercent - MILKING_DRAIN_PER_INTENSITY * intensity)
+      drainedPercent += fillBefore - fillPercent
+      // Price capacity at the tier she had when the FIRST drain happened — a
+      // growth event ordered later in this same turn must not inflate the yield.
+      if (tierAtDrain === undefined) tierAtDrain = tier
+      milkedThisTurn = true
       log.push({
         character: event.character,
         kind: event.kind,
@@ -387,7 +446,99 @@ export function reduceCharacterBody(
     })
   })
 
-  // ---- Step 7: harem tracks — bond, exposure/dependence, attitude pull ----
+  // ---- Step 7: lactation — supply adapt + chronic-supply growth (research/49 R3/R5) ----
+  // The turn she is induced is not also a neglect beat: adaptation starts next turn.
+  let milkYield: { units: number; drainedPercent: number } | undefined
+  if (lactation?.active && !inducedThisTurn) {
+    const adapt = adaptSupply(lactation, milkedThisTurn, ticksEnabled, isEarlyBloomer)
+    lactation = adapt.next
+    if (adapt.raised || adapt.eased) {
+      log.push({
+        character: characterName,
+        kind: 'supply',
+        outcome: 'none',
+        delta: 0,
+        tierAfter: tier,
+        note: `supply → ${supplyLabel(lactation.supplyTier)}`,
+      })
+    }
+
+    const chronic = tickChronic(lactation, ticksEnabled)
+    lactation = chronic.next
+    if (chronic.fires) {
+      // Fire-once-then-reset behind the SAME wall as the pity fire — but the
+      // counter stays BANKED at the threshold (tickChronic pins it) until the
+      // roll actually happens. Resetting on a blocked fire permanently starved
+      // the axis in stories where every growth arms a fresh cooldown.
+      if (state.locked) {
+        log.push({
+          character: characterName,
+          kind: 'supply',
+          outcome: 'muzzled',
+          delta: 0,
+          tierAfter: tier,
+          note: 'chronic supply blocked (locked)',
+        })
+      } else if (cooldown > 0) {
+        log.push({
+          character: characterName,
+          kind: 'supply',
+          outcome: 'cooldown',
+          delta: 0,
+          tierAfter: tier,
+          note: 'chronic supply blocked (cooldown)',
+        })
+      } else {
+        const roll = seededRoll(`${seed}:chronic`)
+        const outcome = resolveGrowthOutcome(roll, 1)
+        const landed = outcome === 'success' || outcome === 'critical' ? landGrowth(1) : 0
+        // The roll happened — spend the banked counter (fire-once-then-reset).
+        lactation = { ...lactation, chronicBeats: 0 }
+        log.push({
+          character: characterName,
+          kind: 'supply',
+          outcome,
+          delta: landed,
+          tierAfter: tier,
+          note: `chronic supply roll ${roll}`,
+        })
+      }
+    }
+  }
+
+  // Milk yield (R7 creation input): the store turns this into an inventory item;
+  // the reducer only owns the arithmetic, where the drain diff lives.
+  if (lactation?.active && drainedPercent > 0) {
+    if (inducedThisTurn) {
+      // Her milk only came in THIS turn — the fluid the drain emptied was the
+      // pre-induction fill, so there is nothing to bottle yet. Milk bottles
+      // only when she was already producing at the turn's start.
+      log.push({
+        character: characterName,
+        kind: 'yield',
+        outcome: 'none',
+        delta: 0,
+        tierAfter: tier,
+        note: `induction turn — the ${Math.round(drainedPercent)}% expressed was pre-induction ${config.fluidType}, nothing to bottle`,
+      })
+    } else {
+      const units = milkYieldUnits(drainedPercent, 2 * capacityMlPerSide(tierAtDrain ?? tier))
+      if (units > 0) {
+        milkYield = { units, drainedPercent }
+      } else {
+        log.push({
+          character: characterName,
+          kind: 'yield',
+          outcome: 'none',
+          delta: 0,
+          tierAfter: tier,
+          note: `sub-unit expression (${Math.round(drainedPercent)}% drained) — nothing to bottle`,
+        })
+      }
+    }
+  }
+
+  // ---- Step 8: harem tracks — bond, exposure/dependence, attitude pull ----
   // Track fields materialize only when something moves them (research/48 risk 7:
   // no eager default writes; read-through defaults live in tracks.ts).
   let bond = state.bond
@@ -450,7 +601,7 @@ export function reduceCharacterBody(
     })
   }
 
-  // ---- Step 8: growth-pressure escalator (greedy_flesh accrues faster) ----
+  // ---- Step 9: growth-pressure escalator (greedy_flesh accrues faster) ----
   growthPressure += PRESSURE_ACCRUAL * (isGreedyFlesh ? 1.5 : 1) * dryBeats
   // Overfill couples through growthFactor ALONE (review ruling B1): a neutral
   // fluid (milk, gf 0) saturates quietly and the state converges — only
@@ -477,11 +628,13 @@ export function reduceCharacterBody(
     growthPressure = 0
   }
 
-  // ---- Step 9: conditions — derived from POST-tick fill/tracks, then classifier merge ----
+  // ---- Step 10: conditions — derived from POST-tick fill/tracks, then classifier merge ----
   // Label matching is case-insensitive throughout (a classifier "engorged" must
   // not duplicate the derived "Engorged"; effectiveSupport lowercases too).
   const sameLabel = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
-  if (fillPercent >= ENGORGED_FILL_THRESHOLD) {
+  // Per-girl threshold (R6): pressure_prone engorges early. sprite.ts reads the
+  // same function so the rendered cell and the condition can never disagree.
+  if (fillPercent >= engorgeThreshold(state)) {
     // Front insertion: derived-first must survive the cap slice below even when
     // carried conditions already sit at the limit (review finding S1).
     const engorged: BodyCondition = { label: 'Engorged', ttl: ENGORGED_TTL }
@@ -529,7 +682,7 @@ export function reduceCharacterBody(
   }
   conditions = conditions.slice(0, MAX_BE_CONDITIONS)
 
-  // ---- Step 10: drift note (one-turn carrier; prior note expired above) ----
+  // ---- Step 11: drift note (one-turn carrier; prior note expired above) ----
   const driftNote =
     extras?.driftFindings && extras.driftFindings.length > 0
       ? { note: extras.driftFindings.map((f) => f.note).join('; ') }
@@ -557,7 +710,11 @@ export function reduceCharacterBody(
       ...(bond !== undefined ? { bond } : {}),
       ...(dependence !== undefined ? { dependence } : {}),
       ...(beatsSinceExposure !== undefined ? { beatsSinceExposure } : {}),
+      // Same conditional-spread contract: the lactation block appears only when
+      // it already existed or was created this turn (research/49 R1).
+      ...(lactation !== undefined ? { lactation } : {}),
     },
     log,
+    ...(milkYield !== undefined ? { milkYield } : {}),
   }
 }
