@@ -125,6 +125,32 @@ describe('spriteAppearanceHash', () => {
     expect(spriteAppearanceHash({ ...APPEARANCE, stylePreset: 'none' })).not.toBe(base)
   })
 
+  test('loraConfig affects the hash only when set (backward compatible)', () => {
+    const base = spriteAppearanceHash(APPEARANCE)
+    // No config, and an empty config with no name/triggers, leave the hash unchanged.
+    expect(spriteAppearanceHash({ ...APPEARANCE, loraConfig: null })).toBe(base)
+    expect(spriteAppearanceHash({ ...APPEARANCE, loraConfig: { baseWeight: 1 } })).toBe(base)
+    // A LoRA name or trigger words change the hash (so edits regenerate the set).
+    expect(
+      spriteAppearanceHash({ ...APPEARANCE, loraConfig: { name: 'grow.safetensors' } }),
+    ).not.toBe(base)
+    expect(
+      spriteAppearanceHash({ ...APPEARANCE, loraConfig: { triggerWords: 'huge_growth' } }),
+    ).not.toBe(base)
+    // Changing the weight of a named LoRA also regenerates.
+    expect(
+      spriteAppearanceHash({
+        ...APPEARANCE,
+        loraConfig: { name: 'grow.safetensors', baseWeight: 0.5 },
+      }),
+    ).not.toBe(
+      spriteAppearanceHash({
+        ...APPEARANCE,
+        loraConfig: { name: 'grow.safetensors', baseWeight: 0.9 },
+      }),
+    )
+  })
+
   test('field boundaries are preserved (no concatenation ambiguity)', () => {
     const a = spriteAppearanceHash({
       ...APPEARANCE,

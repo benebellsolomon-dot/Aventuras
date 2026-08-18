@@ -21,10 +21,12 @@ import {
   type SpriteCellInput,
 } from './spriteSpec'
 import { getBackgroundMatte } from './matting'
+import { resolveLora, loraTriggerText } from './loraBinding'
 import {
   readBodyState,
   spriteAppearanceHash,
   spriteSeed,
+  bandRepresentativeTier,
   type SpriteAppearanceInput,
   type SpriteExpression,
   type SpriteSelection,
@@ -63,6 +65,7 @@ function appearanceInput(character: Character): SpriteAppearanceInput {
   return {
     visualDescriptors: character.visualDescriptors ?? null,
     imageTags: character.imageTags ?? null,
+    loraConfig: character.loraConfig ?? null,
     shape: state?.shape ?? 'natural',
     stylePreset: 'semireal',
     register: 'color',
@@ -99,12 +102,17 @@ export class SpriteAnchorService {
     await persist(character.id, { spriteAnchorStatus: 'generating' })
     try {
       const isBridge = profile.providerType === 'si-bridge'
+      // Per-character LoRA: trigger words lead the prompt (all providers); the
+      // LoRA file + weight (scaled to the anchor tier) apply on ComfyUI.
+      const triggerText = loraTriggerText([character.loraConfig])
+      const anchorPrompt = buildAnchorPrompt(tier, character.visualDescriptors ?? null)
       const result = await registryGenerateImage({
         profileId,
         model: profile.model ?? '',
-        prompt: buildAnchorPrompt(tier, character.visualDescriptors ?? null),
+        prompt: triggerText ? `${triggerText}, ${anchorPrompt}` : anchorPrompt,
         size: imageSettings.spriteSize ?? '832x1216',
         spec: isBridge ? buildAnchorSpec(tier, character.visualDescriptors ?? null) : undefined,
+        loraOverride: resolveLora(character.loraConfig, tier) ?? undefined,
       })
       if (!result.base64) throw new Error('No image data returned')
       await persist(character.id, {
@@ -257,16 +265,23 @@ export class SpriteAnchorService {
       // can't carry an anchor at all (image-conditioning forces Illustrious).
       const useAnchor = isBridge && profile.model !== 'krea2' && isAnchorCurrent(character)
 
+      // Per-character LoRA: trigger words lead the prompt (all providers); the
+      // LoRA file + weight scale to THIS band's representative tier (matching
+      // the sprite's rendered size), so a size LoRA strengthens up the set.
+      const triggerText = loraTriggerText([character.loraConfig])
+      const cellPrompt = buildSpritePrompt(input)
       const result = await registryGenerateImage({
         profileId,
         model: profile.model ?? '',
-        prompt: buildSpritePrompt(input),
+        prompt: triggerText ? `${triggerText}, ${cellPrompt}` : cellPrompt,
         size: settings.systemServicesSettings.imageGeneration.spriteSize ?? DEFAULT_SPRITE_SIZE,
         seed,
         spec: isBridge ? buildSpriteSpec(input) : undefined,
         poseFaceAnchor: useAnchor ? stripDataUrlPrefix(character.spriteAnchor!) : undefined,
         faceidWeight: useAnchor ? SPRITE_FACEID_WEIGHT : undefined,
         openposeStrength: useAnchor ? SPRITE_OPENPOSE_STRENGTH : undefined,
+        loraOverride:
+          resolveLora(character.loraConfig, bandRepresentativeTier(bandIndex)) ?? undefined,
       })
       if (!result.base64) throw new Error('No image data returned')
 

@@ -82,6 +82,14 @@ export interface SpriteAppearanceInput {
   } | null
   /** Curated image-tag bank; part of the identity hash so edits invalidate cached sprites. */
   imageTags?: string | null
+  /** Per-character LoRA binding; part of the identity hash so edits invalidate cached sprites. */
+  loraConfig?: {
+    name?: string
+    triggerWords?: string
+    baseWeight?: number
+    tierScale?: number
+    maxWeight?: number
+  } | null
   shape: BodyShape
   stylePreset: string
   register: string
@@ -122,6 +130,20 @@ export function spriteAppearanceHash(input: SpriteAppearanceInput): string {
   // (no mass sprite/anchor invalidation), while editing a bank regenerates.
   const bank = normalize(input.imageTags ?? undefined)
   if (bank) fields.push(`imgtags:${bank}`)
+  // The LoRA binding likewise participates only when set — the stable fields
+  // (name/weights/triggers) that change the rendered output, appended as one
+  // segment so editing the LoRA regenerates the set without touching others.
+  const lora = input.loraConfig
+  if (lora && (lora.name || lora.triggerWords)) {
+    const parts = [
+      normalize(lora.name),
+      normalize(lora.triggerWords),
+      lora.baseWeight ?? '',
+      lora.tierScale ?? '',
+      lora.maxWeight ?? '',
+    ].join('|')
+    fields.push(`lora:${parts}`)
+  }
   return fnv1a(fields.join(HASH_SEPARATOR)).toString(16).padStart(8, '0')
 }
 
