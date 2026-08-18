@@ -42,8 +42,6 @@ export interface InlineAssemblyInput {
 export interface InlineAssemblyResult {
   /** Final prompt sent to the provider (marker + trigger words + grounded scene + style). */
   fullPrompt: string
-  /** Cue-less grounded scene text (what the spec builder treats as the scene). */
-  groundedScene: string
   /** si-bridge structured spec, when one assembles; other providers ignore it. */
   bridgeSpec?: StructuredImageSpecInput
   /** Per-character LoRA for a single unambiguous subject; undefined otherwise. */
@@ -99,5 +97,5 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
       narrativeText,
     }) ?? undefined
 
-  return { fullPrompt, groundedScene, bridgeSpec, loraOverride }
+  return { fullPrompt, bridgeSpec, loraOverride }
 }
