@@ -54,7 +54,7 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 - Place <pic> tags AFTER the prose that describes the scene they illustrate
 - Write prompts as vivid natural-language visual descriptions (the image backend uses an LLM-class text encoder — flowing descriptive English works best)
 - Include character names in the "characters" attribute if they appear in the image
-- Use sparingly: 1-3 images per response maximum, reserved for impactful visual moments
+- CADENCE: include ONE <pic> tag in every response as a rule — illustrate the most visually notable moment, even in quiet scenes (a look, a location, a small gesture all qualify). Use 2-3 only for major set-pieces. Omit the tag only when the response contains nothing visual at all (pure abstract exposition). The detailed build order below is NOT a reason to skip an image — a routine moment still gets its full prompt
 
 **PROMPT BUILD ORDER — every prompt follows these sections in this EXACT order. Do NOT rearrange or skip sections:**
 
@@ -86,7 +86,7 @@ Elena drew her blade, firelight dancing along the steel edge as she faced the cr
 - **PROMPTS MUST BE IN ENGLISH** - Image generation models only understand English prompts. Always write the prompt attribute in English, even if the surrounding narrative is in another language.
 - The prompt must be a COMPLETE visual description - do not write "the dragon from the scene" or "as described above"
 - Never place <pic> tags in the middle of a sentence - always after the descriptive prose
-- Do not use <pic> for every scene - reserve for truly striking visual moments; best used for dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
+- Pick the single most striking moment of the response to illustrate: dramatic reveals, emotional peaks, action climaxes, new locations, character moments — or, failing those, the response's main visual beat
 - Density target: a good prompt is DETAILED — roughly 400-700 characters for one character, 600-1000 for multiple characters. Never exceed 1200 characters
 </InlineImages>`
 
