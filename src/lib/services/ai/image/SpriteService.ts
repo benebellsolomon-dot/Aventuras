@@ -32,6 +32,8 @@ import {
   type SpriteSelection,
 } from '$lib/services/be'
 import { createLogger } from '$lib/log'
+import { detectPromptDialect, BOORU_QUALITY_PREFIX } from './dialect'
+import { normalizeImageDataUrl } from '$lib/utils/image'
 
 const log = createLogger('SpriteService')
 
@@ -105,13 +107,25 @@ export class SpriteAnchorService {
       // Per-character LoRA: trigger words lead the prompt (all providers); the
       // LoRA file + weight (scaled to the anchor tier) apply on ComfyUI.
       const triggerText = loraTriggerText([character.loraConfig])
-      const anchorPrompt = buildAnchorPrompt(tier, character.visualDescriptors ?? null)
+      let anchorPrompt = buildAnchorPrompt(
+        tier,
+        character.visualDescriptors ?? null,
+        character.imageTags,
+      )
+      if (triggerText) anchorPrompt = `${triggerText}, ${anchorPrompt}`
+      if (detectPromptDialect(profile.model) === 'booru') {
+        anchorPrompt = `${BOORU_QUALITY_PREFIX}, ${anchorPrompt}`
+      }
+      // Online img2img providers can hold identity from the portrait; the
+      // bridge path uses its own FaceID anchor channel instead.
+      const portraitRef = !isBridge ? normalizeImageDataUrl(character.portrait) : undefined
       const result = await registryGenerateImage({
         profileId,
         model: profile.model ?? '',
-        prompt: triggerText ? `${triggerText}, ${anchorPrompt}` : anchorPrompt,
+        prompt: anchorPrompt,
         size: imageSettings.spriteSize ?? '832x1216',
         spec: isBridge ? buildAnchorSpec(tier, character.visualDescriptors ?? null) : undefined,
+        referenceImages: portraitRef ? [portraitRef] : undefined,
         loraOverride: resolveLora(character.loraConfig, tier) ?? undefined,
       })
       if (!result.base64) throw new Error('No image data returned')
@@ -269,14 +283,26 @@ export class SpriteAnchorService {
       // LoRA file + weight scale to THIS band's representative tier (matching
       // the sprite's rendered size), so a size LoRA strengthens up the set.
       const triggerText = loraTriggerText([character.loraConfig])
-      const cellPrompt = buildSpritePrompt(input)
+      let cellPrompt = buildSpritePrompt(input)
+      if (triggerText) cellPrompt = `${triggerText}, ${cellPrompt}`
+      if (detectPromptDialect(profile.model) === 'booru') {
+        cellPrompt = `${BOORU_QUALITY_PREFIX}, ${cellPrompt}`
+      }
+      // Online img2img providers hold identity from the approved anchor (or
+      // the portrait as fallback); bridge uses its FaceID channel instead.
+      const onlineIdentityRef = !isBridge
+        ? ((isAnchorCurrent(character)
+            ? normalizeImageDataUrl(character.spriteAnchor)
+            : undefined) ?? normalizeImageDataUrl(character.portrait))
+        : undefined
       const result = await registryGenerateImage({
         profileId,
         model: profile.model ?? '',
-        prompt: triggerText ? `${triggerText}, ${cellPrompt}` : cellPrompt,
+        prompt: cellPrompt,
         size: settings.systemServicesSettings.imageGeneration.spriteSize ?? DEFAULT_SPRITE_SIZE,
         seed,
         spec: isBridge ? buildSpriteSpec(input) : undefined,
+        referenceImages: onlineIdentityRef ? [onlineIdentityRef] : undefined,
         poseFaceAnchor: useAnchor ? stripDataUrlPrefix(character.spriteAnchor!) : undefined,
         faceidWeight: useAnchor ? SPRITE_FACEID_WEIGHT : undefined,
         openposeStrength: useAnchor ? SPRITE_OPENPOSE_STRENGTH : undefined,

@@ -11,7 +11,7 @@
  */
 
 import type { StructuredImageSpecInput } from './providers/types'
-import { resolveIdentityTags, mapBridgeBuild } from './bridgeSpec'
+import { curatedIdentityTags, resolveIdentityTags, mapBridgeBuild } from './bridgeSpec'
 import { bandRepresentativeTier, bandWord, type SpriteExpression } from '$lib/services/be'
 
 export interface SpriteCellInput {
@@ -62,6 +62,19 @@ function identityExcerpt(d: SpriteCellInput['visualDescriptors']): string | unde
     .filter((part) => part.length > 0)
     .join('; ')
   return joined || undefined
+}
+
+/**
+ * Identity for the prompt fallback: the curated tag bank wins (same authority
+ * order as the bridge spec — size vocabulary already stripped), descriptors
+ * excerpt otherwise. Keeps online-provider sprites on the locked identity
+ * instead of a free-text paraphrase.
+ */
+function identityFallback(
+  imageTags: string | null | undefined,
+  d: SpriteCellInput['visualDescriptors'],
+): string | undefined {
+  return curatedIdentityTags(imageTags)?.join(', ') ?? identityExcerpt(d)
 }
 
 // The engine invariant: the engorged cell always wears the strain/distressed
@@ -134,9 +147,10 @@ export function buildAnchorSpec(
 export function buildAnchorPrompt(
   tier: number,
   visualDescriptors: SpriteCellInput['visualDescriptors'],
+  imageTags?: string | null,
 ): string {
   const parts: string[] = [...SPRITE_FRAMING_TAGS, bandWord(Math.max(0, Math.round(tier)))]
-  const appearance = identityExcerpt(visualDescriptors)
+  const appearance = identityFallback(imageTags, visualDescriptors)
   if (appearance) parts.push(appearance)
   return parts.join(', ')
 }
@@ -152,7 +166,7 @@ export function buildSpritePrompt(input: SpriteCellInput): string {
   ]
   if (expression === 'flushed') parts.push(FLUSH_CUE)
   if (input.engorged) parts.push(engorgedCue(input.fluidType))
-  const appearance = identityExcerpt(input.visualDescriptors)
+  const appearance = identityFallback(input.imageTags, input.visualDescriptors)
   if (appearance) parts.push(appearance)
   parts.push(...clothingSceneTags(input))
   return parts.join(', ')
