@@ -90,6 +90,14 @@ export class ImageAnalysisService extends BaseAIService {
         ? context.charactersWithoutPortraits.join(', ')
         : 'None'
 
+    // Build current location block if available
+    const currentLocationBlock = context.currentLocation
+      ? `## Current Location
+${context.currentLocation}
+
+Ground the setting/environment section of each prompt in this location unless the narrative has moved elsewhere.`
+      : ''
+
     // Build translated narrative block if available
     let translatedNarrativeBlock = ''
     if (context.translatedNarrative && context.translationLanguage) {
@@ -114,6 +122,7 @@ ${context.translatedNarrative}`
       userAction: context.userAction,
       chatHistory: context.chatHistory || '',
       lorebookContext: context.lorebookContext || '',
+      currentLocationBlock,
       translatedNarrativeBlock,
     })
     const { system, user: prompt } = await ctx.render(templateId)

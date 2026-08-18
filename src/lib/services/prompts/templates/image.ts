@@ -1,5 +1,13 @@
 import type { PromptTemplate } from '../types'
 
+const classicAnimeStyleTemplate: PromptTemplate = {
+  id: 'image-style-classic-anime',
+  name: 'Classic Anime',
+  category: 'image-style',
+  description: 'Crisp cel-shaded TV-anime look — bold linework, vibrant colors, glossy highlights',
+  content: `Crisp cel-shaded anime illustration in the style of a modern high-production anime TV series key frame. Clean confident linework with bold, even outlines. Flat cel shading with hard-edged two-tone shadows — no airbrushed gradients on skin. Vibrant saturated colors with strong contrast. Glossy hair with smooth sheen bands and specular highlights. Large expressive anime eyes with detailed multi-tone irises and bright catchlights. Smooth flat skin tones with simple blush shading. Painted background rendered slightly softer than the characters for natural figure-ground separation. Bright, clear lighting. Looks like an official anime screencap or production key visual. Avoid watercolor texture, muted pastel wash, photorealism, 3D rendering, and heavy painterly brushwork.`,
+}
+
 const softAnimeStyleTemplate: PromptTemplate = {
   id: 'image-style-soft-anime',
   name: 'Soft Anime',
@@ -41,7 +49,7 @@ const imagePromptAnalysisTemplate: PromptTemplate = {
   content: `You identify visually striking moments in narrative text for image generation.
 
 ## Your Task
-Analyze the narrative and identify up to {{ maxImages }} key visual moments (0 = unlimited). Create DETAILED, descriptive image prompts (aim for below 500 characters each). **Do NOT exceed 500 characters per prompt - prompts over 500 characters will cause an error and fail to generate.**
+Analyze the narrative and identify up to {{ maxImages }} key visual moments (0 = unlimited). Create DETAILED, descriptive image prompts — a good prompt is roughly 400-700 characters. Never exceed 900 characters.
 
 ## Style (MUST include in every prompt)
 {{ imageStylePrompt }}
@@ -52,26 +60,27 @@ Analyze the narrative and identify up to {{ maxImages }} key visual moments (0 =
 {{ characterDescriptors }}
 
 ## Prompt Requirements
-- **Prompt length:** below 500 characters MAX (prompts over 500 characters will ERROR and fail)
+- **Prompt length:** aim for 400-700 characters; never exceed 900
 - **sourceText:** Exact phrase from narrative (3-15 words, VERBATIM with all punctuation and *markup*)
 - **sceneType:** action|item|character|environment
 - **priority:** 1-10
 
-## Prompt Structure (follow this order)
-1. **Character appearance** - hair (color, length, style), eyes, skin tone, expression, build
-2. **Clothing/accessories** - what they're wearing, distinctive items
-3. **Action/pose** - what they're doing, body position
-4. **Setting/environment** - where they are, lighting, atmosphere, background details
-5. **Style keywords** - copy relevant phrases from the Style section above (lighting, rendering, aesthetic)
+## Prompt Structure (follow this EXACT section order — do not rearrange)
+1. **Camera & framing** - establish shot type FIRST: wide shot / medium shot / close-up / over-the-shoulder, plus an angle when it strengthens the moment (low angle = imposing, high angle = vulnerable, dutch angle = tension, bird's-eye = overview). Match camera to emotional tone.
+2. **Character appearance** - cover ALL of: age bracket, race/species if not human, skin tone, eye color, hair (color, length, style), build, facial expression
+3. **Clothing/accessories** - what they're wearing AND its current state, distinctive items, held objects
+4. **Action/pose** - what they're doing, body position, gaze direction
+5. **Setting/environment (always present, always near the end)** - where they are, time of day, then NAME the light source and its quality (golden hour sunlight, volumetric light through windows, rim lighting, dramatic shadows, backlighting, warm firelight, cold moonlight, neon glow), plus atmosphere details (dust motes, rain, mist, depth of field)
+6. **Style keywords** - copy relevant phrases from the Style section above (lighting, rendering, aesthetic)
 
 ## Example Good Prompt
-"An anime woman with shoulder-length black hair with subtle blue highlights, sharp teal eyes, and a focused expression. She's wearing a dark fitted coat with silver buttons and a grey scarf, one hand adjusting an earpiece. She's standing on a rain-slicked city rooftop at night, with glowing neon signs and distant skyscrapers blurred in the background. Semi-realistic anime style with refined features, detailed hair strands, realistic fabric and skin rendering, cinematic lighting with cool blue and warm neon accents. Polished and atmospheric with depth of field."
+"Medium shot from a slight low angle. A young anime woman with shoulder-length black hair with subtle blue highlights, sharp teal eyes, fair skin, a slim build, and a focused expression. She's wearing a dark fitted coat with silver buttons and a grey scarf, one hand adjusting an earpiece. She's standing on a rain-slicked city rooftop at night, glowing neon signs backlighting her silhouette, distant skyscrapers blurred in the background, rain streaking through the neon glow. Semi-realistic anime style with refined features, detailed hair strands, cinematic lighting with cool blue and warm neon accents, polished and atmospheric with depth of field."
 
 ## CRITICAL Rules
 1. **ONE CHARACTER PER IMAGE** - only depict a single character per prompt. Background details are fine, but no multiple characters. This ensures character consistency.
 2. **NEVER use character names** - the image model doesn't know who "Elena" is. Describe appearance only!
 3. **ALWAYS include the full style** - copy style keywords directly from the Style section
-4. **Stay under 500 characters** - prompts over 500 characters will ERROR and fail. Aim for below 500.
+4. **Stay under 900 characters** - aim for 400-700.
 5. **sourceText** MUST be COPY-PASTED EXACTLY from the DISPLAY NARRATIVE - this is used for text matching and WILL FAIL if not exact.
    - If a "Display Narrative" is provided (translated text), copy sourceText from THAT version
    - Copy the EXACT characters, including punctuation and any *asterisks* or **markup**
@@ -93,6 +102,8 @@ Analyze the narrative and identify up to {{ maxImages }} key visual moments (0 =
 {{ chatHistory }}
 
 {{ lorebookContext }}
+
+{{ currentLocationBlock }}
 
 ## User Action
 {{ userAction }}
@@ -158,18 +169,17 @@ Image models don't know who "Elena" or "Marcus" are. Character names are ONLY fo
 ## Prompt Structure
 
 **SINGLE character (has portrait):**
+- **Dynamic camera angle FIRST** - vary the POV to enhance the scene (see Camera Angles below)
 - Use "The character" or "A [gender]" - reference image provides appearance
 - Action/pose, expression
-- **Dynamic camera angle** - vary the POV to enhance the scene (see Camera Angles below)
-- Setting, lighting, atmosphere
+- Setting, time of day, lighting, atmosphere - always last, never omitted (see Lighting below)
 - 2-3 style keywords
 
 **MULTI-CHARACTER (2-3, all have portraits):**
-- Describe each by KEY visual traits only (hair color/style, one distinctive feature)
-- Spatial arrangement (left/right, foreground/background, facing each other)
-- Actions/poses
-- **Dynamic camera angle** - choose POV that best captures the interaction
-- Brief setting
+- **Dynamic camera angle FIRST** - choose POV that best captures the interaction
+- Each character gets their OWN clause with a spatial anchor ("on the left...", "behind her...") - keep every trait inside its owner's clause to prevent feature bleeding
+- Describe each by KEY visual traits (hair color/style, one distinctive feature) plus action/pose
+- Setting, time of day, lighting, atmosphere - always last, never omitted (see Lighting below)
 - 2-3 style keywords
 
 **PORTRAIT generation (generatePortrait: true):**
@@ -191,6 +201,9 @@ Image models don't know who "Elena" or "Marcus" are. Character names are ONLY fo
 - **Bird's eye view** - tactical scenes, showing spatial relationships
 
 Match the angle to the emotional tone: action scenes benefit from low/dutch angles, tense conversations from close-ups, epic moments from wide shots.
+
+## Lighting (name the light source and its quality in every scene prompt)
+Pick what fits the scene: golden hour sunlight, volumetric light through windows, rim lighting, dramatic shadows, backlighting, silhouette, warm firelight, cold moonlight, neon glow, soft overcast light. Add atmosphere details when they fit: dust motes, rain, mist, floating embers, depth of field.
 
 ## Examples
 
@@ -266,6 +279,8 @@ Match the angle to the emotional tone: action scenes benefit from low/dutch angl
 
 {{ lorebookContext }}
 
+{{ currentLocationBlock }}
+
 ## User Action
 {{ userAction }}
 
@@ -325,6 +340,7 @@ When generating a description, follow these standards:
 }
 
 export const imageTemplates: PromptTemplate[] = [
+  classicAnimeStyleTemplate,
   softAnimeStyleTemplate,
   semiRealisticAnimeStyleTemplate,
   photorealisticStyleTemplate,

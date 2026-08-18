@@ -52,32 +52,42 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 
 **USAGE GUIDELINES:**
 - Place <pic> tags AFTER the prose that describes the scene they illustrate
-- Write prompts as vivid natural-language visual descriptions (the image backend uses an LLM-class text encoder — flowing descriptive English works best): open with content-rating words, then character appearance, clothing and its state, action/pose, setting and lighting
+- Write prompts as vivid natural-language visual descriptions (the image backend uses an LLM-class text encoder — flowing descriptive English works best)
 - Include character names in the "characters" attribute if they appear in the image
-- Re-describe each character's physical appearance IN FULL in every prompt (hair, eyes, build, notable body proportions, current clothing and its state) — the image model cannot see the story, previous images, or other prompts
-- MULTIPLE CHARACTERS (prevent feature-bleeding): when two or more people appear, (1) start the character section with a count tag — "two women", "a man and a woman"; (2) describe each person in ONE self-contained clause with a spatial anchor ("on the left, ...", "on the right, ...", "in the center, ..."), never interleaving their traits; (3) give each a distinguishing anchor (hair colour, outfit) so the model keeps them apart. Example: "two women — on the left, a tall woman with long red hair in a green dress; on the right, a petite woman with short black hair in a white blouse"
 - Use sparingly: 1-3 images per response maximum, reserved for impactful visual moments
 
+**PROMPT BUILD ORDER — every prompt follows these sections in this EXACT order. Do NOT rearrange or skip sections:**
+
+SECTION 1 — Rating: the prompt's first words are always a content rating (see RATING AND BODY WORDS below).
+
+SECTION 2 — Camera & framing: establish shot type and angle before describing anything else. Pick a shot type — wide shot / medium shot / close-up / over-the-shoulder — and add an angle when it strengthens the moment: low angle (imposing, heroic), high angle (vulnerability), dutch angle (tension, action), bird's-eye view (spatial overview). Match the camera to the emotional tone: action wants low or dutch angles, intimate or tense conversation wants close-ups, new locations and group scenes want wide shots.
+
+SECTION 3 — Character count: a count phrase naming who is in frame — "one woman", "two women", "a man and a woman".
+
+SECTION 4 — Characters: re-describe each character's physical appearance IN FULL in every prompt — the image model cannot see the story, previous images, or other prompts. Every character description must cover: age bracket (young woman, mature woman...), race/species if not human, skin tone, eye color, hair length/style/color, breast size band (females — see below), current clothing AND its state, facial expression, posture or action, and any held items.
+  - MULTIPLE CHARACTERS (prevent feature-bleeding — this is where images fail): each person gets their OWN self-contained sentence with a spatial anchor ("on the left, ...", "on the right, ...", "behind her, ..."). Keep every trait inside its owner's sentence — never interleave two characters' traits, and never merge them into one shared description. Give each a distinguishing anchor (hair colour, outfit) so the model keeps them apart. Example: "two women — on the left, a tall mature woman with long wavy red hair, green eyes, and fair skin, wearing an emerald evening dress, smiling warmly; on the right, a petite young woman with a short black bob, dark eyes, and olive skin, in a rumpled white blouse, arms crossed, scowling"
+
+SECTION 5 — Environment (always last): close every prompt with setting, time of day, lighting, and atmosphere in concrete visual terms — never stop at the characters. Name the light source and its quality: golden hour sunlight, volumetric light through windows, rim lighting, dramatic shadows, backlighting, soft overcast light, warm firelight, cold moonlight, neon glow. Add atmosphere details when they fit: dust motes, rain, mist, floating embers, depth of field.
+
 **RATING AND BODY WORDS (required in every prompt):**
-- The prompt's FIRST words are always a content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content)
+- The content rating opening SECTION 1 is one of: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content)
 - For every female character, ALWAYS state her current breast size using one of these bands, matching the story's canon: flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts — body-size continuity is critical
 - Prefer concrete visual wording over abstractions: "torn apron, popped buttons, fabric straining across her chest" not "clothes in disarray"
 - Do NOT add art-style words to prompts ("realistic art style", "anime style", "digital art", etc.) — the visual style is appended automatically and style words in the prompt contradict it
-- Best used for: dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
 
-**EXAMPLE:**
+**EXAMPLES (note how every prompt walks the sections in order — rating, camera, count, characters, environment):**
 The dragon descended from the storm clouds, its obsidian scales gleaming with each flash of lightning.
-<pic prompt="general, a massive black dragon descending from dark storm clouds, gleaming rain-wet scales, lightning illuminating the scene from a dramatic low angle, dark fantasy atmosphere" characters=""></pic>
+<pic prompt="general, wide shot from a dramatic low angle, a massive black dragon descending from dark storm clouds, wings fully spread, gleaming rain-wet obsidian scales, glowing amber eyes, jaws parted. Lightning splits the sky behind it, rain streaking through the frame, ruined battlements far below, dark oppressive storm atmosphere" characters=""></pic>
 
 Elena drew her blade, firelight dancing along the steel edge as she faced the creature.
-<pic prompt="sensitive, a young woman warrior with a determined expression, long red hair, green eyes, an athletic build and medium breasts, wearing fitted leather armor, drawing a glowing sword with firelight reflecting on the blade and her face, medieval interior, dramatic lighting" characters="Elena"></pic>
+<pic prompt="sensitive, medium shot with a slight dutch angle, one woman, a young woman warrior with long braided red hair, green eyes, fair freckled skin, an athletic build and medium breasts, wearing fitted leather armor scuffed at the shoulder, jaw set in a determined expression, drawing a glowing sword in a low stance. Torch-lit medieval great hall behind her, warm firelight reflecting off the blade and her face, deep flickering shadows, embers drifting in the air" characters="Elena"></pic>
 
 **CRITICAL RULES:**
 - **PROMPTS MUST BE IN ENGLISH** - Image generation models only understand English prompts. Always write the prompt attribute in English, even if the surrounding narrative is in another language.
 - The prompt must be a COMPLETE visual description - do not write "the dragon from the scene" or "as described above"
 - Never place <pic> tags in the middle of a sentence - always after the descriptive prose
-- Do not use <pic> for every scene - reserve for truly striking visual moments
-- Keep prompts under 500 characters
+- Do not use <pic> for every scene - reserve for truly striking visual moments; best used for dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
+- Density target: a good prompt is DETAILED — roughly 400-700 characters for one character, 600-1000 for multiple characters. Never exceed 1200 characters
 </InlineImages>`
 
 /**

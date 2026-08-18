@@ -14,7 +14,7 @@ export const imageableSceneSchema = z.object({
   prompt: z
     .string()
     .describe(
-      'Detailed image generation prompt (below 500 characters for standard, shorter for reference mode)',
+      'Detailed image generation prompt following the template build order (400-700 characters for standard mode, shorter for reference mode)',
     ),
   sourceText: z
     .string()
