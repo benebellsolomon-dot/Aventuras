@@ -34,3 +34,14 @@ export function sizeBandMarker(prompt: string): string {
   }
   return ''
 }
+
+/**
+ * Marker straight from the ENGINE tier — always preferred over sizeBandMarker
+ * when the caller knows the actual tier: the text-derived path can only guess
+ * the top of the band (tier 22 and 29 both read "huge breasts" → 29), while
+ * this carries the exact tier the bridge should render.
+ */
+export function tierMarker(tier: number | null | undefined): string {
+  if (tier === null || tier === undefined || !Number.isFinite(tier)) return ''
+  return `__betier_${Math.max(0, Math.round(tier))}__ `
+}

@@ -13,7 +13,6 @@
 import {
   BODY_ROWS_BY_SHAPE,
   DROOP_CM_CURVES,
-  MEASUREMENT_CONSTANTS,
   PROPORTION_THRESHOLDS,
   SKIN_TENSION_THRESHOLDS,
   WEIGHT_FEEL_THRESHOLDS,
@@ -58,22 +57,11 @@ export {
   resolveBuild,
 } from './curves'
 
-const K = MEASUREMENT_CONSTANTS
-
 const clampTier = (tier: number): number =>
   Number.isFinite(tier) ? Math.max(0, Math.floor(tier)) : 0
 
 const clampPercent = (value: number): number =>
   Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0
-
-/** The NAI frame-weight estimate from height + build (reference default when unset). */
-export function estimatedBodyWeightKg(heightCm?: number, build?: string): number {
-  const h =
-    Number.isFinite(heightCm) && (heightCm as number) >= 100 ? (heightCm as number) : K.refHeightCm
-  const mods = K.buildWeightMods as Record<string, number>
-  const mod = (build && mods[build]) || 0
-  return Math.max(20, h * K.bodyWeightHeightFactor - K.bodyWeightHeightOffset + mod)
-}
 
 /** Weight-feel label (NAI weightRef rungs), keyed on current kg per side. */
 export function weightFeel(kgPerSide: number): string {

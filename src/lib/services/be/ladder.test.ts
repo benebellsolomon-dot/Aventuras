@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest'
-import { bandWord, comparative, cupLetter, imageSizePhrase, tierForCupLetter } from './ladder'
+import {
+  bandPosition,
+  bandWord,
+  comparative,
+  cupLetter,
+  imageSizePhrase,
+  tierForCupLetter,
+} from './ladder'
 
 describe('cupLetter', () => {
   test('pins the corrected-math anchors (research/38 C4: 1 inch of diff per letter)', () => {
@@ -70,5 +77,19 @@ describe('tierForCupLetter', () => {
   test('returns null for unknown letters', () => {
     expect(tierForCupLetter('teacup')).toBeNull()
     expect(tierForCupLetter('')).toBeNull()
+  })
+
+  test('A/B clamp to the genre floor instead of failing to seed', () => {
+    expect(tierForCupLetter('A')).toBe(0)
+    expect(tierForCupLetter('B-cup')).toBe(0)
+  })
+})
+
+describe('bandPosition', () => {
+  test('0 at a band floor, approaches 1 before the next band, saturates at the top', () => {
+    expect(bandPosition(22)).toBe(0) // huge floor
+    expect(bandPosition(29)).toBeCloseTo(7 / 8, 5) // last huge tier (next band at 30)
+    expect(bandPosition(40)).toBe(0) // hyper floor
+    expect(bandPosition(400)).toBe(1) // open-ended top saturates
   })
 })

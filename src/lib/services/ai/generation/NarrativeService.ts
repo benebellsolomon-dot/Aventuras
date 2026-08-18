@@ -20,6 +20,7 @@ import { createLogger } from '$lib/log'
 import { stripPicTags } from '$lib/utils/inlineImageParser'
 import { settings } from '$lib/stores/settings.svelte'
 import { detectPromptDialect } from '../image/dialect'
+import { bandWord, cupLetter, readBodyState } from '$lib/services/be'
 import type { StreamChunk } from '../core/types'
 import type {
   Story,
@@ -172,8 +173,30 @@ ${lines.join('\n')}
 }
 
 /**
+ * Current engine body-state per character — deterministic tier reinforcement
+ * for the prompt writer. Without this the LLM guesses the band from story
+ * memory; with it the exact current band/cup is stated per character, so the
+ * grounding pass's replace branch fires on an already-correct word.
+ */
+function buildBodyStateReinforcementBlock(characters: Character[]): string {
+  const lines = characters
+    .map((c) => {
+      const state = readBodyState(c.metadata)
+      if (!state) return null
+      return `- ${c.name}: ${bandWord(state.tier)} (${cupLetter(state.tier)}-cup)`
+    })
+    .filter(Boolean)
+  if (lines.length === 0) return ''
+  return `
+**CURRENT BODY STATE (canonical — overrides story memory):**
+Use EXACTLY these size bands for these characters in every <pic> prompt. The engine tracks growth; the band below is always current.
+${lines.join('\n')}
+`
+}
+
+/**
  * Select the dialect-appropriate inline-image instructions and append the
- * locked identity tags for the characters present in the scene.
+ * locked identity tags + current body state for the characters in the scene.
  */
 export function buildInlineImageInstructions(
   dialect: 'prose' | 'booru',
@@ -181,9 +204,9 @@ export function buildInlineImageInstructions(
 ): string {
   const base =
     dialect === 'booru' ? INLINE_IMAGE_INSTRUCTIONS_BOORU : INLINE_IMAGE_INSTRUCTIONS_PROSE
-  const tagBlock = buildCharacterIdentityTagBlock(characters)
-  if (!tagBlock) return base
-  return base.replace('</InlineImages>', `${tagBlock}</InlineImages>`)
+  const extras = `${buildCharacterIdentityTagBlock(characters)}${buildBodyStateReinforcementBlock(characters)}`
+  if (!extras) return base
+  return base.replace('</InlineImages>', `${extras}</InlineImages>`)
 }
 
 /**

@@ -11,12 +11,14 @@
  */
 
 import {
+  bandPosition,
+  bandWord,
   groundImagePromptSize,
   imageStateCues,
   soloBodyState,
   uniformBodyStateTier,
 } from '$lib/services/be'
-import { sizeBandMarker } from './sizeBandMarker'
+import { sizeBandMarker, tierMarker } from './sizeBandMarker'
 import { detectPromptDialect, BOORU_QUALITY_PREFIX } from './dialect'
 import { maybeBuildBridgeSpec } from './bridgeSpec'
 import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
@@ -90,12 +92,31 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
 
   // The __betier__ marker is only parsed by si-bridge (native) and the a1111
   // shim — every other provider would receive it as literal garbage tokens.
+  // When the engine tier is known it goes in directly (exact); the text-derived
+  // marker is the fallback for band words the LLM wrote on its own.
   const markerConsumers: ReadonlyArray<ImageProviderType | undefined> = ['si-bridge', 'a1111']
-  const marker = markerConsumers.includes(input.providerType) ? sizeBandMarker(groundedPrompt) : ''
+  const marker = markerConsumers.includes(input.providerType)
+    ? tierMarker(beTier) || sizeBandMarker(groundedPrompt)
+    : ''
 
   // Booru-trained models (Illustrious/Pony/...) get a tag quality prefix and NO
   // prose style block — a flowing style paragraph degrades tag adherence.
   const dialect = detectPromptDialect(input.model)
+
+  // Within-band tier reinforcement (booru only): the band word alone flattens
+  // an 8-tier range into one string; A1111 emphasis scaled by the tier's
+  // position inside its band pushes the render toward the right end of it.
+  if (dialect === 'booru' && beTier !== null) {
+    const word = bandWord(beTier)
+    const weight = 1 + 0.2 * bandPosition(beTier)
+    if (weight > 1.01) {
+      groundedPrompt = groundedPrompt.replace(
+        new RegExp(word, 'i'),
+        `(${word}:${weight.toFixed(2)})`,
+      )
+    }
+  }
+
   const fullPrompt =
     dialect === 'booru'
       ? `${marker}${BOORU_QUALITY_PREFIX}, ${groundedPrompt}`

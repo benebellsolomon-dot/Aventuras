@@ -14,7 +14,7 @@ import type {
   ImageModelInfo,
 } from './types'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
-import { generateImage } from 'ai'
+import { generateImage, generateText } from 'ai'
 import { isGoogleImageModel } from '../../sdk/providers/modelFetcher'
 import { createTimeoutFetch } from '../../sdk/providers/fetch'
 
@@ -29,7 +29,32 @@ export function createGoogleProvider(config: ImageProviderConfig): ImageProvider
     name: 'Google AI Studio',
 
     async generate(options: ImageGenerateOptions): Promise<ImageGenerateResult> {
-      const { model, prompt, size, signal } = options
+      const { model, prompt, size, referenceImages, signal } = options
+
+      // img2img: Gemini image models take reference images through the chat
+      // path (image parts + IMAGE response modality) — generateImage() cannot
+      // carry them, so portraits were silently dropped here before.
+      if (referenceImages?.length && isGoogleImageModel(model)) {
+        const result = await generateText({
+          model: googleSDK(model),
+          providerOptions: { google: { responseModalities: ['TEXT', 'IMAGE'] } },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                ...referenceImages.map((img) => ({ type: 'image' as const, image: img })),
+              ],
+            },
+          ],
+          abortSignal: signal,
+        })
+        const file = result.files.find((f) => f.mediaType?.startsWith('image/'))
+        if (!file?.base64) {
+          throw new Error('No image data in Google img2img response')
+        }
+        return { base64: file.base64 }
+      }
 
       const result = await generateImage({
         model: googleSDK.image(model),

@@ -36,6 +36,7 @@ import {
   parseGrowthEligibleKinds,
   readBodyState,
   reduceCharacterBody,
+  seedBaselineFromText,
   sniffTierFromText,
   writeBodyState,
   type BeLogRecord,
@@ -2919,6 +2920,10 @@ class StoryStore {
         ].join('\n')
         const sniffedTier = sniffTierFromText(sniffSource)
         state = defaultBodyState(sniffedTier ?? undefined, this.currentStory?.settings?.beFluidType)
+        // Frame baseline (height/build) parsed from the same text feeds the
+        // band/frame-weight math; the panel's baseline editor still wins later.
+        const seededBaseline = seedBaselineFromText(sniffSource)
+        if (seededBaseline) state = { ...state, baseline: seededBaseline }
         seeded = true
         pendingLog.push({
           character: character.name,

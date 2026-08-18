@@ -5,7 +5,7 @@
  */
 
 import { generateImage, supportsImageGeneration } from './providers/registry'
-import { sizeBandMarker } from './sizeBandMarker'
+import { sizeBandMarker, tierMarker } from './sizeBandMarker'
 import { buildPortraitSpec, type BridgeSpecSubject } from './bridgeSpec'
 import { resolveLora, loraTriggerText } from './loraBinding'
 import { readBodyState } from '$lib/services/be'
@@ -175,9 +175,6 @@ export async function generatePortrait(
   const loraTier = readBodyState(subject?.metadata ?? null)?.tier ?? 0
   const loraOverride = resolveLora(subject?.loraConfig, loraTier) ?? undefined
 
-  // Size-band → bridge tier marker (see sizeBandMarker.ts) — portraits carry the
-  // character's size vocabulary via visual descriptors, so mark them too.
-  prompt = `${sizeBandMarker(prompt)}${prompt}`
   const imageSettings = settings.systemServicesSettings.imageGeneration
 
   const profileId = imageSettings.portraitProfileId
@@ -186,6 +183,14 @@ export async function generatePortrait(
   }
 
   const profile = settings.getImageProfile(profileId)
+
+  // Size marker — engine tier when the subject has body state, text-derived
+  // fallback otherwise. Only for the providers that parse it; everyone else
+  // would receive a literal __betier_N__ token.
+  if (profile?.providerType === 'si-bridge' || profile?.providerType === 'a1111') {
+    const engineTier = readBodyState(subject?.metadata ?? null)?.tier
+    prompt = `${tierMarker(engineTier) || sizeBandMarker(prompt)}${prompt}`
+  }
   const model = profile?.model ?? ''
   if (!model) {
     throw new Error('No image model configured')

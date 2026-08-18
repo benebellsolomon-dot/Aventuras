@@ -9,7 +9,6 @@ import {
   capacityMlPerSide,
   droopCm,
   dryKgPerSide,
-  estimatedBodyWeightKg,
   fluidPressureLabel,
   imageStateCues,
   measurements,
@@ -18,6 +17,7 @@ import {
   sizingString,
   weightFeel,
 } from './measurements'
+import { frameEstimateKg } from './curves'
 import { defaultBodyState } from './metadata'
 import type { BodyState } from './types'
 
@@ -69,9 +69,9 @@ describe('curves reproduce the baked golden snapshots (the spine, at rung resolu
   })
 
   test('reference frame weight matches the NAI estimate', () => {
-    expect(estimatedBodyWeightKg(165, 'average')).toBe(58)
-    expect(estimatedBodyWeightKg(undefined, undefined)).toBe(58)
-    expect(estimatedBodyWeightKg(165, 'petite')).toBeLessThan(58)
+    expect(frameEstimateKg({ heightCm: 165, build: 'average' })).toBe(58)
+    expect(frameEstimateKg(undefined)).toBe(58)
+    expect(frameEstimateKg({ heightCm: 165, build: 'petite' })).toBeLessThan(58)
   })
 })
 

@@ -4,7 +4,7 @@
  * Comparatives and band words are lookups into the generated NAI v0.4.7 tables
  * (ladder-data.ts). Cup letters are DERIVED from the corrected bust-diff
  * closed-form (research/38 C4: strict re-anchor, 1 inch of reference-frame
- * bust−band per letter — tier 47 ≈ T-cup, true X-cup ≈ tier 65), saturating
+ * bust−band per letter — tier 47 ≈ T-cup, true X-cup ≈ tier 64), saturating
  * into 'ZZ'/'ZZ+' at the top. One canonical scalar, everything else a pure
  * tested function of it (31a lesson 1).
  */
@@ -63,6 +63,9 @@ export function tierForCupLetter(letter: string): number | null {
   if (!key) return null
   const anchors = letterTierAnchors()
   if (key in anchors) return anchors[key]
+  // A/B sit below the genre floor (tier 0 is already C — documented ruling in
+  // curves.ts): clamp them to tier 0 so "A-cup" cards seed instead of failing.
+  if (key === 'A' || key === 'B') return 0
   // Legacy doubled letters (FF/GG/HH/…): use the base letter's anchor.
   if (key.length >= 2 && /^([A-Z])\1+$/.test(key)) {
     const base = key[0]
@@ -80,6 +83,21 @@ export function bandIndex(tier: number): number {
     else break
   }
   return idx
+}
+
+/**
+ * Position of the tier within its band: 0 at the band floor, 1 at the last
+ * tier before the next band. The open-ended top band uses a nominal 10-tier
+ * span and saturates at 1. Lets image prompts reinforce WHERE in a band a
+ * character sits — "huge breasts" at tier 29 should render larger than at 22.
+ */
+export function bandPosition(tier: number): number {
+  const t = clampTier(tier)
+  const idx = bandIndex(t)
+  const floor = BAND_WORD_THRESHOLDS[idx].minTier
+  const next = BAND_WORD_THRESHOLDS[idx + 1]?.minTier ?? floor + 10
+  const span = Math.max(1, next - floor)
+  return Math.min(1, (t - floor) / span)
 }
 
 /**

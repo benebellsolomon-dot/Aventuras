@@ -30,6 +30,7 @@ export {
 export { buildBeGenreRules, type BeGenreRuleOptions } from './genre-rules'
 export {
   bandIndex,
+  bandPosition,
   bandWord,
   comparative,
   cupLetter,
@@ -38,6 +39,7 @@ export {
   sniffTierFromText,
   tierForCupLetter,
 } from './ladder'
+export { parseBuildLabel, parseHeightCm, seedBaselineFromText } from './baseline'
 export { BAND_WORD_THRESHOLDS } from './ladder-data'
 export { groundingFacts } from './derive'
 export {
@@ -61,7 +63,6 @@ export {
   droopCm,
   dryKgPerSide,
   effectiveSupport,
-  estimatedBodyWeightKg,
   fluidPressureLabel,
   imageStateCues,
   measurements,

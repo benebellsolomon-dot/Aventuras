@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { assembleInlineImage } from './inlineAssembly'
+import { defaultBodyState, writeBodyState } from '$lib/services/be'
 import type { Character, CharacterLoraConfig } from '$lib/types'
 
 function char(name: string, loraConfig?: CharacterLoraConfig): Character {
@@ -90,6 +91,47 @@ describe('assembleInlineImage', () => {
       model: 'z-image-turbo',
     })
     expect(result.fullPrompt).toBe('a cozy kitchen. STYLE')
+  })
+
+  it('prefers the exact engine tier for the marker over the text-derived top-of-band guess', () => {
+    const lucy = {
+      name: 'Lucy',
+      loraConfig: null,
+      metadata: writeBodyState(null, defaultBodyState(24)),
+      visualDescriptors: {},
+    } as unknown as Character
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: '',
+      providerType: 'si-bridge' as const,
+      presentCharacters: [lucy],
+      tagPrompt: 'a woman with huge breasts in a garden',
+      tagCharacters: ['Lucy'],
+    })
+    // Text-derived would say __betier_29__ (top of "huge"); the engine tier is 24.
+    expect(result.fullPrompt.startsWith('__betier_24__ ')).toBe(true)
+  })
+
+  it('applies within-band emphasis on the band word for booru models', () => {
+    const lucy = {
+      name: 'Lucy',
+      loraConfig: null,
+      metadata: writeBodyState(null, defaultBodyState(28)),
+      visualDescriptors: {},
+    } as unknown as Character
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: '',
+      providerType: 'nanogpt' as const,
+      model: 'wai-illustrious-sdxl',
+      presentCharacters: [lucy],
+      tagPrompt: '1girl, huge breasts, garden',
+      tagCharacters: ['Lucy'],
+    })
+    // Tier 28 sits 6/8 through the huge band (22–29) → weight 1.15.
+    expect(result.fullPrompt).toContain('(huge breasts:1.15)')
   })
 
   it('emits the size-band marker only for providers that parse it', () => {
