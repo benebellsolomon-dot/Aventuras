@@ -18,7 +18,9 @@ import { ComfyApi, PromptBuilder, CallWrapper } from '@saintno/comfyui-sdk'
 import BasicTxt2ImgWorkflow from './comfyWorkflows/basic-txt2img-workflow.json'
 import LoraTxt2ImgWorkflow from './comfyWorkflows/lora-txt2img-workflow.json'
 import UnetTxt2ImgWorkflow from './comfyWorkflows/unet-txt2img-workflow.json'
+import IpAdapterTxt2ImgWorkflow from './comfyWorkflows/ipadapter-txt2img-workflow.json'
 import { parseImageSize } from '$lib/utils/image'
+import { detectPromptDialect, BOORU_DEFAULT_NEGATIVE } from '../dialect'
 
 const DEFAULT_BASE_URL = 'http://localhost:8188'
 
@@ -342,6 +344,39 @@ function buildOnFailedHandler(
   }
 }
 
+/** Default IPAdapter identity weight (bridge FaceID parity; sprites tune via faceidWeight). */
+const IDENTITY_WEIGHT_DEFAULT = 0.8
+
+/**
+ * Upload a reference image to ComfyUI's input store; returns the stored
+ * filename for a LoadImage node. Uses a content-stable name so repeated
+ * renders of the same character reuse the slot (overwrite=true).
+ */
+async function uploadReferenceImage(baseUrl: string, base64: string): Promise<string> {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+  const blob = new Blob([bytes], { type: 'image/png' })
+  const fileName = `aventuras_ref_${await sha1Hex(bytes)}.png`
+  const form = new FormData()
+  form.append('image', blob, fileName)
+  form.append('type', 'input')
+  form.append('overwrite', 'true')
+  const resp = await fetch(`${baseUrl}/upload/image`, { method: 'POST', body: form })
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '')
+    throw new Error(`ComfyUI /upload/image responded ${resp.status}: ${body}`)
+  }
+  const data = (await resp.json().catch(() => null)) as { name?: string } | null
+  return data?.name || fileName
+}
+
+async function sha1Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-1', bytes as BufferSource)
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 16)
+}
+
 export function createComfyProvider(config: ImageProviderConfig): ImageProvider {
   const baseUrl = (config.baseUrl || DEFAULT_BASE_URL).trim()
 
@@ -366,10 +401,14 @@ export function createComfyProvider(config: ImageProviderConfig): ImageProvider 
       const positiveTags = (providerOptions?.positivePrompt as string) || ''
       const negativeTags = (providerOptions?.negativePrompt as string) || ''
       const finalPositivePrompt = positiveTags ? `${prompt}, ${positiveTags}` : prompt
-      const finalNegativePrompt = negativeTags
-      const seed = Number(
-        crypto.getRandomValues(new BigUint64Array(1))[0] % BigInt(Number.MAX_SAFE_INTEGER),
-      )
+      // Profile negative wins; booru models get the standard anti-artifact
+      // default when nothing is configured (matches the NanoGPT provider).
+      const finalNegativePrompt =
+        negativeTags || (detectPromptDialect(model) === 'booru' ? BOORU_DEFAULT_NEGATIVE : '')
+      // Deterministic seed (sprite sets) when the caller provides one.
+      const seed =
+        options.seed ??
+        Number(crypto.getRandomValues(new BigUint64Array(1))[0] % BigInt(Number.MAX_SAFE_INTEGER))
 
       const explicitMode = providerOptions?.mode as ComfyMode | undefined
 
@@ -417,6 +456,114 @@ export function createComfyProvider(config: ImageProviderConfig): ImageProvider 
               }
             })
             .onFailed(buildOnFailedHandler(reject, 'ComfyUI custom workflow'))
+            .run()
+        })
+      }
+
+      // -----------------------------------------------------------------------
+      // Identity workflow (IPAdapter) — auto-routed whenever a reference image
+      // arrives (sprite anchors, portraits). Replaces the si-bridge FaceID
+      // channel for direct ComfyUI. Requires the ComfyUI_IPAdapter_plus custom
+      // nodes; a missing install surfaces as a clear node-validation error.
+      // -----------------------------------------------------------------------
+      if (options.referenceImages?.length && explicitMode !== ComfyMode.CustomWorkflow) {
+        if (!model) throw new Error('No ComfyUI model selected.')
+
+        const refName = await uploadReferenceImage(baseUrl, options.referenceImages[0])
+        const sizeToUse = parseImageSize(size)
+        const step = providerOptions?.step ?? 8
+        const cfg = providerOptions?.cfg ?? 2
+        const sampler = (providerOptions?.sampler as string) ?? 'dpmpp_2m_sde_gpu'
+        const scheduler = (providerOptions?.scheduler as string) ?? 'sgm_uniform'
+        const identityWeight = options.faceidWeight ?? IDENTITY_WEIGHT_DEFAULT
+        const loraOptions = providerOptions?.lora as
+          | { name: string; strengthModel?: number; strengthClip?: number }
+          | undefined
+
+        const workflowBase = JSON.parse(JSON.stringify(IpAdapterTxt2ImgWorkflow))
+        if (!loraOptions) {
+          // No LoRA: drop the loader and rewire model/clip straight to the checkpoint.
+          delete workflowBase['2']
+          workflowBase['11'].inputs.model = ['4', 0]
+          workflowBase['6'].inputs.clip = ['4', 1]
+          workflowBase['7'].inputs.clip = ['4', 1]
+        }
+
+        const inputKeys = [
+          'checkpoint',
+          'positive',
+          'negative',
+          'seed',
+          'batch',
+          'step',
+          'cfg',
+          'sampler',
+          'scheduler',
+          'width',
+          'height',
+          'ref_image',
+          'ip_weight',
+        ]
+        if (loraOptions) {
+          inputKeys.push('lora_name', 'lora_strength_model', 'lora_strength_clip')
+        }
+
+        let builder = new PromptBuilder(workflowBase, inputKeys, ['images'])
+          .setInputNode('checkpoint', '4.inputs.ckpt_name')
+          .setInputNode('positive', '6.inputs.text')
+          .setInputNode('negative', '7.inputs.text')
+          .setInputNode('seed', '3.inputs.seed')
+          .setInputNode('step', '3.inputs.steps')
+          .setInputNode('cfg', '3.inputs.cfg')
+          .setInputNode('sampler', '3.inputs.sampler_name')
+          .setInputNode('scheduler', '3.inputs.scheduler')
+          .setInputNode('batch', '5.inputs.batch_size')
+          .setInputNode('width', '5.inputs.width')
+          .setInputNode('height', '5.inputs.height')
+          .setInputNode('ref_image', '10.inputs.image')
+          .setInputNode('ip_weight', '12.inputs.weight')
+          .setOutputNode('images', '9')
+          .input('checkpoint', model, api.osType)
+          .input('positive', finalPositivePrompt)
+          .input('negative', finalNegativePrompt)
+          .input('seed', seed)
+          .input('step', step)
+          .input('cfg', cfg)
+          .input<string>('sampler', sampler)
+          .input<string>('scheduler', scheduler)
+          .input('batch', 1)
+          .input('width', sizeToUse.width)
+          .input('height', sizeToUse.height)
+          .input<string>('ref_image', refName)
+          .input('ip_weight', identityWeight)
+
+        if (loraOptions) {
+          builder = builder
+            .setInputNode('lora_name', '2.inputs.lora_name')
+            .setInputNode('lora_strength_model', '2.inputs.strength_model')
+            .setInputNode('lora_strength_clip', '2.inputs.strength_clip')
+            .input('lora_name', loraOptions.name, api.osType)
+            .input('lora_strength_model', loraOptions.strengthModel ?? 1)
+            .input('lora_strength_clip', loraOptions.strengthClip ?? 1)
+        }
+
+        return new Promise((resolve, reject) => {
+          new CallWrapper(api, builder)
+            .onFinished(async (data) => {
+              try {
+                const imageInfos = data.images?.images || []
+                if (imageInfos.length === 0) {
+                  return reject(new Error('ComfyUI produced no images'))
+                }
+                const blob = await api.getImage(imageInfos[0])
+                const base64 = await blobToBase64(blob)
+                resolve({ base64 })
+              } catch (error) {
+                console.error('Failed to process ComfyUI identity workflow output:', error)
+                reject(new Error(`Failed to process image output: ${error}`))
+              }
+            })
+            .onFailed(buildOnFailedHandler(reject, 'ComfyUI identity workflow'))
             .run()
         })
       }

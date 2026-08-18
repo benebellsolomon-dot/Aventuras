@@ -1,0 +1,127 @@
+{
+  "2": {
+    "inputs": {
+      "lora_name": "placeholder.safetensors",
+      "strength_model": 1,
+      "strength_clip": 1,
+      "model": ["4", 0],
+      "clip": ["4", 1]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "load_lora"
+    }
+  },
+  "3": {
+    "inputs": {
+      "seed": 509648683700218,
+      "steps": 8,
+      "cfg": 2,
+      "sampler_name": "dpmpp_sde",
+      "scheduler": "sgm_uniform",
+      "denoise": 1,
+      "model": ["12", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["5", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "4": {
+    "inputs": {
+      "ckpt_name": "placeholder.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "5": {
+    "inputs": {
+      "width": 832,
+      "height": 1216,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "",
+      "clip": ["2", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "",
+      "clip": ["2", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["4", 2]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "Aventuras",
+      "images": ["8", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image": "reference.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Identity Reference"
+    }
+  },
+  "11": {
+    "inputs": {
+      "preset": "PLUS FACE (portraits)",
+      "model": ["2", 0]
+    },
+    "class_type": "IPAdapterUnifiedLoader",
+    "_meta": {
+      "title": "IPAdapter Loader"
+    }
+  },
+  "12": {
+    "inputs": {
+      "weight": 0.8,
+      "start_at": 0,
+      "end_at": 1,
+      "weight_type": "standard",
+      "model": ["11", 0],
+      "ipadapter": ["11", 1],
+      "image": ["10", 0]
+    },
+    "class_type": "IPAdapter",
+    "_meta": {
+      "title": "IPAdapter Apply"
+    }
+  }
+}

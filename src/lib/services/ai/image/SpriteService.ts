@@ -304,7 +304,9 @@ export class SpriteAnchorService {
         spec: isBridge ? buildSpriteSpec(input) : undefined,
         referenceImages: onlineIdentityRef ? [onlineIdentityRef] : undefined,
         poseFaceAnchor: useAnchor ? stripDataUrlPrefix(character.spriteAnchor!) : undefined,
-        faceidWeight: useAnchor ? SPRITE_FACEID_WEIGHT : undefined,
+        // Sprite cells run identity BELOW the default weight (bridge FaceID or
+        // ComfyUI IPAdapter alike) so expression clusters stay distinct.
+        faceidWeight: useAnchor || onlineIdentityRef ? SPRITE_FACEID_WEIGHT : undefined,
         openposeStrength: useAnchor ? SPRITE_OPENPOSE_STRENGTH : undefined,
         loraOverride:
           resolveLora(character.loraConfig, bandRepresentativeTier(bandIndex)) ?? undefined,
