@@ -1,4 +1,5 @@
 import { settings } from '$lib/stores/settings.svelte'
+import { stringToDescriptors } from '$lib/utils/visualDescriptors'
 import {
   hasRequiredCredentials,
   getProviderDisplayName,
@@ -99,7 +100,11 @@ export class ImageStore {
         promptLength: portraitPrompt.length,
       })
 
-      const base64 = await sdkGeneratePortrait(portraitPrompt)
+      const base64 = await sdkGeneratePortrait(portraitPrompt, {
+        name: protagonist.name,
+        visualDescriptors: stringToDescriptors(descriptors),
+        metadata: null,
+      })
 
       log('Protagonist portrait generated successfully', {
         protagonistName: protagonist.name,
@@ -159,7 +164,11 @@ export class ImageStore {
         promptLength: portraitPrompt.length,
       })
 
-      const base64 = await sdkGeneratePortrait(portraitPrompt)
+      const base64 = await sdkGeneratePortrait(portraitPrompt, {
+        name: char.name,
+        visualDescriptors: stringToDescriptors(descriptors),
+        metadata: null,
+      })
 
       log('Supporting character portrait generated successfully', {
         characterName: charName,

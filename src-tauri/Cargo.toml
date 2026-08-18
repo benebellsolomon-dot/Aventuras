@@ -35,6 +35,12 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros"]
 qrcode = "0.14"
 image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
+
+# V2 sprite matting (Spec 4): ort + isnet-anime behind the sprite_finish command.
+# The model file is OPTIONAL (app-data/models/isnet-anime.onnx); absent → the
+# command reports unavailable and the frontend pass-through keeps sprites opaque.
+ort = { version = "2.0.0-rc.10", features = ["coreml"] }
+webp = "0.3"
 local-ip-address = "0.6"
 uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

@@ -22,6 +22,7 @@ import type { Genre, Tense } from '$lib/services/ai/wizard/ScenarioService'
 import { scenarioVault } from '$lib/stores/scenarioVault.svelte'
 import { database } from '$lib/services/database'
 import { ImageStore } from '$lib/stores/wizard/imageStore.svelte'
+import { descriptorsToString, hasDescriptors } from '$lib/utils/visualDescriptors'
 import { SvelteMap } from 'svelte/reactivity'
 import { packService } from '$lib/services/packs/pack-service'
 import type { PresetPack, CustomVariable } from '$lib/services/packs/types'
@@ -97,6 +98,7 @@ export class STImportWizardStore {
   imageGenerationMode = $state<'none' | 'agentic' | 'inline'>('none')
   backgroundImagesEnabled = $state(false)
   referenceMode = $state(false)
+  beMode = $state(false)
   importChatAsEntries = $state(false) // true = import chat, false = fresh start with card opening
 
   // Step 6: Review
@@ -384,6 +386,16 @@ export class STImportWizardStore {
           traits: sanitized?.traits?.slice(0, 8) || [],
         }
         this.cardCharacterName = cardChar.name
+        // Carry the sanitized structured visual descriptors through to the image
+        // step's per-name map — this is what prepareStoryData reads when building
+        // the story character. Without this seed, syncToImageStore falls back to
+        // the prose description and the structured appearance data is dropped.
+        if (sanitized?.visualDescriptors && hasDescriptors(sanitized.visualDescriptors)) {
+          this.image.supportingCharacterVisualDescriptors = {
+            ...this.image.supportingCharacterVisualDescriptors,
+            [cardChar.name]: descriptorsToString(sanitized.visualDescriptors),
+          }
+        }
         // Attach card portrait to the primary character
         if (this.cardPortrait) {
           this.characterPortraits = new SvelteMap(this.characterPortraits).set(
@@ -681,6 +693,7 @@ export class STImportWizardStore {
           imageGenerationMode: this.imageGenerationMode,
           backgroundImagesEnabled: this.backgroundImagesEnabled,
           referenceMode: this.referenceMode,
+          beMode: this.beMode,
         },
         title: this.storyTitle,
       }

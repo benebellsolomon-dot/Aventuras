@@ -12,8 +12,14 @@
 import { database } from '$lib/services/database'
 import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
+import {
+  buildBeGenreRules,
+  buildBeStateBlock,
+  readBodyState,
+  type BeStateEntry,
+} from '$lib/services/be'
 import type { RenderResult } from './types'
-import type { Character, Location, Item, StoryBeat } from '$lib/types'
+import type { Character, Location, Item, StoryBeat, Story } from '$lib/types'
 import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
 
 const log = createLogger('ContextBuilder')
@@ -51,6 +57,7 @@ export class ContextBuilder {
       settingDescription: story.description || '',
       visualProseMode: story.settings?.visualProseMode || false,
       inlineImageMode: story.settings?.imageGenerationMode === 'inline',
+      contentRating: story.settings?.contentRating || 'standard',
     })
 
     // Protagonist
@@ -87,6 +94,11 @@ export class ContextBuilder {
     const items = await database.getItems(storyId)
     const storyBeats = await database.getStoryBeats(storyId)
     await builder.loadRuntimeVariableContext(characters, locations, items, storyBeats, protagonist)
+
+    // BE engine: the body-state narrative block (empty string for non-BE stories)
+    builder.loadBeStateContext(story, characters)
+    // BE engine: the static genre-rules pack (research/41 precedence contract)
+    builder.loadBeGenreRules(story)
 
     log('forStory complete', {
       storyId,
@@ -170,6 +182,51 @@ export class ContextBuilder {
       }
     } catch (error) {
       log('loadCustomVariables failed', { packId: this.packId, error })
+    }
+  }
+
+  /**
+   * Build the `beStateBlock` context variable for BE-mode stories: engine-tracked
+   * body state rendered as the authoritative narrative block (be/context.ts owns
+   * the wording). Empty string when beMode is off or nothing carries bodyState.
+   */
+  private loadBeStateContext(story: Story, characters: Character[]): void {
+    try {
+      let beStateBlock = ''
+      if (story.settings?.beMode === true) {
+        const entries: BeStateEntry[] = []
+        for (const character of characters) {
+          const state = readBodyState(character.metadata)
+          if (state) entries.push({ name: character.name, state })
+        }
+        beStateBlock = buildBeStateBlock(entries)
+      }
+      this.add({ beStateBlock })
+    } catch (error) {
+      log('loadBeStateContext failed', { error })
+      this.add({ beStateBlock: '' })
+    }
+  }
+
+  /**
+   * Build the `beGenreRules` context variable: the static BE narration contract
+   * (growth-authorization precedence, render scaffold), with per-story cosmology
+   * and pacing interpolated. Empty string when beMode is off.
+   */
+  private loadBeGenreRules(story: Story): void {
+    try {
+      const settings = story.settings
+      const beGenreRules =
+        settings?.beMode === true
+          ? buildBeGenreRules({
+              growthCosmology: settings.beGrowthCosmology,
+              pacingFlavor: settings.bePacingFlavor,
+            })
+          : ''
+      this.add({ beGenreRules })
+    } catch (error) {
+      log('loadBeGenreRules failed', { error })
+      this.add({ beGenreRules: '' })
     }
   }
 

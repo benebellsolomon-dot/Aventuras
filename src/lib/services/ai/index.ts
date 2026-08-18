@@ -67,6 +67,9 @@ import {
 } from './image'
 import type { InlineImageContext, ImageAnalysisContext } from './image'
 import { generateImage as registryGenerateImage } from './image/providers/registry'
+import { assembleInlineImage } from './image/inlineAssembly'
+import { type ResolvedLora } from './image/loraBinding'
+import type { StructuredImageSpecInput } from './image/providers/types'
 import { EntryInjector, MemoryService, NarrativeService } from './generation'
 import type {
   ClassificationContext,
@@ -137,6 +140,10 @@ export interface ImageGenerationServiceSettings {
   backgroundProfileId: string | null // API profile for background image generation
   backgroundSize: string // Background image size (default: '1280x720')
   backgroundBlur: number // Background blur amount in pixels (default: 0)
+
+  // V2 sprite engine (Spec 4): banded character sprites + anchor renders
+  spriteProfileId?: string | null // API profile for sprite/anchor generation (provider-agnostic)
+  spriteSize?: string // Sprite render size (default: '832x1216', bridge-native portrait aspect)
 }
 
 // Re-export ImageGenerationContext type for backwards compatibility
@@ -152,6 +159,8 @@ export interface ImageGenerationContext {
   translatedNarrative?: string
   translationLanguage?: string
   referenceMode: boolean
+  /** BE grounding gate — supplied by caller to avoid store access */
+  beMode: boolean
   /** Story-level image generation mode — supplied by caller to avoid store access */
   imageGenerationMode?: string | null
   /** All story characters — supplied by caller for portrait/reference lookups */
@@ -877,6 +886,7 @@ class AIService {
           narrativeContent: narrativeToProcess,
           presentCharacters: context.presentCharacters,
           referenceMode: context.referenceMode,
+          beMode: context.beMode,
         }
         await inlineImageService.processNarrativeForInlineImages(inlineContext)
       } else {
@@ -921,7 +931,9 @@ class AIService {
       userAction: context.userAction,
       presentCharacters: context.presentCharacters.map((c) => ({
         name: c.name,
-        visualDescriptors: c.visualDescriptors,
+        // Scene analysis wants the CURRENT look (story-tracked) when present;
+        // identity rendering elsewhere always uses the canonical baseline.
+        visualDescriptors: c.currentVisualDescriptors ?? c.visualDescriptors,
         isProtagonist: c.relationship === 'self',
       })),
       currentLocation: context.currentLocation,
@@ -972,6 +984,7 @@ class AIService {
           context.presentCharacters,
           referenceMode,
           getImageProfile,
+          context.beMode,
         )
       }
     } catch (error) {
@@ -992,6 +1005,7 @@ class AIService {
     presentCharacters: Character[],
     referenceMode: boolean,
     getImageProfile: (id: string) => ImageProfile | undefined,
+    beMode: boolean = false,
   ): Promise<void> {
     const imageId = crypto.randomUUID()
 
@@ -1051,9 +1065,20 @@ class AIService {
       return
     }
 
-    // Build full prompt with style
+    // Build the request via the shared inline-image assembly (BE grounding +
+    // cues + per-character LoRA trigger words + tier-scaled LoRA file + marker +
+    // style + si-bridge spec) so the analyzed path matches the two inline paths
+    // and can't drift.
     const stylePrompt = await this.getStylePrompt(styleId)
-    const fullPrompt = `${scene.prompt}. ${stylePrompt}`
+    const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
+      presentCharacters,
+      tagPrompt: scene.prompt,
+      tagCharacters: scene.characters,
+      beMode,
+      stylePrompt,
+      narrativeText: scene.sourceText ?? '',
+      providerType: getImageProfile(profileId)?.providerType,
+    })
 
     const { width, height } = parseImageSize(sizeToUse)
     // Create pending record in database
@@ -1094,6 +1119,8 @@ class AIService {
       scene,
       presentCharacters,
       referenceImageUrls,
+      bridgeSpec,
+      loraOverride,
     ).catch((error) => {
       log('Async analyzed image generation failed', { imageId, error })
     })
@@ -1112,6 +1139,8 @@ class AIService {
     scene: ImageableScene,
     presentCharacters: Character[],
     referenceImageUrls?: string[],
+    spec?: StructuredImageSpecInput,
+    loraOverride?: ResolvedLora,
   ): Promise<void> {
     try {
       // Update status to generating
@@ -1123,6 +1152,7 @@ class AIService {
         model,
         sceneType: scene.sceneType,
         hasReference: !!referenceImageUrls?.length,
+        hasLora: !!loraOverride,
       })
 
       // Generate image using SDK
@@ -1132,6 +1162,8 @@ class AIService {
         prompt,
         size,
         referenceImages: referenceImageUrls,
+        spec,
+        loraOverride,
       })
 
       if (!result.base64) {

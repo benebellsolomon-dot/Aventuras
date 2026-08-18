@@ -16,6 +16,15 @@
     imageGenerationMode: 'none' | 'agentic' | 'inline'
     backgroundImagesEnabled: boolean
     referenceMode: boolean
+    beMode: boolean
+    /** This story's transformation fluid (BE engine seed source). Input shown only when provided. */
+    beFluidType?: string
+    /** What drives growth in this world — threaded into classifier + narrator (research/41). */
+    beGrowthCosmology?: string
+    /** Free-text pacing note interpolated into the BE genre rules. */
+    bePacingFlavor?: string
+    /** Growth-eligible event kinds; empty = every kind may land growth. */
+    beGrowthEligibleKinds?: string[]
     onPOVChange: (v: POV) => void
     onTenseChange: (v: Tense) => void
     onToneChange: (v: string) => void
@@ -23,6 +32,11 @@
     onImageGenerationModeChange: (v: 'none' | 'agentic' | 'inline') => void
     onBackgroundImagesEnabledChange: (v: boolean) => void
     onReferenceModeChange: (v: boolean) => void
+    onBeModeChange: (v: boolean) => void
+    onBeFluidTypeChange?: (v: string) => void
+    onBeGrowthCosmologyChange?: (v: string) => void
+    onBePacingFlavorChange?: (v: string) => void
+    onBeGrowthEligibleKindsChange?: (v: string[]) => void
     disabledFields?: {
       pov?: boolean
       tense?: boolean
@@ -40,6 +54,11 @@
     imageGenerationMode,
     backgroundImagesEnabled,
     referenceMode,
+    beMode,
+    beFluidType,
+    beGrowthCosmology,
+    bePacingFlavor,
+    beGrowthEligibleKinds,
     onPOVChange,
     onTenseChange,
     onToneChange,
@@ -47,9 +66,42 @@
     onImageGenerationModeChange,
     onBackgroundImagesEnabledChange,
     onReferenceModeChange,
+    onBeModeChange,
+    onBeFluidTypeChange,
+    onBeGrowthCosmologyChange,
+    onBePacingFlavorChange,
+    onBeGrowthEligibleKindsChange,
     disabledFields,
     disabledReason,
   }: Props = $props()
+
+  const GROWTH_KIND_CHOICES = [
+    { value: 'catalyst', label: 'Catalyst', hint: "this world's growth driver" },
+    { value: 'contact', label: 'Contact', hint: 'intimate escalation' },
+    { value: 'attempt', label: 'Attempt', hint: 'explicit growth attempts' },
+  ] as const
+
+  // Local draft, not the prop: updateStorySettings resolves async, so a second
+  // quick toggle would read a stale prop and clobber the first (the same
+  // two-write-source shape customPromptDraft documents in story-settings).
+  let growthKindsTouched = $state(false)
+  let growthKindsDraft = $state<string[]>([])
+  const growthKinds = $derived(
+    growthKindsTouched ? growthKindsDraft : (beGrowthEligibleKinds ?? []),
+  )
+
+  function toggleGrowthKind(kind: string, enabled: boolean) {
+    if (!onBeGrowthEligibleKindsChange) return
+    const known = growthKinds.filter((k) => GROWTH_KIND_CHOICES.some((c) => c.value === k))
+    const next = enabled
+      ? known.includes(kind)
+        ? known
+        : [...known, kind]
+      : known.filter((k) => k !== kind)
+    growthKindsTouched = true
+    growthKindsDraft = next
+    onBeGrowthEligibleKindsChange(next)
+  }
 </script>
 
 <div class="space-y-4">
@@ -258,6 +310,79 @@
       </div>
     </section>
   {/if}
+
+  <!-- Body Transformation Engine -->
+  <section class="space-y-2 pt-1">
+    <div class="flex items-center space-x-2 py-4">
+      <Switch id="be-mode" checked={beMode} onCheckedChange={onBeModeChange} />
+      <div class="grid gap-1.5 leading-none">
+        <Label for="be-mode">Body Transformation Engine</Label>
+        <p class="text-muted-foreground text-xs">
+          Track character body state mechanically: transformation events, deterministic growth
+          resolution, and size-grounded narration and images.
+        </p>
+      </div>
+    </div>
+    {#if beMode && onBeFluidTypeChange}
+      <div class="grid w-full items-center gap-2 pb-2">
+        <Input
+          label="Transformation Fluid"
+          id="be-fluid-type"
+          value={beFluidType ?? ''}
+          oninput={(e) => onBeFluidTypeChange(e.currentTarget.value)}
+          placeholder="milk (this story's fluid — used when seeding new body states)"
+        />
+      </div>
+    {/if}
+    {#if beMode && onBeGrowthCosmologyChange}
+      <div class="grid w-full items-center gap-2 pb-2">
+        <Input
+          label="Growth Cosmology"
+          id="be-growth-cosmology"
+          value={beGrowthCosmology ?? ''}
+          oninput={(e) => onBeGrowthCosmologyChange(e.currentTarget.value)}
+          placeholder="what drives growth in this world (e.g. 'only her partner's climax inside her')"
+        />
+        <p class="text-muted-foreground text-xs">
+          Teaches the classifier what counts as this story's growth catalyst and gives the narrator
+          the mechanism to flavor growth scenes with.
+        </p>
+      </div>
+    {/if}
+    {#if beMode && onBePacingFlavorChange}
+      <div class="grid w-full items-center gap-2 pb-2">
+        <Input
+          label="Pacing Flavor"
+          id="be-pacing-flavor"
+          value={bePacingFlavor ?? ''}
+          oninput={(e) => onBePacingFlavorChange(e.currentTarget.value)}
+          placeholder="e.g. 'slow-burn, savoring each stage' (optional narration pacing note)"
+        />
+      </div>
+    {/if}
+    {#if beMode && onBeGrowthEligibleKindsChange}
+      <div class="grid w-full items-center gap-2 pb-2">
+        <Label>Growth-Eligible Events</Label>
+        <p class="text-muted-foreground text-xs">
+          Which event kinds may land growth. Leave all off to let every kind roll; turn some on to
+          restrict growth to those kinds (e.g. catalyst-only for strict-cosmology stories).
+        </p>
+        {#each GROWTH_KIND_CHOICES as choice (choice.value)}
+          <div class="flex items-center space-x-2">
+            <Switch
+              id={`be-growth-kind-${choice.value}`}
+              checked={growthKinds.includes(choice.value)}
+              onCheckedChange={(v) => toggleGrowthKind(choice.value, v)}
+            />
+            <Label for={`be-growth-kind-${choice.value}`} class="font-normal">
+              {choice.label}
+              <span class="text-muted-foreground">— {choice.hint}</span>
+            </Label>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </section>
 
   <!-- Visual Prose Styling -->
   <section class="space-y-2 pt-1">

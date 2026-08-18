@@ -23,7 +23,10 @@ import { database } from '$lib/services/database'
 import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
+import { assembleInlineImage } from './inlineAssembly'
+import { type ResolvedLora } from './loraBinding'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
+import type { StructuredImageSpecInput } from './providers/types'
 import { createLogger } from '$lib/log'
 import type { Character, EmbeddedImage } from '$lib/types'
 
@@ -51,6 +54,8 @@ export class InlineImageTracker {
     private storyId: string,
     private entryId: string,
     private getCharacters: () => Character[],
+    /** BE grounding gate — mirrors the narrative block's beMode gating. */
+    private getBeMode: () => boolean = () => false,
   ) {
     log('Tracker created', { storyId, entryId })
   }
@@ -74,8 +79,10 @@ export class InlineImageTracker {
         characters: tag.characters,
       })
 
-      // Fire-and-forget: style prompt fetch + generation start is async
-      this.startGeneration(tag, referenceMode).catch((error) => {
+      // Fire-and-forget: style prompt fetch + generation start is async.
+      // accumulatedContent (the narrative streamed so far) is the context
+      // signal for the si-bridge spec's intimacy inference.
+      this.startGeneration(tag, referenceMode, accumulatedContent).catch((error) => {
         log('startGeneration failed', { error })
       })
     }
@@ -85,7 +92,11 @@ export class InlineImageTracker {
    * Start image generation for a tag. The generation runs async and stores
    * the result in pendingImages for later DB persistence.
    */
-  private async startGeneration(tag: ParsedPicTag, referenceMode: boolean): Promise<void> {
+  private async startGeneration(
+    tag: ParsedPicTag,
+    referenceMode: boolean,
+    narrativeSoFar: string,
+  ): Promise<void> {
     const imageSettings = settings.systemServicesSettings.imageGeneration
 
     const imageId = crypto.randomUUID()
@@ -125,9 +136,34 @@ export class InlineImageTracker {
     if (!profile) return
     if (!supportsImageGeneration(profile.providerType)) return
 
-    // Build full prompt with style
+    // Assemble the request via the shared helper — this streaming tracker is the
+    // LIVE inline path, so it must produce the same grounding + per-character
+    // LoRA/trigger words + spec as the post-hoc InlineImageService.
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const fullPrompt = `${tag.prompt}. ${stylePrompt}`
+    const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
+      presentCharacters: this.getCharacters(),
+      tagPrompt: tag.prompt,
+      tagCharacters: tag.characters,
+      beMode: this.getBeMode(),
+      stylePrompt,
+      narrativeText: narrativeSoFar,
+      providerType: profile.providerType,
+    })
+    if (bridgeSpec) {
+      log('Built si-bridge structured spec', {
+        characters: bridgeSpec.characters.length,
+        tiers: bridgeSpec.characters.map((c) => c.tier_index),
+        intimacy: bridgeSpec.intimacy,
+        location: bridgeSpec.location,
+        regional: bridgeSpec.regional ?? false,
+      })
+    }
+    if (profile.providerType === 'si-bridge' && referenceImageUrls?.length) {
+      // B1 anchor path not wired yet — portrait references cannot be consumed.
+      log('si-bridge ignores portrait references (B1 identity anchors not yet wired)', {
+        droppedReferences: referenceImageUrls.length,
+      })
+    }
 
     log('Starting async image generation', {
       imageId,
@@ -143,6 +179,8 @@ export class InlineImageTracker {
       fullPrompt,
       imageSettings.size,
       referenceImageUrls,
+      bridgeSpec,
+      loraOverride,
     )
 
     this.pendingImages.push({
@@ -166,6 +204,8 @@ export class InlineImageTracker {
     prompt: string,
     size: string,
     referenceImageUrls?: string[],
+    spec?: StructuredImageSpecInput,
+    loraOverride?: ResolvedLora,
   ): Promise<{ base64: string | null; error?: string }> {
     try {
       const result = await registryGenerateImage({
@@ -174,6 +214,8 @@ export class InlineImageTracker {
         prompt,
         size,
         referenceImages: referenceImageUrls,
+        spec,
+        loraOverride,
       })
 
       if (!result.base64) {
@@ -183,7 +225,10 @@ export class InlineImageTracker {
       log('Image generated successfully (in memory)')
       return { base64: result.base64 }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      // Tauri's HTTP plugin throws plain strings on network failures
+      // (connection refused etc.) — preserve them instead of "Unknown error".
+      const errorMessage =
+        error instanceof Error ? error.message : error ? String(error) : 'Unknown error'
       log('Image generation failed', { error: errorMessage })
       return { base64: null, error: errorMessage }
     }
@@ -244,22 +289,31 @@ export class InlineImageTracker {
 
       log('Image record created with generating status', { imageId: pending.id })
 
-      // Update record when generation completes (non-blocking)
+      // Update record when generation completes (non-blocking). A failed DB
+      // write must not swallow the ready event — that would strand the row in
+      // 'generating' with no UI signal (mirrors InlineImageService's catch).
       pending.generationPromise
         .then(async (result) => {
-          await database.updateEmbeddedImage(pending.id, {
-            imageData: result.base64 || '',
-            status: result.base64 ? 'complete' : 'failed',
-            errorMessage: result.error,
-          })
-          emitImageReady(pending.id, this.entryId, !!result.base64)
+          let persisted = false
+          try {
+            await database.updateEmbeddedImage(pending.id, {
+              imageData: result.base64 || '',
+              status: result.base64 ? 'complete' : 'failed',
+              errorMessage: result.error,
+            })
+            persisted = true
+          } catch (dbError) {
+            log('Failed to update image record', { imageId: pending.id, dbError })
+          }
+          // Success requires the image to actually be readable from the DB.
+          emitImageReady(pending.id, this.entryId, !!result.base64 && persisted)
           log('Image record updated', {
             imageId: pending.id,
-            status: result.base64 ? 'complete' : 'failed',
+            status: result.base64 && persisted ? 'complete' : 'failed',
           })
         })
         .catch((error) => {
-          log('Failed to update image record', { imageId: pending.id, error })
+          log('Failed to finalize image record', { imageId: pending.id, error })
         })
     }
 

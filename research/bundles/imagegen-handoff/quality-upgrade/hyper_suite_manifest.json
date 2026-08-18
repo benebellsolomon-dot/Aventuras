@@ -1,0 +1,446 @@
+{
+  "frames": [
+    {
+      "group": "framing",
+      "scene_key": "cowboy",
+      "tier": 40,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "framing_cowboy_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "2609f80e-7d8f-42be-95dc-002621628b3e",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_cowboy_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "framing",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "framing_cowboy_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "79fd84ac-726d-4570-9508-58e8ce168bcd",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_cowboy_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "framing",
+      "scene_key": "full_body",
+      "tier": 40,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "framing_full_body_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "bc84b7ba-1403-4043-892e-5063d79af8a0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_full_body_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "framing",
+      "scene_key": "full_body",
+      "tier": 50,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "framing_full_body_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "2510c79f-614e-4039-a142-3f8f5dde5fc7",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_full_body_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "framing",
+      "scene_key": "portrait",
+      "tier": 40,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "framing_portrait_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "6fb3aea7-2387-472a-b57c-01857c54af54",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_portrait_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "framing",
+      "scene_key": "portrait",
+      "tier": 50,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "framing_portrait_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "6b9574a4-b5b2-4fda-abb9-b2df1e71c1cf",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_portrait_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "framing",
+      "scene_key": "two_char",
+      "tier": 40,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "framing_two_char_t40_s111",
+      "width": 1216,
+      "height": 832,
+      "prompt_id": "8b4ec45e-d5bf-4185-84b4-7e20e85425dc",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_two_char_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "framing",
+      "scene_key": "two_char",
+      "tier": 50,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "framing_two_char_t50_s111",
+      "width": 1216,
+      "height": 832,
+      "prompt_id": "5ed42a49-4f61-43f9-b75a-fbae4f319e75",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_framing_two_char_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "pose",
+      "scene_key": "arms_up",
+      "tier": 40,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "pose_arms_up_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "99e4ac12-a07a-402b-8fa5-f64e1d71b457",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_pose_arms_up_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "pose",
+      "scene_key": "arms_up",
+      "tier": 50,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "pose_arms_up_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "1b1c5e32-dba4-4aa8-9674-f82ed836c8b8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_pose_arms_up_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "pose",
+      "scene_key": "supine",
+      "tier": 40,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "pose_supine_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "65afb31c-2678-4d8e-b169-b8850593f3ef",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_pose_supine_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "pose",
+      "scene_key": "supine",
+      "tier": 50,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "pose_supine_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "0b7f7d58-8ad6-43d4-b801-e489e617d499",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_pose_supine_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "pose",
+      "scene_key": "hand_on_breast",
+      "tier": 40,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "pose_hand_on_breast_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "9586e602-6fbc-443f-8983-0f75d12f7b10",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_pose_hand_on_breast_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "pose",
+      "scene_key": "hand_on_breast",
+      "tier": 50,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "pose_hand_on_breast_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "114beb4f-5d15-4645-b5a7-c0870bd01c06",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_pose_hand_on_breast_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "seed",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 222,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "seed_cowboy_t50_s222",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "4cd4417d-4bb4-4ea5-ae42-be5f2e20c2d6",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_seed_cowboy_t50_s222_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "seed",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 333,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "seed_cowboy_t50_s333",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "dfd26eea-b1e0-4694-a356-cb6357914a04",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_seed_cowboy_t50_s333_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "seed",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 444,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "seed_cowboy_t50_s444",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "749fb76c-5443-4c3e-a36f-a45c3550c7ce",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_seed_cowboy_t50_s444_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "seed",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 555,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "seed_cowboy_t50_s555",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "5cc774c9-e38a-4c82-9f5c-9b296f55fd44",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_seed_cowboy_t50_s555_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "seed",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 666,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "seed_cowboy_t50_s666",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "705b2f1c-061e-40b7-af90-b9093f3877a2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_seed_cowboy_t50_s666_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "seed",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 777,
+      "register": "color",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "seed_cowboy_t50_s777",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "cda96931-11a2-4e87-bba5-4eadee5b99b6",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_seed_cowboy_t50_s777_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "manga",
+      "scene_key": "cowboy",
+      "tier": 40,
+      "seed": 111,
+      "register": "manga",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "manga_cowboy_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "3b8e342d-f2f8-4e25-8122-6d9d0aac60c4",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_manga_cowboy_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "manga",
+      "scene_key": "cowboy",
+      "tier": 50,
+      "seed": 111,
+      "register": "manga",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "manga_cowboy_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "ae6c69df-4ec5-4c46-b347-f6cea2bb8a96",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_manga_cowboy_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "manga",
+      "scene_key": "full_body",
+      "tier": 40,
+      "seed": 111,
+      "register": "manga",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "manga_full_body_t40_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "eeeb4ffe-83d8-4726-8159-2694f75bef4c",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_manga_full_body_t40_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "manga",
+      "scene_key": "full_body",
+      "tier": 50,
+      "seed": 111,
+      "register": "manga",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "manga_full_body_t50_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "85cf10ef-f6a8-4cac-b23d-d1f4c90cfe51",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_manga_full_body_t50_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "monoton",
+      "scene_key": "full_body",
+      "tier": 45,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "monoton_full_body_t45_s111",
+      "width": 832,
+      "height": 1216,
+      "prompt_id": "1454a0a3-6a05-47ed-aa23-81c7297c7f3a",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_monoton_full_body_t45_s111_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "group": "monoton",
+      "scene_key": "two_char",
+      "tier": 45,
+      "seed": 111,
+      "register": "color",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "monoton_two_char_t45_s111",
+      "width": 1216,
+      "height": 832,
+      "prompt_id": "f6aed715-7480-4229-b0a8-1432cfd67dae",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\HSUITE_monoton_two_char_t45_s111_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

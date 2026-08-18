@@ -27,6 +27,7 @@
     ChevronDown,
     ChevronUp,
     Bug,
+    Clapperboard,
     ImageIcon,
     MessageSquare,
     AlertTriangle,
@@ -266,6 +267,22 @@
     {/if}
 
     {#if story.currentStory}
+      <!-- Visual Novel view toggle -->
+      <Button
+        icon={Clapperboard}
+        label="VN"
+        variant="text"
+        class="min-h-11 min-w-11 {ui.activePanel === 'vn'
+          ? 'text-primary'
+          : 'text-muted-foreground hover:text-primary'}"
+        onclick={(e: MouseEvent) => {
+          // Blur so a following Space keypress advances the VN, not this toggle.
+          ;(e.currentTarget as HTMLElement | null)?.blur()
+          ui.setActivePanel(ui.activePanel === 'vn' ? 'story' : 'vn')
+        }}
+        title="Toggle Visual Novel view"
+      />
+
       <!-- Gallery Button -->
       <Button
         icon={ImageIcon}

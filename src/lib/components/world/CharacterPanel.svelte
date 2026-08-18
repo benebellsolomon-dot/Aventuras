@@ -19,7 +19,7 @@
     UserPlus,
     Save,
   } from 'lucide-svelte'
-  import type { Character } from '$lib/types'
+  import type { Character, CharacterLoraConfig } from '$lib/types'
   import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
   import {
     hasRequiredCredentials,
@@ -28,6 +28,7 @@
   } from '$lib/services/ai/image'
   import { database } from '$lib/services/database'
   import RuntimeVariableDisplay from './RuntimeVariableDisplay.svelte'
+  import BeStatePanel from './BeStatePanel.svelte'
   import { ContextBuilder } from '$lib/services/context'
   import { normalizeImageDataUrl } from '$lib/utils/image'
   import { createLogger } from '$lib/log'
@@ -43,6 +44,7 @@
   import { cn } from '$lib/utils/cn'
   import IconRow from '$lib/components/ui/icon-row.svelte'
   import { DEFAULT_FALLBACK_STYLE_PROMPT } from '$lib/services/ai/image/constants'
+  import { currentAppearanceHash, spriteAnchorService } from '$lib/services/ai/image/SpriteService'
 
   let showAddForm = $state(false)
   let newName = $state('')
@@ -55,6 +57,11 @@
   let editStatus = $state<Character['status']>('active')
   let editTraits = $state('')
   let editVisualDescriptors = $state('')
+  let editImageTags = $state('')
+  let editLoraName = $state('')
+  let editLoraTriggers = $state('')
+  let editLoraBaseWeight = $state('')
+  let editLoraTierScale = $state('')
   let pendingProtagonistId = $state<string | null>(null)
   let previousRelationshipLabel = $state('')
   let swapError = $state<string | null>(null)
@@ -63,6 +70,9 @@
   let uploadingPortraitId = $state<string | null>(null)
   let generatingPortraitId = $state<string | null>(null)
   let portraitError = $state<string | null>(null)
+  // Sprite anchor state (V2a — dedicated approved anchor render)
+  let generatingAnchorId = $state<string | null>(null)
+  let anchorError = $state<string | null>(null)
   let editPortrait = $state<string | null>(null)
   let expandedPortrait = $state<{ src: string; name: string } | null>(null)
   let savedToVaultId = $state<string | null>(null)
@@ -211,6 +221,12 @@
     editStatus = character.status
     editTraits = character.traits.join(', ')
     editVisualDescriptors = descriptorsToString(character.visualDescriptors)
+    editImageTags = character.imageTags ?? ''
+    const lora = character.loraConfig
+    editLoraName = lora?.name ?? ''
+    editLoraTriggers = lora?.triggerWords ?? ''
+    editLoraBaseWeight = lora?.baseWeight != null ? String(lora.baseWeight) : ''
+    editLoraTierScale = lora?.tierScale != null ? String(lora.tierScale) : ''
     editPortrait = character.portrait
     portraitError = null
     // Initialize runtime vars from entity metadata
@@ -225,10 +241,35 @@
     editRelationship = ''
     editTraits = ''
     editVisualDescriptors = ''
+    editImageTags = ''
+    editLoraName = ''
+    editLoraTriggers = ''
+    editLoraBaseWeight = ''
+    editLoraTierScale = ''
     editStatus = 'active'
     editPortrait = null
     portraitError = null
     editRuntimeVars = {}
+  }
+
+  /**
+   * Assemble the LoRA config from the edit fields, or null when nothing is set.
+   * Numeric fields fall back to undefined (helper defaults) when blank/invalid.
+   */
+  function buildEditLoraConfig(): CharacterLoraConfig | null {
+    const name = editLoraName.trim()
+    const triggerWords = editLoraTriggers.trim()
+    const base = parseFloat(editLoraBaseWeight)
+    const scale = parseFloat(editLoraTierScale)
+    if (!name && !triggerWords && !Number.isFinite(base) && !Number.isFinite(scale)) {
+      return null
+    }
+    return {
+      name: name || undefined,
+      triggerWords: triggerWords || undefined,
+      baseWeight: Number.isFinite(base) ? base : undefined,
+      tierScale: Number.isFinite(scale) ? scale : undefined,
+    }
   }
 
   async function saveEdit(character: Character) {
@@ -262,6 +303,8 @@
       status: editStatus,
       traits,
       visualDescriptors,
+      imageTags: editImageTags.trim() || null,
+      loraConfig: buildEditLoraConfig(),
       portrait: editPortrait,
       metadata: updatedMetadata,
     })
@@ -372,6 +415,61 @@
     }
   }
 
+  async function adoptTrackedLook(character: Character) {
+    if (!character.currentVisualDescriptors) return
+    // Deliberate promotion: the tracked look becomes canonical (this changes
+    // the sprite appearance hash → anchor goes stale + sets regenerate).
+    await story.updateCharacter(character.id, {
+      visualDescriptors: character.currentVisualDescriptors,
+      currentVisualDescriptors: null,
+    })
+    editVisualDescriptors = descriptorsToString(character.currentVisualDescriptors)
+  }
+
+  async function clearTrackedLook(character: Character) {
+    await story.updateCharacter(character.id, { currentVisualDescriptors: null })
+  }
+
+  let rebuildingSpritesId = $state<string | null>(null)
+
+  async function rebuildSprites(character: Character) {
+    anchorError = null
+    rebuildingSpritesId = character.id
+    try {
+      const dropped = await database.deleteAllSpritesForCharacter(character.id)
+      log('Sprite cache cleared for rebuild', { characterId: character.id, dropped })
+    } catch (error) {
+      anchorError = error instanceof Error ? error.message : String(error)
+    } finally {
+      rebuildingSpritesId = null
+    }
+  }
+
+  async function generateSpriteAnchor(character: Character) {
+    anchorError = null
+    generatingAnchorId = character.id
+    try {
+      await spriteAnchorService.generateAnchor(character, (id, updates) =>
+        story.updateCharacter(id, updates),
+      )
+    } catch (error) {
+      anchorError = error instanceof Error ? error.message : String(error)
+    } finally {
+      generatingAnchorId = null
+    }
+  }
+
+  async function approveSpriteAnchor(character: Character) {
+    anchorError = null
+    try {
+      await spriteAnchorService.approveAnchor(character, (id, updates) =>
+        story.updateCharacter(id, updates),
+      )
+    } catch (error) {
+      anchorError = error instanceof Error ? error.message : String(error)
+    }
+  }
+
   async function generatePortrait(character: Character) {
     const imageSettings = settings.systemServicesSettings.imageGeneration
 
@@ -435,7 +533,16 @@
       })
 
       // Generate the portrait using SDK
-      const base64 = await sdkGeneratePortrait(portraitPrompt)
+      const base64 = await sdkGeneratePortrait(portraitPrompt, {
+        name: character.name,
+        visualDescriptors: stringToDescriptors(editVisualDescriptors),
+        // The editor draft is authoritative here (portrait is only generated
+        // from within the edit form): an emptied field means no bank, not "fall
+        // back to the saved value".
+        imageTags: editImageTags.trim() || null,
+        loraConfig: buildEditLoraConfig(),
+        metadata: character.metadata,
+      })
 
       log('Portrait generated successfully', {
         characterName: character.name,
@@ -628,6 +735,83 @@
                   placeholder="Appearance (comma separated)"
                   class="h-8 text-xs"
                 />
+                <div class="mt-2 space-y-1">
+                  <Label class="text-xs">Image Tag Bank</Label>
+                  <Textarea
+                    bind:value={editImageTags}
+                    placeholder="Locked identity tags for image generation, e.g. long silver hair, violet eyes, elf ears, freckles"
+                    class="min-h-[56px] text-xs"
+                  />
+                  <p class="text-muted-foreground text-xs">
+                    Physical-only tags that lock this character's look across every generated image
+                    (overrides the appearance line above). Leave empty to derive from appearance.
+                    Don't include size — the transformation engine controls that.
+                  </p>
+                </div>
+                <div class="mt-2 space-y-1">
+                  <Label class="text-xs">Character LoRA</Label>
+                  <Input
+                    type="text"
+                    bind:value={editLoraName}
+                    placeholder="ComfyUI LoRA filename (optional)"
+                    class="h-8 text-xs"
+                  />
+                  <Input
+                    type="text"
+                    bind:value={editLoraTriggers}
+                    placeholder="Trigger words (comma separated)"
+                    class="h-8 text-xs"
+                  />
+                  <div class="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.05"
+                      bind:value={editLoraBaseWeight}
+                      placeholder="Base weight (1)"
+                      class="h-8 text-xs"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      bind:value={editLoraTierScale}
+                      placeholder="Per-tier scale (0)"
+                      class="h-8 text-xs"
+                    />
+                  </div>
+                  <p class="text-muted-foreground text-xs">
+                    Trigger words are added to every image prompt (all providers). The LoRA file +
+                    weight apply on ComfyUI; per-tier scale raises the weight as this character
+                    grows (weight = base + scale × tier).
+                  </p>
+                </div>
+                {#if character.currentVisualDescriptors && Object.values(character.currentVisualDescriptors).some((v) => v)}
+                  <div class="border-border bg-muted/20 mt-1 rounded-md border p-2">
+                    <div class="text-muted-foreground mb-1 text-xs font-medium">
+                      Story-tracked look (does not affect images)
+                    </div>
+                    <p class="text-muted-foreground text-xs">
+                      {descriptorsToString(character.currentVisualDescriptors)}
+                    </p>
+                    <div class="mt-1.5 flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-6 px-2 text-xs"
+                        onclick={() => adoptTrackedLook(character)}
+                      >
+                        Adopt as baseline
+                      </Button>
+                      <Button
+                        variant="text"
+                        size="sm"
+                        class="h-6 px-2 text-xs"
+                        onclick={() => clearTrackedLook(character)}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                {/if}
               </div>
 
               <div class="space-y-1">
@@ -731,6 +915,91 @@
                   <p class="text-destructive mt-2 text-xs">{portraitError}</p>
                 {/if}
               </div>
+
+              <!-- Sprite Anchor (V2 sprite engine; BE stories, non-protagonist) -->
+              {#if story.currentStory?.settings?.beMode === true && !isProtagonist}
+                {@const anchorHashNow = currentAppearanceHash(character)}
+                <div class="border-border bg-muted/20 rounded-md border p-2">
+                  <div
+                    class="text-muted-foreground mb-2 flex items-center justify-between text-xs font-medium"
+                  >
+                    <span>Sprite Anchor</span>
+                    {#if character.spriteAnchorStatus === 'approved'}
+                      {#if character.spriteAnchorHash === anchorHashNow}
+                        <Badge variant="outline" class="h-5 text-xs">Approved</Badge>
+                      {:else}
+                        <Badge variant="destructive" class="h-5 text-xs">Stale — regenerate</Badge>
+                      {/if}
+                    {:else if character.spriteAnchorStatus === 'ready'}
+                      <Badge variant="secondary" class="h-5 text-xs">Awaiting approval</Badge>
+                    {:else if character.spriteAnchorStatus === 'failed'}
+                      <Badge variant="destructive" class="h-5 text-xs">Failed — retry</Badge>
+                    {:else if character.spriteAnchorStatus === 'generating' && generatingAnchorId !== character.id}
+                      <Badge variant="secondary" class="h-5 text-xs">Interrupted — retry</Badge>
+                    {/if}
+                  </div>
+                  <div class="flex items-start gap-3">
+                    {#if character.spriteAnchor}
+                      <img
+                        src={normalizeImageDataUrl(character.spriteAnchor) ?? ''}
+                        alt="Sprite anchor preview"
+                        class="ring-border bg-background h-16 w-16 rounded-md object-cover ring-1"
+                      />
+                    {:else}
+                      <div
+                        class="border-border bg-background/50 flex h-16 w-16 items-center justify-center rounded-md border border-dashed"
+                      >
+                        <User class="text-muted-foreground h-6 w-6" />
+                      </div>
+                    {/if}
+                    <div class="flex flex-1 flex-col gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="bg-background h-7 w-full justify-start text-xs"
+                        onclick={() => generateSpriteAnchor(character)}
+                        disabled={generatingAnchorId !== null}
+                      >
+                        {#if generatingAnchorId === character.id}
+                          <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                          <span>Rendering anchor...</span>
+                        {:else}
+                          <Wand2 class="h-3.5 w-3.5" />
+                          <span>{character.spriteAnchor ? 'Regenerate' : 'Generate'}</span>
+                        {/if}
+                      </Button>
+                      {#if character.spriteAnchorStatus === 'ready'}
+                        <Button
+                          variant="default"
+                          size="sm"
+                          class="h-7 w-full justify-start text-xs"
+                          onclick={() => approveSpriteAnchor(character)}
+                        >
+                          Approve as identity anchor
+                        </Button>
+                      {/if}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="bg-background h-7 w-full justify-start text-xs"
+                        onclick={() => rebuildSprites(character)}
+                        disabled={rebuildingSpritesId !== null}
+                        title="Delete every cached sprite cell — the next VN render regenerates the band from current identity"
+                      >
+                        {#if rebuildingSpritesId === character.id}
+                          <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                          <span>Clearing...</span>
+                        {:else}
+                          <span>Rebuild sprites</span>
+                        {/if}
+                      </Button>
+                    </div>
+                  </div>
+                  {#if anchorError}
+                    <p class="text-destructive mt-2 text-xs">{anchorError}</p>
+                  {/if}
+                </div>
+              {/if}
 
               <div class="border-border flex justify-end gap-2 border-t pt-2">
                 <Button variant="text" size="sm" class="h-7 text-xs" onclick={cancelEdit}>
@@ -936,6 +1205,11 @@
                     values={character.metadata?.runtimeVars as RuntimeVarsMap | undefined}
                     pinnedOnly={false}
                   />
+                {/if}
+
+                <!-- BE body state (BE-mode stories, non-protagonist) -->
+                {#if story.currentStory?.settings?.beMode === true && !isProtagonist}
+                  <BeStatePanel {character} />
                 {/if}
               </div>
             {/if}

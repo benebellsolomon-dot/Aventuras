@@ -4,6 +4,22 @@ export type POV = 'first' | 'second' | 'third'
 export type Tense = 'past' | 'present'
 
 // Visual descriptors for character appearance (used for image generation)
+/**
+ * Per-character LoRA binding for image generation.
+ * - triggerWords are prepended to the image prompt (provider-agnostic).
+ * - name + weight feed a LoRA-capable provider (ComfyUI); ignored by cloud.
+ * - the effective weight scales with the BE engine tier:
+ *     weight = clamp(baseWeight + tierScale * tier, 0, maxWeight)
+ *   so a size LoRA can strengthen as a character grows (tierScale 0 = flat).
+ */
+export interface CharacterLoraConfig {
+  name?: string // ComfyUI LoRA filename (empty = trigger-words only, no LoRA file)
+  triggerWords?: string // injected into the image prompt
+  baseWeight?: number // strength at tier 0 (default 1)
+  tierScale?: number // strength added per engine tier (default 0 = flat)
+  maxWeight?: number // upper clamp for the scaled weight (default 1.5)
+}
+
 export interface VisualDescriptors {
   face?: string // Skin tone, facial features, expression, age indicators
   hair?: string // Color, length, style, texture
@@ -74,6 +90,8 @@ export interface PersistentCharacterSnapshot {
   relationship: string | null
   visualDescriptors: VisualDescriptors
   portrait: string | null // Data URL (data:image/...) or legacy base64
+  /** Metadata snapshot (runtimeVars, bodyState). Optional: absent on snapshots persisted before this field existed. */
+  metadata?: Record<string, unknown> | null
 }
 
 // Persistent style review state - saved per-story for style analysis tracking
@@ -105,6 +123,14 @@ export interface MemoryConfig {
   maxChaptersPerRetrieval: number // Max chapters to retrieve per query
 }
 
+/**
+ * Content rating for narrative generation.
+ * - standard: default behavior, no extra content guidance injected
+ * - mature: adult themes may occur on-page with scene discretion
+ * - explicit: fully explicit depiction expected when scenes call for it
+ */
+export type ContentRating = 'standard' | 'mature' | 'explicit'
+
 export interface StorySettings {
   model?: string
   temperature?: number
@@ -118,6 +144,13 @@ export interface StorySettings {
   backgroundImagesEnabled?: boolean
   referenceMode?: boolean
   customSystemPrompt?: string // Per-story Liquid template override; bypasses pack template when set
+  beMode?: boolean // BE engine: classifier event extraction + deterministic body-state reducer + narrative grounding
+  beFluidType?: string // BE engine: this story's transformation fluid, used when seeding new body states (default 'milk')
+  beGrowthCosmology?: string // BE engine: what drives growth in this world — threaded into classifier + narrator instructions (research/41)
+  bePacingFlavor?: string // BE engine: free-text pacing note interpolated into the genre rules
+  beGrowthEligibleKinds?: string[] // BE engine: which event kinds may land growth (subset of catalyst/contact/attempt); empty/unset = all
+  contentRating?: ContentRating // Content guidance level injected into narrative prompts (default: standard)
+  postHistoryInstructions?: string // Liquid-enabled directives injected after story history, just before generation
 }
 
 export interface StoryEntry {
@@ -160,13 +193,28 @@ export interface Character {
   description: string | null
   relationship: string | null
   traits: string[]
-  visualDescriptors: VisualDescriptors // Visual appearance details for image generation
+  visualDescriptors: VisualDescriptors // CANONICAL baseline appearance (user-owned; identity rendering + sprite hash)
+  /** Story-tracked "current look" — classifier-updated each turn; prose/scene-analysis context, NEVER identity. */
+  currentVisualDescriptors?: VisualDescriptors | null
+  /**
+   * Curated image-tag bank (Kazuma-style): physical-only, comma/newline-separated
+   * identity tags that OVERRIDE the derived identity_tags for image generation
+   * (bridge/portrait/sprite). User-owned canonical identity, hidden from the story
+   * LLM. Size vocabulary is stripped at use time — the BE engine owns size.
+   */
+  imageTags?: string | null
+  /** Per-character LoRA binding for image generation (trigger words + tier-scaled weight). */
+  loraConfig?: CharacterLoraConfig | null
   portrait: string | null // Data URL (data:image/...) for reference in image generation
   status: 'active' | 'inactive' | 'deceased'
   metadata: Record<string, unknown> | null
   branchId: string | null // Branch this character belongs to (null = main/inherited)
   overridesId?: string | null // COW: ID of the parent entity this row overrides (null = original)
   deleted?: boolean // COD: tombstone — entity is deleted on this branch (COW only)
+  // V2 sprite engine: dedicated approved anchor render (raw/un-matted FaceID/pose source)
+  spriteAnchor?: string | null // Data URL, like portrait
+  spriteAnchorStatus?: SpriteAnchorStatus | null
+  spriteAnchorHash?: string | null // appearance hash the anchor was approved for
   // Translation fields
   translatedName?: string | null
   translatedDescription?: string | null
@@ -640,6 +688,7 @@ export interface AgenticSession {
 // UI State types
 export type ActivePanel =
   | 'story'
+  | 'vn'
   | 'library'
   | 'settings'
   | 'templates'
@@ -765,6 +814,7 @@ export type ImageProviderType =
   | 'zhipu'
   | 'comfyui'
   | 'a1111'
+  | 'si-bridge'
 
 export interface ImageProfile {
   id: string
@@ -774,6 +824,27 @@ export interface ImageProfile {
   baseUrl?: string
   model: string
   providerOptions: Record<string, unknown>
+  createdAt: number
+}
+
+// ===== V2 Sprite Engine (Spec 4) =====
+
+export type SpriteStatus = 'pending' | 'generating' | 'complete' | 'failed'
+export type SpriteAnchorStatus = 'none' | 'pending' | 'generating' | 'ready' | 'approved' | 'failed'
+
+/** One cached cell of a character's banded sprite set (35 cells per appearance). */
+export interface CharacterSprite {
+  id: string
+  storyId: string
+  characterId: string
+  appearanceHash: string
+  bandIndex: number
+  expression: 'positive' | 'neutral' | 'distressed' | 'flushed'
+  engorged: boolean
+  imageData: string // Data URL (webp/png base64); matted when the matting model is available
+  seed?: number
+  status: SpriteStatus
+  errorMessage?: string
   createdAt: number
 }
 
@@ -968,6 +1039,9 @@ export interface WorldStateDelta {
     itemIds: string[]
     storyBeatIds: string[]
   }
+
+  /** BE reducer outcome log for this turn (cadence instrumentation; rollback-aware by riding the delta) */
+  beLog?: import('$lib/services/be/types').BeLogRecord[]
 }
 
 /**

@@ -1,6 +1,7 @@
 use tauri::Manager;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod matting;
 mod migration_patch;
 mod sync;
 
@@ -223,9 +224,34 @@ pub fn run() {
             description: "entry_versions",
             sql: include_str!("../migrations/035_entry_versions.sql"),
             kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 36,
+            description: "character_sprites",
+            sql: include_str!("../migrations/036_character_sprites.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 37,
+            description: "current_visual_descriptors",
+            sql: include_str!("../migrations/037_current_visual_descriptors.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 38,
+            description: "character_image_tags",
+            sql: include_str!("../migrations/038_character_image_tags.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 39,
+            description: "character_lora_config",
+            sql: include_str!("../migrations/039_character_lora_config.sql"),
+            kind: MigrationKind::Up,
         }
     ];
 
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
     #[cfg(all(debug_assertions, feature = "devtools"))]
@@ -261,6 +287,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
+        .manage(matting::MattingState::default())
         .invoke_handler(tauri::generate_handler![
             start_sync_server,
             stop_sync_server,
@@ -269,6 +296,8 @@ pub fn run() {
             sync_connect,
             sync_pull_story,
             sync_push_story,
+            matting::sprite_matting_available,
+            matting::sprite_finish,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

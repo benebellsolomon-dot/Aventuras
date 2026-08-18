@@ -38,6 +38,7 @@
     { value: 'image-style-soft-anime', label: 'Soft Anime' },
     { value: 'image-style-semi-realistic', label: 'Semi-realistic Anime' },
     { value: 'image-style-photorealistic', label: 'Photorealistic' },
+    { value: 'image-style-krea-bridge', label: 'Krea (SI Bridge)' },
   ] as const
 
   const imageSizes = [
@@ -71,6 +72,7 @@
     { value: 'zhipu', label: 'Zhipu CogView' },
     { value: 'comfyui', label: 'ComfyUI' },
     { value: 'a1111', label: 'A1111 / SD.cpp / Kobold' },
+    { value: 'si-bridge', label: 'SI Bridge' },
   ]
   const profileModes = [
     { value: ComfyMode.CustomWorkflow, label: 'Custom Workflow' },
@@ -108,12 +110,13 @@
     portrait: 'portraitProfileId',
     reference: 'referenceProfileId',
     background: 'backgroundProfileId',
+    sprite: 'spriteProfileId',
   } as const satisfies Record<string, keyof typeof settings.systemServicesSettings.imageGeneration>
 
   // Handle profile change
   function onProfileChange(
     profileId: string,
-    type: 'standard' | 'portrait' | 'reference' | 'background',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite',
   ) {
     settings.systemServicesSettings.imageGeneration[profileIdKey[type]] = profileId
     settings.saveSystemServicesSettings()
@@ -121,7 +124,7 @@
 
   // Get the currently selected image profile for a type
   function getSelectedImageProfile(
-    type: 'standard' | 'portrait' | 'reference' | 'background',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite',
   ): ImageProfile | undefined {
     const profileId = settings.systemServicesSettings.imageGeneration[profileIdKey[type]]
     return profileId ? settings.getImageProfile(profileId) : undefined
@@ -257,7 +260,7 @@
    * Get supported sizes for a specific profile type/ID
    */
   function getSupportedSizes(
-    type: 'standard' | 'portrait' | 'reference' | 'background' | 'testing',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite' | 'testing',
   ) {
     let profileId: string | null = null
     switch (type) {
@@ -272,6 +275,9 @@
         break
       case 'background':
         profileId = settings.systemServicesSettings.imageGeneration.backgroundProfileId
+        break
+      case 'sprite':
+        profileId = settings.systemServicesSettings.imageGeneration.spriteProfileId ?? null
         break
       case 'testing':
         profileId = testProfileId
@@ -1126,6 +1132,23 @@
             </p>
           </div>
 
+          <div class="space-y-2">
+            <Label>Sprite Profile</Label>
+            <Autocomplete
+              items={settings.imageProfiles}
+              selected={getSelectedImageProfile('sprite')}
+              onSelect={(v) => onProfileChange((v as ImageProfile).id, 'sprite')}
+              itemLabel={(p: ImageProfile) =>
+                `${p.name} (${providerTypes.find((t) => t.value === p.providerType)?.label || p.providerType}${p.model ? ` · ${p.model}` : ''})`}
+              itemValue={(p: ImageProfile) => p.id}
+              placeholder="Select an image profile"
+            />
+            <p class="text-muted-foreground mt-1 text-xs">
+              Profile for VN sprite and anchor renders (BE stories). SI Bridge holds identity across
+              sizes via the approved anchor; other providers render prompt-only sprites.
+            </p>
+          </div>
+
           {#if settings.systemServicesSettings.imageGeneration.portraitProfileId || settings.systemServicesSettings.imageGeneration.profileId}
             <div class="space-y-2">
               <Label>Character Portrait Size</Label>
@@ -1403,10 +1426,21 @@
       </div>
     {/if}
 
-    {#if profileProviderType === 'comfyui' || profileProviderType === 'openai' || profileProviderType === 'zhipu' || profileProviderType === 'a1111'}
+    {#if profileProviderType === 'comfyui' || profileProviderType === 'openai' || profileProviderType === 'zhipu' || profileProviderType === 'a1111' || profileProviderType === 'si-bridge'}
       <div class="space-y-2">
         <Label>Base URL (optional)</Label>
-        <Input bind:value={profileBaseUrl} placeholder="Custom base URL" />
+        <Input
+          bind:value={profileBaseUrl}
+          placeholder={profileProviderType === 'si-bridge'
+            ? 'http://127.0.0.1:8001'
+            : 'Custom base URL'}
+        />
+        {#if profileProviderType === 'si-bridge'}
+          <p class="text-muted-foreground text-xs">
+            The bridge's native structured API. The API key is sent as X-API-Key; the bridge routes
+            each request to its own pipeline, so no model/sampler setup is needed.
+          </p>
+        {/if}
       </div>
     {/if}
 

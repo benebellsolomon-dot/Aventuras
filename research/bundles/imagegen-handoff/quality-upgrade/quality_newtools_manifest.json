@@ -1,0 +1,53 @@
+{
+  "frames": [
+    {
+      "id": "base_4x_d04",
+      "note": "4x-AnimeSharp d0.4 (current)",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNT_base_4x_d04_00001_.png"
+      ]
+    },
+    {
+      "id": "v4_d04",
+      "note": "2x-AnimeSharpV4 d0.4",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNT_v4_d04_00001_.png"
+      ]
+    },
+    {
+      "id": "v4_d03",
+      "note": "2x-AnimeSharpV4 d0.3",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNT_v4_d03_00001_.png"
+      ]
+    },
+    {
+      "id": "4x_d03",
+      "note": "4x-AnimeSharp d0.3",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNT_4x_d03_00001_.png"
+      ]
+    },
+    {
+      "id": "4x_d04_DD",
+      "note": "4x d0.4 + DetailDaemon 0.2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNT_4x_d04_DD_00001_.png"
+      ]
+    },
+    {
+      "id": "4x_d04_FreeU",
+      "note": "4x d0.4 + FreeU_V2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNT_4x_d04_FreeU_00001_.png"
+      ]
+    },
+    {
+      "id": "combo_v4_DD_FreeU",
+      "note": "V4 d0.3 + DD0.15 + FreeU (max)",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QNT_combo_v4_DD_FreeU_00001_.png"
+      ]
+    }
+  ]
+}

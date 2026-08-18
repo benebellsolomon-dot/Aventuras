@@ -1,0 +1,217 @@
+{
+  "tier_chain": [
+    0,
+    2,
+    8,
+    14,
+    20,
+    26,
+    33,
+    40,
+    45,
+    50
+  ],
+  "d_step": 0.5,
+  "frames": [
+    {
+      "sampler": "dpmpp2m",
+      "step": 0,
+      "tier": 0,
+      "cup": "flat chest",
+      "label": "CST_dpmpp2m_s0_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s0_t0_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 1,
+      "tier": 2,
+      "cup": "small breasts",
+      "label": "CST_dpmpp2m_s1_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s1_t2_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 2,
+      "tier": 8,
+      "cup": "medium breasts",
+      "label": "CST_dpmpp2m_s2_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s2_t8_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 3,
+      "tier": 14,
+      "cup": "large breasts",
+      "label": "CST_dpmpp2m_s3_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s3_t14_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 4,
+      "tier": 20,
+      "cup": "large breasts",
+      "label": "CST_dpmpp2m_s4_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s4_t20_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 5,
+      "tier": 26,
+      "cup": "huge breasts",
+      "label": "CST_dpmpp2m_s5_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s5_t26_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 6,
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "label": "CST_dpmpp2m_s6_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s6_t33_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 7,
+      "tier": 40,
+      "cup": "hyper breasts",
+      "label": "CST_dpmpp2m_s7_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s7_t40_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 8,
+      "tier": 45,
+      "cup": "hyper breasts",
+      "label": "CST_dpmpp2m_s8_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s8_t45_00001_.png"
+      ]
+    },
+    {
+      "sampler": "dpmpp2m",
+      "step": 9,
+      "tier": 50,
+      "cup": "hyper breasts",
+      "label": "CST_dpmpp2m_s9_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_dpmpp2m_s9_t50_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 0,
+      "tier": 0,
+      "cup": "flat chest",
+      "label": "CST_euler_s0_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s0_t0_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 1,
+      "tier": 2,
+      "cup": "small breasts",
+      "label": "CST_euler_s1_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s1_t2_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 2,
+      "tier": 8,
+      "cup": "medium breasts",
+      "label": "CST_euler_s2_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s2_t8_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 3,
+      "tier": 14,
+      "cup": "large breasts",
+      "label": "CST_euler_s3_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s3_t14_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 4,
+      "tier": 20,
+      "cup": "large breasts",
+      "label": "CST_euler_s4_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s4_t20_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 5,
+      "tier": 26,
+      "cup": "huge breasts",
+      "label": "CST_euler_s5_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s5_t26_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 6,
+      "tier": 33,
+      "cup": "gigantic breasts",
+      "label": "CST_euler_s6_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s6_t33_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 7,
+      "tier": 40,
+      "cup": "hyper breasts",
+      "label": "CST_euler_s7_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s7_t40_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 8,
+      "tier": 45,
+      "cup": "hyper breasts",
+      "label": "CST_euler_s8_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s8_t45_00001_.png"
+      ]
+    },
+    {
+      "sampler": "euler",
+      "step": 9,
+      "tier": 50,
+      "cup": "hyper breasts",
+      "label": "CST_euler_s9_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\CST_euler_s9_t50_00001_.png"
+      ]
+    }
+  ]
+}

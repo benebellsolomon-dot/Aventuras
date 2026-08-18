@@ -7,6 +7,7 @@
 
 import { z } from 'zod'
 import type { RuntimeVariable } from '$lib/services/packs/types'
+import type { BeEvent } from '$lib/services/be'
 
 // ============================================================================
 // Visual Descriptors Schema
@@ -226,4 +227,6 @@ export type Scene = z.infer<typeof sceneSchema>
 export type ClassificationResult = z.infer<typeof classificationResultSchema> & {
   /** Internal metadata: runtime variable definitions for use by applyClassificationResult. Not LLM output. */
   _runtimeVarDefs?: RuntimeVariable[]
+  /** BE transformation events (present only when the story's beMode schema extension is active). */
+  beEvents?: BeEvent[]
 }

@@ -1,0 +1,120 @@
+{
+  "base_tier": 14,
+  "targets": [
+    22,
+    30,
+    40,
+    50
+  ],
+  "d_main": 0.5,
+  "frames": [
+    {
+      "group": "base",
+      "tier": 14,
+      "denoise": 1.0,
+      "label": "EXPHOLD_base_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_base_t14_00001_.png"
+      ]
+    },
+    {
+      "group": "imgbase",
+      "tier": 22,
+      "denoise": 0.5,
+      "label": "EXPHOLD_imgbase_t22_d50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_imgbase_t22_d50_00001_.png"
+      ]
+    },
+    {
+      "group": "txt2img",
+      "tier": 22,
+      "denoise": 1.0,
+      "label": "EXPHOLD_txt2img_t22",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_txt2img_t22_00001_.png"
+      ]
+    },
+    {
+      "group": "imgbase",
+      "tier": 30,
+      "denoise": 0.5,
+      "label": "EXPHOLD_imgbase_t30_d50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_imgbase_t30_d50_00001_.png"
+      ]
+    },
+    {
+      "group": "txt2img",
+      "tier": 30,
+      "denoise": 1.0,
+      "label": "EXPHOLD_txt2img_t30",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_txt2img_t30_00001_.png"
+      ]
+    },
+    {
+      "group": "imgbase",
+      "tier": 40,
+      "denoise": 0.5,
+      "label": "EXPHOLD_imgbase_t40_d50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_imgbase_t40_d50_00001_.png"
+      ]
+    },
+    {
+      "group": "txt2img",
+      "tier": 40,
+      "denoise": 1.0,
+      "label": "EXPHOLD_txt2img_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_txt2img_t40_00001_.png"
+      ]
+    },
+    {
+      "group": "imgbase",
+      "tier": 50,
+      "denoise": 0.5,
+      "label": "EXPHOLD_imgbase_t50_d50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_imgbase_t50_d50_00001_.png"
+      ]
+    },
+    {
+      "group": "txt2img",
+      "tier": 50,
+      "denoise": 1.0,
+      "label": "EXPHOLD_txt2img_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_txt2img_t50_00001_.png"
+      ]
+    },
+    {
+      "group": "dsweep",
+      "tier": 50,
+      "denoise": 0.4,
+      "label": "EXPHOLD_dsweep_t50_d40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_dsweep_t50_d40_00001_.png"
+      ]
+    },
+    {
+      "group": "dsweep",
+      "tier": 50,
+      "denoise": 0.6,
+      "label": "EXPHOLD_dsweep_t50_d60",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_dsweep_t50_d60_00001_.png"
+      ]
+    },
+    {
+      "group": "dsweep",
+      "tier": 50,
+      "denoise": 0.7,
+      "label": "EXPHOLD_dsweep_t50_d70",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\EXPHOLD_dsweep_t50_d70_00001_.png"
+      ]
+    }
+  ]
+}

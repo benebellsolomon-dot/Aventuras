@@ -31,6 +31,7 @@ import {
   type ClassificationResult,
 } from '../sdk/schemas/classifier'
 import { buildExtendedClassificationSchema } from '../sdk/schemas/runtime-variables'
+import { buildBeEventInstructions, extendClassificationSchemaWithBeEvents } from '$lib/services/be'
 import type { RuntimeVariable, RuntimeEntityType } from '$lib/services/packs/types'
 
 const log = createLogger('Classifier')
@@ -90,10 +91,21 @@ export class ClassifierService extends BaseAIService {
     }
 
     // Build the schema: extended with inline vars if runtime variables exist, else base
-    const schema =
+    let schema =
       runtimeVars.length > 0
         ? buildExtendedClassificationSchema(runtimeVarsByType)
         : classificationResultSchema
+
+    // BE stories additionally extract transformation events (schema-extension only —
+    // ad-hoc fields would be stripped by Zod)
+    const beMode = context.story.settings?.beMode === true
+    if (beMode) {
+      const extended = extendClassificationSchemaWithBeEvents(schema)
+      if (extended === schema) {
+        log('WARNING: beEvents schema extension no-op — BE extraction disabled this turn')
+      }
+      schema = extended
+    }
 
     // Format existing entities for the prompt
     const existingCharacters = this.formatExistingCharacters(context.existingCharacters)
@@ -111,9 +123,14 @@ export class ClassifierService extends BaseAIService {
       ? `Current story time: Year ${currentStoryTime.years}, Day ${currentStoryTime.days}, ${String(currentStoryTime.hours).padStart(2, '0')}:${String(currentStoryTime.minutes).padStart(2, '0')}`
       : ''
 
-    // Build custom variable instructions for the prompt
-    const customVariableInstructions =
-      runtimeVars.length > 0 ? this.buildCustomVarInstructions(runtimeVarsByType) : ''
+    // Build custom variable instructions for the prompt. BE event instructions
+    // piggyback on the same template slot, so no classifier-template edit is needed.
+    const customVariableInstructions = [
+      runtimeVars.length > 0 ? this.buildCustomVarInstructions(runtimeVarsByType) : '',
+      beMode ? buildBeEventInstructions(context.story.settings?.beGrowthCosmology) : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
 
     // Create ContextBuilder from story -- auto-populates mode, pov, tense, genre, etc.
     const ctx = await ContextBuilder.forStory(context.storyId)
@@ -164,6 +181,7 @@ export class ClassifierService extends BaseAIService {
       }
 
       log('classify complete', {
+        beEvents: beMode ? (result.beEvents?.length ?? 0) : undefined,
         characterUpdates: result.entryUpdates.characterUpdates.length,
         newCharacters: result.entryUpdates.newCharacters.length,
         locationUpdates: result.entryUpdates.locationUpdates.length,

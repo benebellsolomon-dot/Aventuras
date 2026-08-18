@@ -1,0 +1,157 @@
+{
+  "params": {
+    "sampler": "euler_ancestral",
+    "scheduler": "normal",
+    "steps": 28,
+    "steps_hires": 18,
+    "cfg": 5.0,
+    "seed": 111,
+    "smooth_booster": 0.5,
+    "hires_denoise": 0.4
+  },
+  "frames": [
+    {
+      "tier": 0,
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "prompt_id": "663899cf-d029-4b2a-a8f3-82d6c86c3a7c",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t000_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 2,
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "prompt_id": "9349bd3b-e247-454b-b60f-313169174bc4",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t002_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 6,
+      "cup": "medium breasts",
+      "slider": -0.45,
+      "hyper": 0.0,
+      "prompt_id": "9615e518-969b-4e00-9149-69e1729d9f54",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t006_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 10,
+      "cup": "medium breasts",
+      "slider": -0.05,
+      "hyper": 0.0,
+      "prompt_id": "01e45f05-0fa7-4d7f-a5b4-faf317576b8b",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t010_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 14,
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "prompt_id": "ee921336-1c5c-4fc5-8f8d-8bcce780cb6a",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t014_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 18,
+      "cup": "large breasts",
+      "slider": 0.23,
+      "hyper": 0.0,
+      "prompt_id": "3da29521-ce77-4774-a8d5-d3a8bf825e28",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t018_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 22,
+      "cup": "huge breasts",
+      "slider": 0.3,
+      "hyper": 0.0,
+      "prompt_id": "c80cea9a-4ee3-4bbc-aac0-38983ac1fe73",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t022_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 26,
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "prompt_id": "348c342b-afe7-4197-924d-0ecffd2a14e5",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t026_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 30,
+      "cup": "gigantic breasts",
+      "slider": 0.4,
+      "hyper": 0.0,
+      "prompt_id": "7ea92a6d-e789-4626-bd19-433ccb701e4c",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t030_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 35,
+      "cup": "gigantic breasts",
+      "slider": 0.57,
+      "hyper": 0.0,
+      "prompt_id": "6272418a-f71c-4ae1-9006-98c2e53c3796",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t035_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 40,
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "prompt_id": "bf07804e-8938-486b-8975-8fcb072b5a3f",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t040_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 45,
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "prompt_id": "09fd9816-ae90-47f4-bbeb-71fbec898913",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t045_00002_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "tier": 50,
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "prompt_id": "4843a421-f75d-45c0-a5cc-2ea6de0ed59c",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TIERLAD_t050_00002_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

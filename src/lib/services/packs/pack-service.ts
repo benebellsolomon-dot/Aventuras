@@ -1,6 +1,7 @@
 import { database } from '$lib/services/database'
 import { PROMPT_TEMPLATES } from '$lib/services/prompts/templates'
 import { hashContent } from './hash'
+import { getBundledPack } from './bundled'
 import type { PresetPack, FullPack } from './types'
 
 /**
@@ -123,6 +124,44 @@ class PackService {
     }
 
     // No custom variables copied — new packs start clean
+
+    return pack
+  }
+
+  /**
+   * Create a pack from a bundled definition: baseline templates with the
+   * bundle's transforms applied, plus its custom and runtime variables.
+   * The result is a normal user pack (never auto-refreshed).
+   */
+  async createBundledPack(bundleId: string, nameOverride?: string): Promise<PresetPack> {
+    const bundle = getBundledPack(bundleId)
+    if (!bundle) throw new Error(`Unknown bundled pack: ${bundleId}`)
+
+    const packId = crypto.randomUUID()
+    const pack = await database.createPack({
+      id: packId,
+      name: nameOverride?.trim() || bundle.name,
+      description: bundle.description,
+      author: bundle.author,
+      isDefault: false,
+    })
+
+    for (const template of PROMPT_TEMPLATES) {
+      const transform = bundle.templateTransforms[template.id]
+      const content = transform ? transform(template.content) : template.content
+      await database.setPackTemplateContent(packId, template.id, content)
+      if (template.userContent) {
+        await database.setPackTemplateContent(packId, `${template.id}-user`, template.userContent)
+      }
+    }
+
+    for (const variable of bundle.customVariables) {
+      await database.createPackVariable(packId, variable)
+    }
+
+    for (const runtimeVariable of bundle.runtimeVariables) {
+      await database.createRuntimeVariable(packId, runtimeVariable)
+    }
 
     return pack
   }

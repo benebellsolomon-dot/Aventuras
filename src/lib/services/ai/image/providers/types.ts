@@ -29,6 +29,48 @@ export interface ComfyCustomWorkflow {
   negativePromptPath: string | null
 }
 
+/**
+ * One subject in a bridge StructuredImageSpec (si-animator-bridge contract §2).
+ * `tier_index` rides the shared 0-51 cup-band scalar (see bridgeSpec.bridgeTierIndex);
+ * identity travels as `appearance_excerpt` free text — the bridge infers flat
+ * fields from it, so no caller-side descriptor parsing. NOTE: be_moments is a
+ * SPEC-level field only — SpecCharacter has no such field server-side, and
+ * character-level extras are silently ignored (extra="allow").
+ */
+export interface BridgeSpecCharacter {
+  sex?: 'female' | 'male'
+  tier_index: number
+  build?: string
+  breast_shape?: string
+  hair_color?: string
+  hair_style?: string
+  eye_color?: string
+  skin_tone?: string
+  /** Only feeds bridge-side SKIN-TONE inference — not a general identity channel. */
+  appearance_excerpt?: string
+  /** Verbatim identity tags — the bridge's strongest identity channel (overrides flat fields). */
+  identity_tags?: string[]
+}
+
+/**
+ * The structured request body for the bridge's native `POST /image`. The bridge
+ * owns the prompt recipe: send structure, never hand-built prompt strings.
+ * Unknown keys are ignored bridge-side, so this can trail the live contract safely.
+ */
+export interface StructuredImageSpecInput {
+  register?: 'color' | 'manga'
+  intimacy?: 'clean' | 'suggestive' | 'nude' | 'explicit'
+  characters: BridgeSpecCharacter[]
+  scene_tags?: string[]
+  location?: string | null
+  lighting_tag?: string | null
+  be_moments?: string[]
+  intimate_moments?: string[]
+  regional?: boolean
+  extra_tags?: string[]
+  style_preset?: 'clean_premium' | 'painterly_glow' | 'semireal' | 'none'
+}
+
 export interface ImageGenerateOptions {
   model: string
   prompt: string
@@ -36,6 +78,18 @@ export interface ImageGenerateOptions {
   referenceImages?: string[] // raw base64 (no data: prefix)
   signal?: AbortSignal
   providerOptions?: Record<string, unknown>
+  /** Structured spec for the si-bridge provider; other providers ignore it. */
+  spec?: StructuredImageSpecInput
+  /**
+   * si-bridge FaceID/OpenPose identity-hold (Spec 4 B1): bare base64 of the
+   * approved anchor render. Routes the request onto the openpose_faceid
+   * workflow bridge-side while the spec still drives tier sizing.
+   */
+  poseFaceAnchor?: string
+  faceidWeight?: number
+  openposeStrength?: number
+  /** Deterministic seed (sprite sets share one per character+appearance). */
+  seed?: number
 }
 
 export interface ImageGenerateResult {

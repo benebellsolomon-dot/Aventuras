@@ -24,6 +24,15 @@ const photorealisticStyleTemplate: PromptTemplate = {
   content: `Photorealistic digital art with true-to-life rendering. Natural lighting with accurate shadows and highlights. Detailed textures on skin, fabric, and materials. Accurate human proportions and anatomy. Professional photography aesthetic with cinematic depth of field. High dynamic range with realistic contrast. Detailed environments with accurate perspective. Materials rendered with proper reflectance and subsurface scattering where appropriate. Film grain optional for cinematic feel. 8K quality, hyperrealistic detail.`,
 }
 
+const kreaBridgeStyleTemplate: PromptTemplate = {
+  id: 'image-style-krea-bridge',
+  name: 'Krea (SI Bridge)',
+  category: 'image-style',
+  description:
+    'Natural-language style block for the SI-bridge Krea 2 workflow (LLM-class text encoder)',
+  content: `High-quality detailed anime illustration with clean expressive linework, rich colors, refined shading, and cinematic lighting. Crisp focus and polished detail throughout. Every depicted character is a mature adult in their twenties or older.`,
+}
+
 const imagePromptAnalysisTemplate: PromptTemplate = {
   id: 'image-prompt-analysis',
   name: 'Image Prompt Analysis',
@@ -319,6 +328,7 @@ export const imageTemplates: PromptTemplate[] = [
   softAnimeStyleTemplate,
   semiRealisticAnimeStyleTemplate,
   photorealisticStyleTemplate,
+  kreaBridgeStyleTemplate,
   imagePromptAnalysisTemplate,
   imagePromptAnalysisReferenceTemplate,
   imagePortraitGenerationTemplate,

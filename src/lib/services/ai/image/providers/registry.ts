@@ -13,6 +13,7 @@ import type {
   ImageProviderConfig,
   ImageGenerateResult,
   ImageModelInfo,
+  StructuredImageSpecInput,
 } from './types'
 import { createLogger } from '$lib/log'
 
@@ -26,6 +27,7 @@ import { createZhipuProvider } from './zhipu'
 import { createComfyProvider } from './comfy'
 import { createOpenRouterProvider } from './openrouter'
 import { createA1111Provider } from './a1111'
+import { createSiBridgeProvider } from './si-bridge'
 
 const log = createLogger('ImageRegistry')
 
@@ -45,6 +47,7 @@ const PROVIDER_FACTORIES: Record<ImageProviderType, ProviderFactory> = {
   zhipu: createZhipuProvider,
   comfyui: createComfyProvider,
   a1111: createA1111Provider,
+  'si-bridge': createSiBridgeProvider,
 }
 
 // ============================================================================
@@ -91,8 +94,31 @@ export async function generateImage(options: {
   size?: string
   referenceImages?: string[]
   signal?: AbortSignal
+  /** Structured spec for the si-bridge provider; other providers ignore it. */
+  spec?: StructuredImageSpecInput
+  /** si-bridge FaceID/OpenPose identity-hold (Spec 4 B1); other providers ignore them. */
+  poseFaceAnchor?: string
+  faceidWeight?: number
+  openposeStrength?: number
+  /** Deterministic seed (sprite sets); providers without seed support ignore it. */
+  seed?: number
+  /** Per-character LoRA (name + tier-scaled weight); merged into providerOptions.lora for LoRA-capable providers, ignored by others. */
+  loraOverride?: { name: string; strengthModel: number; strengthClip: number }
 }): Promise<ImageGenerateResult> {
-  const { profileId, model, prompt, size = '1024x1024', referenceImages, signal } = options
+  const {
+    profileId,
+    model,
+    prompt,
+    size = '1024x1024',
+    referenceImages,
+    signal,
+    spec,
+    poseFaceAnchor,
+    faceidWeight,
+    openposeStrength,
+    seed,
+    loraOverride,
+  } = options
 
   const profile = settings.getImageProfile(profileId)
   if (!profile) {
@@ -110,10 +136,16 @@ export async function generateImage(options: {
     hasReferences: !!referenceImages?.length,
   })
 
+  // A per-character LoRA overrides the profile's default lora slot. Cloud
+  // providers ignore providerOptions.lora, so this is a no-op for them.
+  const effectiveProviderOptions = loraOverride
+    ? { ...profile.providerOptions, lora: loraOverride }
+    : profile.providerOptions
+
   const config: ImageProviderConfig = {
     apiKey: profile.apiKey,
     baseUrl: profile.baseUrl,
-    providerOptions: profile.providerOptions,
+    providerOptions: effectiveProviderOptions,
     timeoutMs: settings.apiSettings.llmTimeoutMs,
   }
 
@@ -130,7 +162,12 @@ export async function generateImage(options: {
     size,
     referenceImages: cleanRefs,
     signal,
-    providerOptions: profile.providerOptions,
+    providerOptions: effectiveProviderOptions,
+    spec,
+    poseFaceAnchor,
+    faceidWeight,
+    openposeStrength,
+    seed,
   })
 }
 

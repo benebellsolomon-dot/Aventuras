@@ -1,0 +1,76 @@
+{
+  "recipe": "dpmpp_2m/karras + AnimeSharp 1.5x d0.4 + cfg5",
+  "seed": 333,
+  "frames": [
+    {
+      "id": "S0_baseline",
+      "note": "",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S0_baseline_00001_.png"
+      ]
+    },
+    {
+      "id": "S1_detailed",
+      "note": "(highly detailed:1.2), intricate details, sharp focus",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S1_detailed_00001_.png"
+      ]
+    },
+    {
+      "id": "S2_cel",
+      "note": "(cel shading:1.2), flat colors, bold clean lineart, an",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S2_cel_00001_.png"
+      ]
+    },
+    {
+      "id": "S3_painterly",
+      "note": "(painterly:1.2), digital painting, soft brushwork, sof",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S3_painterly_00001_.png"
+      ]
+    },
+    {
+      "id": "S4_semireal",
+      "note": "(semi-realistic:1.15), realistic skin texture, detaile",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S4_semireal_00001_.png"
+      ]
+    },
+    {
+      "id": "S5_cinematic",
+      "note": "(cinematic lighting:1.15), dramatic lighting, depth of",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S5_cinematic_00001_.png"
+      ]
+    },
+    {
+      "id": "S6_vibrant",
+      "note": "(vibrant saturated colors:1.15), glossy, clean modern ",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S6_vibrant_00001_.png"
+      ]
+    },
+    {
+      "id": "S7_pastel",
+      "note": "(soft pastel colors:1.1), gentle shading, dreamy, deli",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S7_pastel_00001_.png"
+      ]
+    },
+    {
+      "id": "S8_retro",
+      "note": "(retro 1990s anime:1.15), cel animation, vintage anime",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S8_retro_00001_.png"
+      ]
+    },
+    {
+      "id": "S9_ultra",
+      "note": "(ultra-detailed:1.3), 8k, extremely intricate, ornate ",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSTYLE_S9_ultra_00001_.png"
+      ]
+    }
+  ]
+}

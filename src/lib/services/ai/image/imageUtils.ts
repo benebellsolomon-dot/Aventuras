@@ -5,6 +5,10 @@
  */
 
 import { generateImage, supportsImageGeneration } from './providers/registry'
+import { sizeBandMarker } from './sizeBandMarker'
+import { buildPortraitSpec, type BridgeSpecSubject } from './bridgeSpec'
+import { resolveLora, loraTriggerText } from './loraBinding'
+import { readBodyState } from '$lib/services/be'
 import { database } from '$lib/services/database'
 import { settings } from '$lib/stores/settings.svelte'
 import type { StorySettings } from '$lib/types'
@@ -160,7 +164,20 @@ export async function retryImageGeneration(imageId: string, prompt: string): Pro
  * Generate a portrait image for a character.
  * Returns the base64 image data on success.
  */
-export async function generatePortrait(prompt: string): Promise<string> {
+export async function generatePortrait(
+  prompt: string,
+  subject?: BridgeSpecSubject,
+): Promise<string> {
+  // Per-character LoRA trigger words lead the prompt (provider-agnostic); the
+  // LoRA file + tier-scaled weight (below) apply only on LoRA-capable providers.
+  const triggerText = subject ? loraTriggerText([subject.loraConfig]) : ''
+  if (triggerText) prompt = `${triggerText}, ${prompt}`
+  const loraTier = readBodyState(subject?.metadata ?? null)?.tier ?? 0
+  const loraOverride = resolveLora(subject?.loraConfig, loraTier) ?? undefined
+
+  // Size-band → bridge tier marker (see sizeBandMarker.ts) — portraits carry the
+  // character's size vocabulary via visual descriptors, so mark them too.
+  prompt = `${sizeBandMarker(prompt)}${prompt}`
   const imageSettings = settings.systemServicesSettings.imageGeneration
 
   const profileId = imageSettings.portraitProfileId
@@ -176,9 +193,15 @@ export async function generatePortrait(prompt: string): Promise<string> {
 
   const size = imageSettings.portraitSize || '1024x1024'
 
+  // si-bridge portraits send structure: identity via identity_tags + the tier
+  // from engine state (or sniffed from the descriptors) — prose alone dropped
+  // both bridge-side. The marked prompt stays as the recorded fallback.
+  const spec =
+    subject && profile?.providerType === 'si-bridge' ? buildPortraitSpec(subject) : undefined
+
   log('Generating portrait', { profileId, model, size, promptLength: prompt.length })
 
-  const result = await generateImage({ profileId, model, prompt, size })
+  const result = await generateImage({ profileId, model, prompt, size, spec, loraOverride })
 
   if (!result.base64) {
     throw new Error('No image data returned from provider')

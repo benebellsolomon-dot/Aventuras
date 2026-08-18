@@ -1,0 +1,175 @@
+{
+  "200:101": {
+    "inputs": {
+      "ckpt_name": "waiIllustriousSDXL_v170.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "WAI-illustrious-SDXL v17 (SDXL backbone for ControlNet colorize)"
+    }
+  },
+  "200:105": {
+    "inputs": {
+      "stop_at_clip_layer": -2,
+      "clip": [
+        "200:101",
+        1
+      ]
+    },
+    "class_type": "CLIPSetLastLayer",
+    "_meta": {
+      "title": "Clip Skip 2 (Illustrious community-canonical)"
+    }
+  },
+  "200:115": {
+    "inputs": {
+      "image": "{{INPUT_IMAGE_FILENAME}}",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load grayscale manga page (B&W source to colorize)"
+    }
+  },
+  "200:117": {
+    "inputs": {
+      "control_net_name": "{{CONTROLNET_MODEL_NAME}}"
+    },
+    "class_type": "ControlNetLoader",
+    "_meta": {
+      "title": "ControlNet-manga-recolor (SubMaroon/ControlNet-manga-recolor — SDXL)"
+    }
+  },
+  "200:120": {
+    "inputs": {
+      "text": "{{POSITIVE_PROMPT}}",
+      "clip": [
+        "200:105",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive — colorize prompt)"
+    }
+  },
+  "200:121": {
+    "inputs": {
+      "text": "{{NEGATIVE_PROMPT}}",
+      "clip": [
+        "200:105",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative)"
+    }
+  },
+  "200:125": {
+    "inputs": {
+      "strength": "{{CONTROLNET_STRENGTH}}",
+      "start_percent": 0.0,
+      "end_percent": 1.0,
+      "positive": [
+        "200:120",
+        0
+      ],
+      "negative": [
+        "200:121",
+        0
+      ],
+      "control_net": [
+        "200:117",
+        0
+      ],
+      "image": [
+        "200:115",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {
+      "title": "Apply ControlNet — grayscale page conditions colorized output"
+    }
+  },
+  "200:130": {
+    "inputs": {
+      "pixels": [
+        "200:115",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode B&W page (latent seed for img2img-style colorize at high denoise)"
+    }
+  },
+  "200:140": {
+    "inputs": {
+      "seed": "{{SEED}}",
+      "steps": "{{STEPS}}",
+      "cfg": "{{CFG}}",
+      "sampler_name": "{{SAMPLER}}",
+      "scheduler": "{{SCHEDULER}}",
+      "denoise": 1.0,
+      "model": [
+        "200:101",
+        0
+      ],
+      "positive": [
+        "200:125",
+        0
+      ],
+      "negative": [
+        "200:125",
+        1
+      ],
+      "latent_image": [
+        "200:130",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler — full denoise; composition rails come from the ControlNet, not the latent"
+    }
+  },
+  "200:150": {
+    "inputs": {
+      "samples": [
+        "200:140",
+        0
+      ],
+      "vae": [
+        "200:101",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "200:160": {
+    "inputs": {
+      "filename_prefix": "image/{{JOB_ID}}",
+      "images": [
+        "200:150",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save colorized PNG"
+    }
+  }
+}

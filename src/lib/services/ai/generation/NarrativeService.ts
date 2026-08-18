@@ -13,6 +13,7 @@
 
 import { streamNarrative, generateNarrative } from '../sdk/generate'
 import { ContextBuilder } from '$lib/services/context'
+import { getContentGuidelines } from './contentGuidelines'
 import { StyleReviewerService } from './StyleReviewerService'
 import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
@@ -51,24 +52,32 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 
 **USAGE GUIDELINES:**
 - Place <pic> tags AFTER the prose that describes the scene they illustrate
-- Write prompts as detailed visual descriptions: subject, action, setting, mood, lighting, art style
+- Write prompts as vivid natural-language visual descriptions (the image backend uses an LLM-class text encoder — flowing descriptive English works best): open with content-rating words, then character appearance, clothing and its state, action/pose, setting and lighting
 - Include character names in the "characters" attribute if they appear in the image
+- Re-describe each character's physical appearance IN FULL in every prompt (hair, eyes, build, notable body proportions, current clothing and its state) — the image model cannot see the story, previous images, or other prompts
+- MULTIPLE CHARACTERS (prevent feature-bleeding): when two or more people appear, (1) start the character section with a count tag — "two women", "a man and a woman"; (2) describe each person in ONE self-contained clause with a spatial anchor ("on the left, ...", "on the right, ...", "in the center, ..."), never interleaving their traits; (3) give each a distinguishing anchor (hair colour, outfit) so the model keeps them apart. Example: "two women — on the left, a tall woman with long red hair in a green dress; on the right, a petite woman with short black hair in a white blouse"
 - Use sparingly: 1-3 images per response maximum, reserved for impactful visual moments
+
+**RATING AND BODY WORDS (required in every prompt):**
+- The prompt's FIRST words are always a content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content)
+- For every female character, ALWAYS state her current breast size using one of these bands, matching the story's canon: flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts — body-size continuity is critical
+- Prefer concrete visual wording over abstractions: "torn apron, popped buttons, fabric straining across her chest" not "clothes in disarray"
+- Do NOT add art-style words to prompts ("realistic art style", "anime style", "digital art", etc.) — the visual style is appended automatically and style words in the prompt contradict it
 - Best used for: dramatic reveals, emotional peaks, action climaxes, new locations, important character moments
 
 **EXAMPLE:**
 The dragon descended from the storm clouds, its obsidian scales gleaming with each flash of lightning.
-<pic prompt="A massive black dragon descending from dark storm clouds, scales gleaming with rain, lightning illuminating the scene, dramatic low angle shot, dark fantasy art style" characters=""></pic>
+<pic prompt="general, a massive black dragon descending from dark storm clouds, gleaming rain-wet scales, lightning illuminating the scene from a dramatic low angle, dark fantasy atmosphere" characters=""></pic>
 
 Elena drew her blade, firelight dancing along the steel edge as she faced the creature.
-<pic prompt="Young woman warrior with determined expression drawing a glowing sword, firelight reflecting on blade and face, medieval interior background, dramatic lighting, fantasy art" characters="Elena"></pic>
+<pic prompt="sensitive, a young woman warrior with a determined expression, long red hair, green eyes, an athletic build and medium breasts, wearing fitted leather armor, drawing a glowing sword with firelight reflecting on the blade and her face, medieval interior, dramatic lighting" characters="Elena"></pic>
 
 **CRITICAL RULES:**
 - **PROMPTS MUST BE IN ENGLISH** - Image generation models only understand English prompts. Always write the prompt attribute in English, even if the surrounding narrative is in another language.
 - The prompt must be a COMPLETE visual description - do not write "the dragon from the scene" or "as described above"
 - Never place <pic> tags in the middle of a sentence - always after the descriptive prose
 - Do not use <pic> for every scene - reserve for truly striking visual moments
-- Keep prompts between 50-150 words for best results
+- Keep prompts under 500 characters
 </InlineImages>`
 
 /**
@@ -286,7 +295,7 @@ export class NarrativeService {
     })
 
     // Build system prompt via ContextBuilder pipeline
-    const { systemPrompt, primingMessage } = await this.buildPrompts(
+    const { systemPrompt, primingMessage, postHistoryBlock } = await this.buildPrompts(
       story,
       worldState,
       tieredContextBlock,
@@ -298,7 +307,7 @@ export class NarrativeService {
     // Build the user prompt from entries
     const mode = story?.mode ?? 'adventure'
     const inlineImageMode = story?.settings?.imageGenerationMode === 'inline'
-    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode)
+    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode, postHistoryBlock)
 
     try {
       // Stream using the main narrative profile
@@ -346,7 +355,7 @@ export class NarrativeService {
     log('generate', { entriesCount: entries.length })
 
     // Build system prompt via ContextBuilder pipeline
-    const { systemPrompt, primingMessage } = await this.buildPrompts(
+    const { systemPrompt, primingMessage, postHistoryBlock } = await this.buildPrompts(
       story,
       worldState,
       tieredContextBlock,
@@ -356,7 +365,7 @@ export class NarrativeService {
 
     const mode = story?.mode ?? 'adventure'
     const inlineImageMode = story?.settings?.imageGenerationMode === 'inline'
-    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode)
+    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode, postHistoryBlock)
 
     return generateNarrative({
       system: systemPrompt,
@@ -379,7 +388,7 @@ export class NarrativeService {
     styleReview?: StyleReviewResult | null,
     retrievedChapterContext?: string | null,
     timelineFillResult?: TimelineFillResult | null,
-  ): Promise<{ systemPrompt: string; primingMessage: string }> {
+  ): Promise<{ systemPrompt: string; primingMessage: string; postHistoryBlock: string }> {
     const mode = story?.mode ?? 'adventure'
 
     // Create ContextBuilder -- forStory auto-populates mode, pov, tense, genre,
@@ -437,6 +446,10 @@ export class NarrativeService {
       ctx.add({ visualProseInstructions: VISUAL_PROSE_INSTRUCTIONS })
     }
 
+    // Content guidelines based on the story's content rating.
+    // Always set (empty string for 'standard') so templates can safely test it.
+    ctx.add({ contentGuidelines: getContentGuidelines(story?.settings?.contentRating) })
+
     // Render system prompt — use per-story override when set, otherwise fall back to pack template
     let systemPrompt: string
     const customPrompt = story?.settings?.customSystemPrompt
@@ -463,14 +476,28 @@ export class NarrativeService {
       (context.protagonistName as string) ?? 'the protagonist',
     )
 
+    // Render post-history instructions (Liquid-enabled) for injection at the
+    // tail of the user prompt — the strongest steering position, applied after
+    // all story history and immediately before generation.
+    let postHistoryBlock = ''
+    const postHistoryRaw = story?.settings?.postHistoryInstructions?.trim()
+    if (postHistoryRaw) {
+      const rendered = templateEngine.render(postHistoryRaw, ctx.getContext())
+      if (rendered === null) {
+        log('ERROR: post-history instructions render failed, using raw content')
+      }
+      postHistoryBlock = rendered ?? postHistoryRaw
+    }
+
     log('buildPrompts complete', {
       mode,
       usingCustomPrompt: !!customPrompt,
       systemPromptLength: systemPrompt.length,
       primingMessageLength: primingMessage.length,
+      hasPostHistory: postHistoryBlock.length > 0,
     })
 
-    return { systemPrompt, primingMessage }
+    return { systemPrompt, primingMessage, postHistoryBlock }
   }
 
   /**
@@ -482,6 +509,7 @@ export class NarrativeService {
     entries: StoryEntry[],
     mode: 'adventure' | 'creative-writing',
     inlineImageMode: boolean = false,
+    postHistoryBlock: string = '',
   ): string {
     // Use all entries passed - these are already the visible (non-summarized) entries
     // Truncation/context management happens upstream via the memory system
@@ -521,6 +549,11 @@ export class NarrativeService {
     prompt += '## Current Action:\n'
     prompt += currentAction
     prompt += '\n\n'
+
+    if (postHistoryBlock) {
+      prompt += `[Narrative Directives]\n${postHistoryBlock}\n\n`
+    }
+
     prompt += 'Continue the narrative:'
 
     return prompt

@@ -1,0 +1,168 @@
+{
+  "cn": "controlnet-openpose-sdxl-xinsir.safetensors",
+  "cn_strength": 1.0,
+  "tiers": [
+    0,
+    2,
+    8,
+    14,
+    20,
+    26,
+    33,
+    40,
+    45,
+    50
+  ],
+  "frames": [
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 14,
+      "kind": "base_nocn",
+      "label": "OPGROW_base_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_base_t14_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": -1,
+      "kind": "pose",
+      "label": "OPGROW_poseimg",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_poseimg_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 0,
+      "kind": "cn",
+      "cup": "flat chest",
+      "slider": -1.5,
+      "hyper": 0.0,
+      "label": "OPGROW_petite_clothed_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t0_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 2,
+      "kind": "cn",
+      "cup": "small breasts",
+      "slider": -1.1,
+      "hyper": 0.0,
+      "label": "OPGROW_petite_clothed_t2",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t2_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 8,
+      "kind": "cn",
+      "cup": "medium breasts",
+      "slider": -0.2,
+      "hyper": 0.0,
+      "label": "OPGROW_petite_clothed_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t8_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 14,
+      "kind": "cn",
+      "cup": "large breasts",
+      "slider": 0.0,
+      "hyper": 0.0,
+      "label": "OPGROW_petite_clothed_t14",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t14_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 20,
+      "kind": "cn",
+      "cup": "large breasts",
+      "slider": 0.34,
+      "hyper": 0.0,
+      "label": "OPGROW_petite_clothed_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t20_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 26,
+      "kind": "cn",
+      "cup": "huge breasts",
+      "slider": 0.47,
+      "hyper": 0.0,
+      "label": "OPGROW_petite_clothed_t26",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t26_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 33,
+      "kind": "cn",
+      "cup": "gigantic breasts",
+      "slider": 0.5,
+      "hyper": 0.0,
+      "label": "OPGROW_petite_clothed_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t33_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 40,
+      "kind": "cn",
+      "cup": "hyper breasts",
+      "slider": 0.5,
+      "hyper": 0.5,
+      "label": "OPGROW_petite_clothed_t40",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t40_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 45,
+      "kind": "cn",
+      "cup": "hyper breasts",
+      "slider": 0.55,
+      "hyper": 0.68,
+      "label": "OPGROW_petite_clothed_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t45_00001_.png"
+      ]
+    },
+    {
+      "body": "petite",
+      "clothing": "clothed",
+      "tier": 50,
+      "kind": "cn",
+      "cup": "hyper breasts",
+      "slider": 0.6,
+      "hyper": 0.85,
+      "label": "OPGROW_petite_clothed_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\OPGROW_petite_clothed_t50_00001_.png"
+      ]
+    }
+  ]
+}

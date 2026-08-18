@@ -1,0 +1,63 @@
+{
+  "scene": "1girl, solo, mature female, adult, long silver hair, blue eyes, detailed face, detailed eyes, huge breasts, (fitted ribbed sweater:1.1), cleavage, hand on hip, cowboy shot, facing viewer, cozy cafe interior, warm window light, (matte skin:1.2)",
+  "seed": 333,
+  "sampler": "dpmpp_2m",
+  "frames": [
+    {
+      "id": "H0_nohires",
+      "note": "base 832x1216, no hires",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H0_nohires_00001_.png"
+      ]
+    },
+    {
+      "id": "H1_latent_nearest",
+      "note": "latent nearest-exact 1.5x d0.4 (CURRENT prod)",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H1_latent_nearest_00001_.png"
+      ]
+    },
+    {
+      "id": "H2_latent_bislerp",
+      "note": "latent bislerp 1.5x d0.4",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H2_latent_bislerp_00001_.png"
+      ]
+    },
+    {
+      "id": "H3_anisharp15",
+      "note": "4x-AnimeSharp 1.5x d0.4 (playbook)",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H3_anisharp15_00001_.png"
+      ]
+    },
+    {
+      "id": "H4_ultrasharp15",
+      "note": "4x-UltraSharp 1.5x d0.4",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H4_ultrasharp15_00001_.png"
+      ]
+    },
+    {
+      "id": "H5_yandere15",
+      "note": "4x-NMKD-YandereNeoXL 1.5x d0.4",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H5_yandere15_00001_.png"
+      ]
+    },
+    {
+      "id": "H6_anisharp2x",
+      "note": "4x-AnimeSharp 2.0x d0.4",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H6_anisharp2x_00001_.png"
+      ]
+    },
+    {
+      "id": "H7_anisharp15_d05",
+      "note": "4x-AnimeSharp 1.5x d0.5",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QHIRES_H7_anisharp15_d05_00001_.png"
+      ]
+    }
+  ]
+}

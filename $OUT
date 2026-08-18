@@ -1,0 +1,4 @@
+reduced growthPressure = NaN (NaN? true)
+written metadata.bodyState.growthPressure = NaN
+readBodyState(meta) = NULL -> ENTIRE BODY STATE DISCARDED (tier/shape/conditions all lost, re-seeds next turn)
+control clean readback = OK preserved tier 40

@@ -267,6 +267,7 @@
         aiService.generateImagesForNarrative({
           ...ctx,
           imageGenerationMode: story.currentStory?.settings?.imageGenerationMode,
+          beMode: story.currentStory?.settings?.beMode === true,
           allCharacters: story.characters,
           imageSettings: settings.systemServicesSettings.imageGeneration,
           getImageProfile: (id) => settings.getImageProfile(id),
@@ -462,6 +463,7 @@
         currentStoryRef.id,
         narrationEntryId,
         () => story.characters,
+        () => story.currentStory?.settings?.beMode === true,
       )
     }
 
@@ -521,6 +523,7 @@
         translationSettings: settings.translationSettings,
         imageSettings: {
           imageGenerationMode: currentStoryRef.settings?.imageGenerationMode ?? 'agentic',
+          beMode: currentStoryRef.settings?.beMode === true,
           backgroundImagesEnabled: currentStoryRef.settings?.backgroundImagesEnabled ?? false,
           referenceMode: currentStoryRef.settings?.referenceMode ?? false,
         },
@@ -655,6 +658,7 @@
               narrativeResponse: fullResponse,
               userAction: userActionContent,
               presentCharacters,
+              beMode: currentStoryRef.settings?.beMode === true,
               currentLocation:
                 event.result.scene.currentLocationName ?? worldState.currentLocation?.name,
               chatHistory: imageGenChatHistory,

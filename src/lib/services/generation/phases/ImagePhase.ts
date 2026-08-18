@@ -27,6 +27,8 @@ export interface ImageDependencies {
 export interface ImageSettings {
   imageGenerationMode?: 'none' | 'agentic' | 'inline'
   referenceMode?: boolean
+  /** BE grounding gate for image prompts (per-story beMode). */
+  beMode?: boolean
 }
 
 /** Input for the image phase */
@@ -118,6 +120,7 @@ export class ImagePhase {
       narrativeResponse: narrativeContent,
       userAction,
       presentCharacters,
+      beMode: imageSettings.beMode === true,
       currentLocation,
       chatHistory,
       lorebookContext,

@@ -1,0 +1,34 @@
+{
+  "cells": [
+    {
+      "label": "v4_01_neg_barecleavage",
+      "prompt_id": "5873f169-bfcf-432f-8ee6-852931ebd8f0",
+      "baseline": "v3_01",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 2girls, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, both huge breasts, (deep cleavage:1.2), cleavage, between breasts, inter-breast shadow, bare skin between breasts, narrow waist, bikini, beach, standing, hands behind back, empty hands",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v4_01_neg_barecleavage_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v4_02_no_between",
+      "prompt_id": "ceb7f522-51d0-467d-abeb-1b60dece95e5",
+      "baseline": "v3_01",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 2girls, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, both huge breasts, (deep cleavage:1.2), cleavage, narrow waist, bikini, beach, standing, hands behind back, empty hands",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v4_02_no_between_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v4_03_arms_pose",
+      "prompt_id": "438fb133-7a5a-41ed-9666-02e68bc15bde",
+      "baseline": "v3_01",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 2girls, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, both huge breasts, (deep cleavage:1.2), cleavage, between breasts, narrow waist, bikini, beach, standing, arms crossed under breasts, hands on own hips",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v4_03_arms_pose_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

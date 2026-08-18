@@ -1,0 +1,92 @@
+{
+  "cells": [
+    {
+      "label": "v2_01_huge_hands",
+      "prompt_id": "25f2596f-ec6b-426d-9d15-0558bb5b497f",
+      "baseline": "02/05",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, fitted t-shirt, hands on hips, indoors, standing, smile",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_01_huge_hands_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v2_02_gigantic_aids",
+      "prompt_id": "495852d4-3308-4950-8dd7-a9c0ebd2306c",
+      "baseline": "03",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, gigantic breasts, cleavage, between breasts, underboob shadow, narrow waist, fitted t-shirt, indoors, standing, smile",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_02_gigantic_aids_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v2_03_strain_geo",
+      "prompt_id": "b6baf654-ca16-43cd-ade8-14bd0b6416b5",
+      "baseline": "09",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, taut shirt, taut fabric, fabric stretched, stress folds, gaping shirt, strained buttons, button gap, cleavage, underboob, hands at sides",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_03_strain_geo_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v2_04_gravity",
+      "prompt_id": "15f391ff-018d-4bf9-b81c-c2b60bde84dd",
+      "baseline": "11",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, topless, nude, hanging breasts, heavy breasts, underboob shadow, soft breasts, sagging, blush, hand on chest",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_04_gravity_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v2_05_swimsuit",
+      "prompt_id": "200558d4-6d81-4291-ad9d-45be0e8bb35a",
+      "baseline": "07",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, huge breasts, competition swimsuit, taut fabric, stress folds, beach, hand on hip",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_05_swimsuit_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v2_06_fullbody",
+      "prompt_id": "ceda1b86-6492-4dbb-9cfd-10fda79a0a7c",
+      "baseline": "12",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, gigantic breasts, cleavage, between breasts, underboob shadow, narrow waist, full body, standing, cowboy shot, arms down, plain background",
+      "face": true,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_06_fullbody_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v2_07_two_char",
+      "prompt_id": "0522ed0a-9b48-4c37-9b7c-ad5c27dee7f8",
+      "baseline": "13",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 2girls, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, both huge breasts, cleavage, between breasts, underboob shadow, narrow waist, bikini, beach, standing, hands at sides",
+      "face": true,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_07_two_char_00001_.png"
+      ],
+      "status": "success"
+    },
+    {
+      "label": "v2_08_burst",
+      "prompt_id": "92d2e3c8-b7d3-47ef-9f70-1de05fab4b63",
+      "baseline": "10",
+      "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest, absurdres, highres, 1girl, solo, mature female, adult, long blonde hair, blue eyes, curvy, wide hips, collarbone, gigantic breasts, cleavage, between breasts, underboob shadow, narrow waist, torn clothes, bursting breasts, taut fabric, fabric stretched, stress folds, gaping shirt, strained buttons, button gap, flying button, surprised, breast expansion, hands raised",
+      "face": false,
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\TS_v2_08_burst_00001_.png"
+      ],
+      "status": "success"
+    }
+  ]
+}

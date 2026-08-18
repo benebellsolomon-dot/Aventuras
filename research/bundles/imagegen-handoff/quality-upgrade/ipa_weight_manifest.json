@@ -1,0 +1,108 @@
+{
+  "tiers": [
+    0,
+    8,
+    20,
+    33,
+    45,
+    50
+  ],
+  "frames": [
+    {
+      "weight": 0.6,
+      "tier": 0,
+      "label": "IPAW_w60_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w60_t0_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.6,
+      "tier": 8,
+      "label": "IPAW_w60_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w60_t8_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.6,
+      "tier": 20,
+      "label": "IPAW_w60_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w60_t20_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.6,
+      "tier": 33,
+      "label": "IPAW_w60_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w60_t33_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.6,
+      "tier": 45,
+      "label": "IPAW_w60_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w60_t45_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.6,
+      "tier": 50,
+      "label": "IPAW_w60_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w60_t50_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.7,
+      "tier": 0,
+      "label": "IPAW_w70_t0",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w70_t0_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.7,
+      "tier": 8,
+      "label": "IPAW_w70_t8",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w70_t8_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.7,
+      "tier": 20,
+      "label": "IPAW_w70_t20",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w70_t20_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.7,
+      "tier": 33,
+      "label": "IPAW_w70_t33",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w70_t33_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.7,
+      "tier": 45,
+      "label": "IPAW_w70_t45",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w70_t45_00001_.png"
+      ]
+    },
+    {
+      "weight": 0.7,
+      "tier": 50,
+      "label": "IPAW_w70_t50",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\IPAW_w70_t50_00001_.png"
+      ]
+    }
+  ]
+}

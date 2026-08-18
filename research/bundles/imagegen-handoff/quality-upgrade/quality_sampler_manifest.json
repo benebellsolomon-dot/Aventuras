@@ -1,0 +1,62 @@
+{
+  "hires": "4x-AnimeSharp 1.5x d0.4",
+  "seed": 333,
+  "frames": [
+    {
+      "id": "ea_normal",
+      "note": "euler_ancestral / normal",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_ea_normal_00001_.png"
+      ]
+    },
+    {
+      "id": "2m_karras",
+      "note": "dpmpp_2m / karras",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_2m_karras_00001_.png"
+      ]
+    },
+    {
+      "id": "2msde_karras",
+      "note": "dpmpp_2m_sde / karras",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_2msde_karras_00001_.png"
+      ]
+    },
+    {
+      "id": "3msde_karras",
+      "note": "dpmpp_3m_sde / karras",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_3msde_karras_00001_.png"
+      ]
+    },
+    {
+      "id": "resms_karras",
+      "note": "res_multistep / karras",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_resms_karras_00001_.png"
+      ]
+    },
+    {
+      "id": "2mcfgpp_karras",
+      "note": "dpmpp_2m_cfg_pp / karras",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_2mcfgpp_karras_00001_.png"
+      ]
+    },
+    {
+      "id": "euler_normal",
+      "note": "euler / normal",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_euler_normal_00001_.png"
+      ]
+    },
+    {
+      "id": "2m_sgm",
+      "note": "dpmpp_2m / sgm_uniform",
+      "files": [
+        "D:\\LLM\\ComfyUI_windows_portable\\ComfyUI\\output\\QSAMP_2m_sgm_00001_.png"
+      ]
+    }
+  ]
+}
