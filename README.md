@@ -4,6 +4,8 @@
 
 Aventuras is a desktop and mobile interactive fiction application offering multiple story modes (Adventure Mode, Creative Writing Mode), deep AI integration via major providers, an advanced Memory System, dynamic Lorebook, and an autonomous Lore Management Agent. The app provides a robust set of writing tools and world tracking features, ensuring contextually rich and coherent AI-generated narratives.
 
+It also includes a customizable prompt-pack system, per-story content controls, multi-provider image generation with per-character visual consistency, and an optional adult transformation engine — all described below.
+
 ## Features
 
 ### Story Modes
@@ -64,16 +66,43 @@ Aventuras is a desktop and mobile interactive fiction application offering multi
 - Initial state configuration (protagonist, locations, items)
 - Opening scene text support
 
+### Prompt Packs
+
+- Preset packs bundle the narrative/system prompt templates (LiquidJS) used for generation, assignable per story
+- Custom pack variables and per-entity runtime variables (character/location/item/story-beat) surfaced in prompts
+- Per-story custom system prompt override (Liquid-enabled), with a live variable reference
+- Import/export packs as `.prompt.json`
+- "Start from" a bundled starter pack when creating a pack (see the Transformation Engine below)
+
+### Content & Narrative Control
+
+- **Content rating** per story (standard / mature / explicit) that injects matching content guidance into the narrative prompt
+- **Post-history instructions** — Liquid-enabled directives injected after the story history, immediately before generation (the strongest steering position)
+- Per-story POV, tense, tone, and writing-style controls
+
 ### Image Generation
 
-- Embedded image generation in story entries (inline `<pic>` tags or AI-powered scene detection)
-- Structured prompt build order (rating → camera → character count → isolated per-character descriptions → environment) with anti-bleed rules for multi-character scenes
-- Automatic prompt dialect per model: Danbooru tags + quality prefix + negative prompts for anime tag models (Illustrious/Pony/NoobAI), natural language for LLM-encoder models
-- Per-character locked identity tag banks (hand-curated or AI-generated from the character description) copied verbatim into every prompt
-- Character portraits and sprite anchors as img2img references for visual consistency
-- Providers: NanoGPT, ComfyUI (incl. IPAdapter identity workflow), A1111, OpenAI, Google, OpenRouter, Pollinations, and more
-- Per-character LoRA binding (trigger words + tier-scaled weights on ComfyUI)
-- Selectable art styles (Classic Anime default) and configurable image sizes up to 2048x2048
+- Embedded inline images (`<pic>` tags), AI-detected "agentic" scene illustration, character portraits, and background images
+- Structured prompt build order (rating → camera → character count → isolated per-character descriptions → environment) with **anti-bleed multi-character rules** (count tag, per-character clauses with spatial anchors)
+- Automatic **prompt dialect** per model: Danbooru tags + quality prefix + default and size-aware negative prompts for anime tag models (Illustrious/Pony/NoobAI), natural language for LLM-encoder models
+- **Per-character image-tag bank** — curated (or AI-generated from the character description) physical-only identity tags that lock a character's look across every generated image
+- **Per-character LoRA** — trigger words injected into prompts (all providers) plus a LoRA file whose weight can scale with the transformation tier (ComfyUI)
+- Character portraits and sprite anchors as img2img references for visual consistency (ComfyUI runs them through a bundled IPAdapter identity workflow)
+- Multiple providers: ComfyUI, A1111/Forge, OpenAI, Google, OpenRouter, NanoGPT, Chutes, Zhipu, Pollinations (any LoRA-capable local backend supported through ComfyUI)
+- Visual-novel sprite engine (banded per-character sprite sets with expression cells) and optional visual-prose (HTML/CSS) output
+- Selectable art styles (Classic Anime default), configurable image sizes, and per-task profiles (main / portrait / reference / sprite)
+
+### Transformation Engine (Adult, Optional)
+
+An opt-in, per-story engine for adult transformation-themed (breast-expansion) storytelling. Disabled by default; enable it in Story Settings.
+
+- Deterministic body-state reducer: the classifier proposes transformation **events** each turn and a reducer applies them, keeping a canonical size **tier** as the single source of truth (cup letters, bands, and prose are derived, never stored)
+- Gated growth with cooldown, growth-pressure, size-lock, and per-story growth cosmology/pacing
+- Soft states (transformation attitude, arousal, fluids) proposed by the classifier and clamped
+- `[BODY STATE]` and `[BE GENRE RULES]` blocks injected into the narrative prompt so the engine (not world lore) is the authority on when and how much growth happens
+- Frame baseline (height/build) auto-seeded from character descriptions; frame weight, band, and measurements derive from it
+- Size grounding for images (exact-tier bridge markers, body-relative size anchors above band saturation, graduated engorgement cues, size-aware negative prompts), banded sprite sets, and tier-scaled LoRA weighting all read from the engine
+- A bundled **"Breast Expansion (NSFW)"** prompt pack (a prose-craft companion) can be created from the "Start from" option in the pack creator
 
 ### Save and Restore
 
@@ -155,6 +184,8 @@ Available `npm run` scripts:
 - `build`: Build for production
 - `check`: Run `svelte-check` (type checking)
 - `check:watch`: Watch mode type checking
+- `test`: Run the unit test suite (`vitest run`)
+- `test:watch`: Run tests in watch mode (`vitest`)
 - `tauri`: Tauri CLI commands
 - `release`: Run release script (`node scripts/release.js`)
 - `lint`: Run ESLint
@@ -163,9 +194,14 @@ Available `npm run` scripts:
 
 ### Tests
 
-**Current Status**: No test suite is currently configured.
+Unit tests run on **Vitest** (`npm test`). Coverage is focused on the pure engine and
+image-pipeline logic — the transformation reducer/ladder/drift, prompt assembly, LoRA
+binding, identity-tag resolution, and sprite hashing.
 
-- TODO: Add testing framework (e.g., Vitest/Playwright) and configure tests.
+```bash
+npm test          # run once
+npm run test:watch  # watch mode
+```
 
 ### Environment Variables
 

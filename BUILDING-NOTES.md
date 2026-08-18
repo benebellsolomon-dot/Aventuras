@@ -25,6 +25,23 @@ On Node 26, `vite build` dies with `Maximum call stack size exceeded` while its
 - Inline image instructions require full character re-description per prompt
   (`NarrativeService.ts`).
 - Self-updater disabled (`tauri.conf.json`: no `plugins.updater`,
-  `createUpdaterArtifacts: false`, version `0.7.6-be.1`) so upstream releases can't
+  `createUpdaterArtifacts: false`, version `0.7.6-be.21`) so upstream releases can't
   overwrite local patches. The Settings "check for updates" button errors — expected.
   To take an upstream release: fetch upstream, rebase `be-patches`, rebuild.
+- **Transformation engine** (`src/lib/services/be/`): deterministic body-state reducer
+  over a canonical size `tier`, classifier event extraction, `[BODY STATE]`/`[BE GENRE
+  RULES]` prompt injection, banded sprite engine. Opt-in per story (`beMode`).
+- **Content controls** (`StorySettings`): `contentRating` (standard/mature/explicit) and
+  Liquid `postHistoryInstructions`, injected in the narrative pipeline
+  (`NarrativeService.ts`, `contentGuidelines.ts`).
+- **Bundled prompt packs** (`src/lib/services/packs/bundled/`): `createBundledPack` +
+  "Start from" selector; ships a Breast Expansion starter pack.
+- **Per-character image identity**: `imageTags` bank (migration 038) overrides derived
+  identity tags; `loraConfig` (migration 039) adds trigger words + tier-scaled LoRA.
+  Applied across all image paths via the shared `image/inlineAssembly.ts`.
+- **Anti-bleed multi-character image prompts** (inline image instructions in
+  `NarrativeService.ts`).
+- Tests: Vitest suite added (`npm test`).
+
+> Note: `be-patches` has been merged into local `master` (merge commit; not pushed —
+> `origin`/`upstream` push URLs are intentionally `DISABLED`).
