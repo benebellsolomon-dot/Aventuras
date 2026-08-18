@@ -1078,6 +1078,7 @@ class AIService {
       stylePrompt,
       narrativeText: scene.sourceText ?? '',
       providerType: getImageProfile(profileId)?.providerType,
+      model: modelToUse,
     })
 
     const { width, height } = parseImageSize(sizeToUse)

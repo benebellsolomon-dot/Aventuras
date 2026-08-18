@@ -67,4 +67,41 @@ describe('assembleInlineImage', () => {
     })
     expect(result.loraOverride?.name).toBe('lucy.safetensors')
   })
+
+  it('uses the booru quality prefix and drops the prose style for booru models', () => {
+    const result = assembleInlineImage({
+      ...BASE,
+      presentCharacters: [],
+      tagPrompt: '1girl, solo, red hair',
+      tagCharacters: [],
+      model: 'wai-illustrious-sdxl',
+    })
+    expect(result.fullPrompt).toBe(
+      'masterpiece, best quality, highly detailed, 1girl, solo, red hair',
+    )
+  })
+
+  it('keeps the prose style for non-booru models', () => {
+    const result = assembleInlineImage({
+      ...BASE,
+      presentCharacters: [],
+      tagPrompt: 'a cozy kitchen',
+      tagCharacters: [],
+      model: 'z-image-turbo',
+    })
+    expect(result.fullPrompt).toBe('a cozy kitchen. STYLE')
+  })
+
+  it('emits the size-band marker only for providers that parse it', () => {
+    const input = {
+      ...BASE,
+      presentCharacters: [],
+      tagPrompt: 'a woman with huge breasts in a garden',
+      tagCharacters: [],
+    }
+    const bridge = assembleInlineImage({ ...input, providerType: 'si-bridge' as const })
+    const nano = assembleInlineImage({ ...input, providerType: 'nanogpt' as const })
+    expect(bridge.fullPrompt).toMatch(/^__betier_\d+__ /)
+    expect(nano.fullPrompt).not.toContain('__betier_')
+  })
 })

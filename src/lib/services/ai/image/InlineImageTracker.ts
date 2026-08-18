@@ -148,6 +148,7 @@ export class InlineImageTracker {
       stylePrompt,
       narrativeText: narrativeSoFar,
       providerType: profile.providerType,
+      model: modelToUse,
     })
     if (bridgeSpec) {
       log('Built si-bridge structured spec', {

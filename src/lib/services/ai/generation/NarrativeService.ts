@@ -18,6 +18,8 @@ import { StyleReviewerService } from './StyleReviewerService'
 import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
 import { stripPicTags } from '$lib/utils/inlineImageParser'
+import { settings } from '$lib/stores/settings.svelte'
+import { detectPromptDialect } from '../image/dialect'
 import type { StreamChunk } from '../core/types'
 import type {
   Story,
@@ -36,11 +38,12 @@ import type { TimelineFillResult } from '../retrieval/TimelineFillService'
 const log = createLogger('Narrative')
 
 /**
- * Full instruction text for inline image generation via <pic> tags.
+ * Full instruction text for inline image generation via <pic> tags — PROSE
+ * dialect (LLM-class text encoders: Krea, Flux, plain SDXL).
  * Injected into ContextBuilder when inlineImageMode is enabled on a story.
  * Templates reference this via {{ inlineImageInstructions }}.
  */
-const INLINE_IMAGE_INSTRUCTIONS = `<InlineImages>
+const INLINE_IMAGE_INSTRUCTIONS_PROSE = `<InlineImages>
 You can embed images directly in your narrative using the <pic> tag. Images will be generated automatically where you place these tags.
 
 **TAG FORMAT:**
@@ -89,6 +92,99 @@ Elena drew her blade, firelight dancing along the steel edge as she faced the cr
 - Pick the single most striking moment of the response to illustrate: dramatic reveals, emotional peaks, action climaxes, new locations, character moments — or, failing those, the response's main visual beat
 - Density target: a good prompt is DETAILED — roughly 400-700 characters for one character, 600-1000 for multiple characters. Never exceed 1200 characters
 </InlineImages>`
+
+/**
+ * Full instruction text for inline image generation via <pic> tags — BOORU
+ * dialect (anime tag models: Illustrious, Pony, NoobAI, ...). These models
+ * follow comma-separated booru tags far more reliably than prose: count tags
+ * control how many characters render, tag order controls emphasis.
+ */
+const INLINE_IMAGE_INSTRUCTIONS_BOORU = `<InlineImages>
+You can embed images directly in your narrative using the <pic> tag. Images will be generated automatically where you place these tags. The image model is a booru-tag anime model: prompts are comma-separated Danbooru-style tags, NOT prose sentences.
+
+**TAG FORMAT:**
+<pic prompt="[comma-separated booru tags]" characters="[character names]"></pic>
+
+**ATTRIBUTES:**
+- \`prompt\` (REQUIRED): Comma-separated booru tags describing the full scene. **MUST ALWAYS BE IN ENGLISH** regardless of the narrative language.
+- \`characters\` (optional): Comma-separated names of characters appearing in the image (for portrait reference).
+
+**USAGE GUIDELINES:**
+- Place <pic> tags AFTER the prose that describes the scene they illustrate
+- CADENCE: include ONE <pic> tag in every response as a rule — illustrate the most visually notable moment, even in quiet scenes (a look, a location, a small gesture all qualify). Use 2-3 only for major set-pieces. Omit the tag only when the response contains nothing visual at all (pure abstract exposition). The detailed build order below is NOT a reason to skip an image — a routine moment still gets its full prompt
+
+**PROMPT BUILD ORDER — every prompt follows these sections in this EXACT order. Do NOT rearrange or skip sections:**
+
+SECTION 1 — Rating: the prompt's first words are always a content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content).
+
+SECTION 2 — Camera: shot-type tags — wide shot / cowboy shot / upper body / close-up / portrait — plus an angle tag when it strengthens the moment: from below, from above, from behind, from side, dutch angle, pov. Match the camera to the emotional tone.
+
+SECTION 3 — Character count: the booru count tag for exactly who is in frame — "1girl, solo", "2girls", "1boy, 1girl", "3girls". This tag CONTROLS how many people render — never omit it, never contradict it.
+
+SECTION 4 — Characters:
+  - SINGLE character: a flat comma-separated tag run covering age bracket (mature female, young woman...), race/species if not human, hair length/style/color, eye color, skin tone, body type, breast size band (females — see below), clothing tags AND their state (torn shirt, open jacket, straining buttons), facial expression tag, pose/action tags, held items.
+  - MULTIPLE characters (prevent feature-bleeding — this is where images fail): do NOT merge everyone into one tag list. Each character gets their OWN short natural-language sentence with booru tags embedded and a spatial anchor. Format: "On the left, a [age/species tag] with [hair tags], [eye tags], [skin tag], wearing [clothing tags], [expression tag], [pose tag]." Keep every trait inside its owner's sentence.
+- Re-describe each character IN FULL in every prompt — the image model cannot see the story, previous images, or other prompts.
+
+SECTION 5 — Scene tags (always last): location tags (indoors, outdoors, bedroom, forest, castle interior, night city...), time-of-day tags (day, night, sunset, dawn), lighting tags (sunlight, golden hour, volumetric lighting, rim lighting, backlighting, dramatic shadow, moonlight, firelight, neon lights), atmosphere tags (rain, mist, dust particles, embers, depth of field, bokeh).
+
+**RATING AND BODY WORDS (required in every prompt):**
+- For every female character, ALWAYS state her current breast size using one of these bands, matching the story's canon: flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts — body-size continuity is critical
+- Use concrete visual tags, not abstractions: "torn apron, popped buttons" not "clothes in disarray"
+- Do NOT add art-style or quality tags ("masterpiece", "best quality", "anime style", "realistic") — quality tags are prepended automatically and duplicates hurt the result
+
+**EXAMPLES (note the section order — rating, camera, count, characters, scene):**
+The dragon descended from the storm clouds, its obsidian scales gleaming with each flash of lightning.
+<pic prompt="general, wide shot, from below, no humans, dragon, black scales, glowing amber eyes, spread wings, open mouth, descending, storm clouds, lightning, rain, ruined castle, night, dark, dramatic shadow" characters=""></pic>
+
+Elena drew her blade, firelight dancing along the steel edge as she faced the creature.
+<pic prompt="sensitive, cowboy shot, dutch angle, 1girl, solo, young woman, long hair, braided ponytail, red hair, green eyes, fair skin, freckles, athletic build, medium breasts, leather armor, fingerless gloves, determined expression, clenched jaw, drawing sword, glowing sword, fighting stance, castle interior, great hall, night, firelight, torches, dramatic shadow, embers" characters="Elena"></pic>
+
+The two women faced each other across the kitchen table, the argument hanging in the air between them.
+<pic prompt="general, medium shot, 2girls. On the left, a tall mature woman with long wavy red hair, green eyes, fair skin, large breasts, wearing an emerald dress, angry expression, hands on hips. On the right, a petite young woman with short black bob, dark eyes, olive skin, small breasts, wearing a rumpled white blouse, scowling, arms crossed. kitchen, indoors, table, afternoon, window light, warm lighting" characters="Marta, Yuki"></pic>
+
+**CRITICAL RULES:**
+- **PROMPTS MUST BE IN ENGLISH** - Image generation models only understand English prompts.
+- The prompt must be a COMPLETE scene description - never reference the story text
+- Never place <pic> tags in the middle of a sentence - always after the descriptive prose
+- Pick the single most striking moment of the response to illustrate
+- Density target: 30-45 tags for a single character, more for multiple characters. Comma-separated tags ONLY except the per-character sentences in multi-character scenes
+- Booru tags are for <pic> prompts ONLY — never let tag formatting leak into your narrative prose
+</InlineImages>`
+
+/**
+ * Locked per-character identity tags (Kazuma-style): when a character has a
+ * curated image-tag bank, the prompt-writing LLM copies it verbatim instead of
+ * re-deriving appearance from prose — this is what keeps a character looking
+ * like themselves across images.
+ */
+function buildCharacterIdentityTagBlock(characters: Character[]): string {
+  const withTags = characters.filter((c) => (c.imageTags ?? '').trim().length > 0)
+  if (withTags.length === 0) return ''
+  const lines = withTags.map(
+    (c) => `- ${c.name}: ${(c.imageTags ?? '').replace(/\s*\n+\s*/g, ', ').trim()}`,
+  )
+  return `
+**CHARACTER IDENTITY TAGS (locked — copy verbatim):**
+When any of these characters appears in a <pic> prompt, copy their tags into that prompt EXACTLY as written — never alter, paraphrase, or contradict them. Add clothing, expression, and pose on top. These tags are for <pic> prompts ONLY, never for narrative prose.
+${lines.join('\n')}
+`
+}
+
+/**
+ * Select the dialect-appropriate inline-image instructions and append the
+ * locked identity tags for the characters present in the scene.
+ */
+export function buildInlineImageInstructions(
+  dialect: 'prose' | 'booru',
+  characters: Character[],
+): string {
+  const base =
+    dialect === 'booru' ? INLINE_IMAGE_INSTRUCTIONS_BOORU : INLINE_IMAGE_INSTRUCTIONS_PROSE
+  const tagBlock = buildCharacterIdentityTagBlock(characters)
+  if (!tagBlock) return base
+  return base.replace('</InlineImages>', `${tagBlock}</InlineImages>`)
+}
 
 /**
  * Full instruction text for visual prose mode (HTML/CSS formatting).
@@ -450,7 +546,14 @@ export class NarrativeService {
     // via {{ inlineImageInstructions }} and {{ visualProseInstructions }}
     const preRenderContext = ctx.getContext()
     if (preRenderContext.inlineImageMode) {
-      ctx.add({ inlineImageInstructions: INLINE_IMAGE_INSTRUCTIONS })
+      const imageSettings = settings.systemServicesSettings.imageGeneration
+      const imageModel = settings.getImageProfile(imageSettings.profileId ?? '')?.model ?? ''
+      ctx.add({
+        inlineImageInstructions: buildInlineImageInstructions(
+          detectPromptDialect(imageModel),
+          worldState.characters,
+        ),
+      })
     }
     if (preRenderContext.visualProseMode) {
       ctx.add({ visualProseInstructions: VISUAL_PROSE_INSTRUCTIONS })

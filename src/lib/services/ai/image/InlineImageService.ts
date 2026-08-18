@@ -178,6 +178,7 @@ export class InlineImageGenerationService {
       stylePrompt,
       narrativeText: context.narrativeContent,
       providerType: activeProviderType,
+      model: modelToUse,
     })
     if (bridgeSpec) {
       log('Built si-bridge structured spec', {

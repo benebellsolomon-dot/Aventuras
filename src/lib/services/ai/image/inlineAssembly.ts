@@ -17,6 +17,7 @@ import {
   uniformBodyStateTier,
 } from '$lib/services/be'
 import { sizeBandMarker } from './sizeBandMarker'
+import { detectPromptDialect, BOORU_QUALITY_PREFIX } from './dialect'
 import { maybeBuildBridgeSpec } from './bridgeSpec'
 import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
@@ -37,6 +38,8 @@ export interface InlineAssemblyInput {
   narrativeText: string
   /** Active image provider (gates si-bridge spec assembly). */
   providerType?: ImageProviderType
+  /** Image model id — selects the prompt dialect (booru vs prose). */
+  model?: string
 }
 
 export interface InlineAssemblyResult {
@@ -85,7 +88,18 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
     loraOverride = resolveLora(taggedChars[0].loraConfig, soloTier) ?? undefined
   }
 
-  const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
+  // The __betier__ marker is only parsed by si-bridge (native) and the a1111
+  // shim — every other provider would receive it as literal garbage tokens.
+  const markerConsumers: ReadonlyArray<ImageProviderType | undefined> = ['si-bridge', 'a1111']
+  const marker = markerConsumers.includes(input.providerType) ? sizeBandMarker(groundedPrompt) : ''
+
+  // Booru-trained models (Illustrious/Pony/...) get a tag quality prefix and NO
+  // prose style block — a flowing style paragraph degrades tag adherence.
+  const dialect = detectPromptDialect(input.model)
+  const fullPrompt =
+    dialect === 'booru'
+      ? `${marker}${BOORU_QUALITY_PREFIX}, ${groundedPrompt}`
+      : `${marker}${groundedPrompt}. ${stylePrompt}`
 
   const bridgeSpec =
     maybeBuildBridgeSpec({

@@ -14,6 +14,7 @@ import type {
   ImageModelInfo,
 } from './types'
 import { imageFetch, imageGetFetch } from './fetchAdapter'
+import { detectPromptDialect, BOORU_DEFAULT_NEGATIVE } from '../dialect'
 
 const DEFAULT_BASE_URL = 'https://nano-gpt.com/api/v1'
 const MODELS_ENDPOINT = 'https://nano-gpt.com/api/models'
@@ -37,6 +38,15 @@ export function createNanoGPTProvider(config: ImageProviderConfig): ImageProvide
         prompt,
         width: width || 1024,
         height: height || 1024,
+      }
+
+      // Booru/SD-family models take a negative prompt; profile config wins,
+      // with a sensible anti-artifact default for booru models.
+      const configuredNegative = (config.providerOptions?.negativePrompt as string) || ''
+      const negativePrompt =
+        configuredNegative || (detectPromptDialect(model) === 'booru' ? BOORU_DEFAULT_NEGATIVE : '')
+      if (negativePrompt) {
+        body.negative_prompt = negativePrompt
       }
 
       // img2img: pass reference as imageDataUrl
