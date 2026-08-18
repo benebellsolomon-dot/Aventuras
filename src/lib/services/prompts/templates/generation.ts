@@ -46,7 +46,36 @@ Avoid choices like "Wait and see" or "Do nothing" - each option should lead to m
 - action: Physical actions (fight, take, use, give, etc.)
 - dialogue: Speaking to someone
 - examine: Looking at or investigating something
-- move: Going somewhere or leaving`,
+- move: Going somewhere or leaving
+{% if checkTaggingInstruction and checkTaggingInstruction != '' %}
+{{ checkTaggingInstruction }}
+{% endif %}`,
+}
+
+const riskAssessPromptTemplate: PromptTemplate = {
+  id: 'risk-assess',
+  name: 'Risk Assess',
+  category: 'service',
+  description: 'Decides whether a free-text player action warrants a skill check, and which',
+  content: `You are the rules adjudicator for an RPG. Given the player's typed action, decide whether it carries a REAL chance of failure that a d20 skill check should resolve. Routine, safe, or purely conversational actions are NOT risky. Judge from the fiction, not player convenience. Answer with structured output only.`,
+  userContent: `## Player
+{{ playerSheetSummary }}
+
+## Scene
+Location: {{ currentLocation }}
+Characters present: {{ npcsPresent }}
+
+## Player's typed action
+"""
+{{ userActionText }}
+"""
+
+## Task
+Decide: is this action risky enough to deserve a skill check?
+- risky=false for: talking, observing, trivial movement, anything with no meaningful failure mode.
+- risky=true needs: a governing skill and a DC. DC rubric: 8 trivial-but-fumblable · 11 easy · 14 moderate · 17 hard · 20 very hard · 24 near-impossible.
+- If the action channels the player's catalytic power (growth influence, transformation magic), set essenceCost 1-3 by potency.
+- When the action targets a specific character, set targetCharacter to her exact name.`,
 }
 
 const timelineFillPromptTemplate: PromptTemplate = {
@@ -89,6 +118,7 @@ Provide a concise, factual answer based only on the chapter content above. If th
 
 export const generationTemplates: PromptTemplate[] = [
   actionChoicesPromptTemplate,
+  riskAssessPromptTemplate,
   timelineFillPromptTemplate,
   timelineFillAnswerPromptTemplate,
 ]

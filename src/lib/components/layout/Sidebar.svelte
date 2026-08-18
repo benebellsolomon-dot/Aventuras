@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ui } from '$lib/stores/ui.svelte'
   import { settings } from '$lib/stores/settings.svelte'
+  import { story } from '$lib/stores/story.svelte'
   import {
     Users,
     MapPin,
@@ -8,11 +9,16 @@
     Scroll,
     Clock,
     GitBranch,
+    Dices,
+    Heart,
     BookOpen,
     BookMarked,
     Brain,
   } from 'lucide-svelte'
   import CharacterPanel from '$lib/components/world/CharacterPanel.svelte'
+  import SheetPanel from '$lib/components/world/SheetPanel.svelte'
+  import HaremPanel from '$lib/components/world/HaremPanel.svelte'
+  import { readRpgSheet } from '$lib/services/rpg'
 
   import LocationPanel from '$lib/components/world/LocationPanel.svelte'
   import InventoryPanel from '$lib/components/world/InventoryPanel.svelte'
@@ -25,7 +31,7 @@
   import * as Tabs from '$lib/components/ui/tabs'
   import { Button } from '$lib/components/ui/button'
 
-  const tabs = [
+  const baseTabs = [
     { id: 'characters' as const, icon: Users, label: 'Characters' },
     { id: 'locations' as const, icon: MapPin, label: 'Locations' },
     { id: 'inventory' as const, icon: Backpack, label: 'Inventory' },
@@ -33,6 +39,35 @@
     { id: 'time' as const, icon: Clock, label: 'Time' },
     { id: 'branches' as const, icon: GitBranch, label: 'Branches' },
   ]
+
+  // The RPG Sheet tab exists only in BE-mode stories (research/47 Step 12).
+  // Derived so the swipe handlers below always index the live array.
+  const isBeMode = $derived(story.currentStory?.settings?.beMode === true)
+  const tabs = $derived(
+    isBeMode
+      ? [
+          ...baseTabs,
+          { id: 'sheet' as const, icon: Dices, label: 'Sheet' },
+          { id: 'harem' as const, icon: Heart, label: 'Harem' },
+        ]
+      : baseTabs,
+  )
+
+  // If beMode flips off while a BE-only tab is active, land somewhere real.
+  $effect(() => {
+    if (!isBeMode && (ui.sidebarTab === 'sheet' || ui.sidebarTab === 'harem')) {
+      ui.setSidebarTab('characters')
+    }
+  })
+
+  // Badge the Sheet tab when a level-up left points to spend.
+  const hasUnspentPoints = $derived.by(() => {
+    if (!isBeMode) return false
+    const protagonist = story.characters.find((c) => c.relationship === 'self')
+    if (!protagonist) return false
+    const sheet = readRpgSheet(protagonist.metadata)
+    return !!sheet && sheet.unspentPoints.attribute + sheet.unspentPoints.skill > 0
+  })
 
   function handleSwipeLeft() {
     // Navigate to next tab
@@ -85,7 +120,12 @@
             class="data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-muted/30 hover:bg-muted/20 text-muted-foreground flex-1 rounded-none border-b-2 border-transparent bg-transparent py-3 transition-colors"
             title={tab.label}
           >
-            <tab.icon class="h-4 w-4" />
+            <span class="relative inline-flex">
+              <tab.icon class="h-4 w-4" />
+              {#if tab.id === 'sheet' && hasUnspentPoints}
+                <span class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400"></span>
+              {/if}
+            </span>
           </Tabs.Trigger>
         {/each}
       </Tabs.List>
@@ -111,6 +151,14 @@
       <Tabs.Content value="branches" class="mt-0 h-full space-y-4">
         <BranchPanel />
       </Tabs.Content>
+      {#if isBeMode}
+        <Tabs.Content value="sheet" class="mt-0 h-full space-y-4">
+          <SheetPanel />
+        </Tabs.Content>
+        <Tabs.Content value="harem" class="mt-0 h-full space-y-4">
+          <HaremPanel />
+        </Tabs.Content>
+      {/if}
     </div>
   </Tabs.Root>
 

@@ -37,6 +37,7 @@ export {
 export { SuggestionsService } from './SuggestionsService'
 
 export { ActionChoicesService } from './ActionChoicesService'
+export { RiskAssessService } from './RiskAssessService'
 
 // Style analysis
 export {

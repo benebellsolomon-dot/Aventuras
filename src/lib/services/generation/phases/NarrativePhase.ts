@@ -21,6 +21,7 @@ import type {
 import type { Story, StoryEntry } from '$lib/types'
 import type { StyleReviewResult } from '$lib/services/ai/generation/StyleReviewerService'
 import type { StreamChunk } from '$lib/services/ai/core/types'
+import type { CheckRecord } from '$lib/services/rpg'
 
 const MAX_EMPTY_RESPONSE_RETRIES = 3
 
@@ -35,6 +36,7 @@ export interface NarrativeDependencies {
     retrievedContext: string | null | undefined,
     signal: AbortSignal | undefined,
     timelineFillResult: RetrievalResult['timelineFillResult'],
+    pendingCheck?: CheckRecord | null,
   ) => AsyncIterable<StreamChunk>
 }
 
@@ -46,6 +48,8 @@ export interface NarrativeInput {
   retrievalResult: RetrievalResult
   styleReview: StyleReviewResult | null | undefined
   abortSignal?: AbortSignal
+  /** Resolved RPG check for this turn (CheckPhase output), if any. */
+  pendingCheck?: CheckRecord | null
 }
 
 /** Result from narrative phase */
@@ -68,6 +72,7 @@ export class NarrativePhase {
     yield { type: 'phase_start', phase: 'narrative' } satisfies PhaseStartEvent
 
     const { visibleEntries, worldState, story, retrievalResult, styleReview, abortSignal } = input
+    const pendingCheck = input.pendingCheck ?? null
     let fullResponse = ''
     let fullReasoning = ''
     let chunkCount = 0
@@ -93,6 +98,7 @@ export class NarrativePhase {
           retrievalResult.combinedContext,
           abortSignal,
           retrievalResult.timelineFillResult,
+          pendingCheck,
         )) {
           if (abortSignal?.aborted) {
             yield { type: 'aborted', phase: 'narrative' } satisfies AbortedEvent

@@ -6,13 +6,15 @@
  * inputs (state, events, config, seed, extras) → same outputs, which is what
  * keeps retries/undo replay-safe. No Date.now, no Math.random.
  *
- * Pinned pipeline order (Spec 1, research/37 — each step reads the prior
+ * Pinned pipeline order (Spec 1 + research/48 — each step reads the prior
  * step's output; auto-conditions MUST read post-tick fill or Engorged lags):
  *   1. decay conditions          2. cooldown tick
  *   3. land pendingGrowth        4. apply softState
- *   5. passive fill tick         6. events loop (anticipation split)
- *   7. pressure accrual/pity     8. conditions: derive + classifier merge
- *   9. drift note
+ *   5. passive fill tick         6. events loop (quirk-adjusted, anticipation split)
+ *   7. tracks: bond + exposure/dependence + attitude pull
+ *   8. pressure accrual/pity (quirk-scaled)
+ *   9. conditions: derive (Engorged, Withdrawal) + classifier merge
+ *   10. drift note
  */
 
 import {
@@ -20,7 +22,6 @@ import {
   ENGORGED_FILL_THRESHOLD,
   ENGORGED_TTL,
   GROWTH_DELTA_BY_OUTCOME,
-  INTENSITY_ROLL_BONUS,
   MAX_BE_CONDITIONS,
   MILKING_DRAIN_PER_INTENSITY,
   OVERFILL_ADD_BASE,
@@ -29,9 +30,24 @@ import {
   PRESSURE_CAP,
   PRESSURE_FIRE,
   PRESSURE_RELEASE,
-  ROLL_BANDS,
   fluidProfile,
 } from './constants'
+import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
+import { measurements } from './measurements'
+import { INTERACTION_MILESTONES } from './milestones'
+import { hasQuirk } from './quirks'
+import {
+  applyBondEvents,
+  applyExposure,
+  bondOf,
+  decayDependence,
+  dependenceOf,
+  withdrawalCondition,
+} from './tracks'
+import { CRAVING_PULL_DEPENDENCE } from './constants'
+
+// Re-export: pre-extraction callers (and tests) import seededRoll from here.
+export { seededRoll } from './roll'
 import type {
   BeEvent,
   BeLogRecord,
@@ -39,7 +55,9 @@ import type {
   BeStoryConfig,
   BodyCondition,
   BodyState,
+  BondEvent,
   DriftFinding,
+  ExposureEvent,
   GrowthOutcome,
   ReducerResult,
 } from './types'
@@ -49,27 +67,6 @@ const GROWTH_KINDS = new Set(['catalyst', 'contact', 'attempt'])
 /** Dry outcomes accrue escalator pressure. `ineligible` is deliberately absent —
  * pity-firing growth the story's canon forbids would recreate the research/41 bug. */
 const DRY_OUTCOMES = new Set<GrowthOutcome>(['fail', 'partial', 'cooldown', 'muzzled'])
-
-const clampIntensity = (value: number): number =>
-  Number.isFinite(value) ? Math.min(3, Math.max(1, Math.round(value))) : 1
-
-/** FNV-1a 32-bit hash → deterministic d20 roll for a seed string. */
-export function seededRoll(seed: string): number {
-  let hash = 0x811c9dc5
-  for (let i = 0; i < seed.length; i++) {
-    hash ^= seed.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return ((hash >>> 0) % 20) + 1
-}
-
-function resolveOutcome(roll: number, intensity: number): GrowthOutcome {
-  const total = roll + (clampIntensity(intensity) - 1) * INTENSITY_ROLL_BONUS
-  if (total >= ROLL_BANDS.critical) return 'critical'
-  if (total >= ROLL_BANDS.success) return 'success'
-  if (total >= ROLL_BANDS.partial) return 'partial'
-  return 'fail'
-}
 
 function decayConditions(conditions: ReadonlyArray<BodyCondition>): BodyCondition[] {
   const next: BodyCondition[] = []
@@ -100,6 +97,10 @@ export interface ReducerExtras {
    * time (decay, cooldown) but never change size unseen. Default true.
    */
   ticksEnabled?: boolean
+  /** Classifier-proposed bond movement this turn (research/48; velocity-capped). */
+  bondEvents?: ReadonlyArray<BondEvent>
+  /** Classifier-proposed catalyst exposure this turn (research/48; gain-capped). */
+  exposureEvents?: ReadonlyArray<ExposureEvent>
 }
 
 /**
@@ -132,20 +133,41 @@ export function reduceCharacterBody(
   let dryBeats = 0
   const ticksEnabled = extras?.ticksEnabled !== false
 
+  // Quirk flags (research/48 Step 3 hook table). Phase-3 quirks (early_bloomer,
+  // pressure_prone) are deliberately never read here — data-only until the
+  // lactation axis lands (R10).
+  const isFastMetabolizer = hasQuirk(state, 'fast_metabolizer')
+  const isSlowBurn = hasQuirk(state, 'slow_burn')
+  const isGreedyFlesh = hasQuirk(state, 'greedy_flesh')
+  const isStubbornFrame = hasQuirk(state, 'stubborn_frame')
+  const isDevotedHeart = hasQuirk(state, 'devoted_heart')
+  const isNeedyNipples = hasQuirk(state, 'needy_nipples')
+
   /** Land growth (cap-clamped): merges into lastGrowth, arms cooldown. Returns the landed delta. */
   const landGrowth = (want: number): number => {
     let delta = want
     if (config.sizeCapTier !== null) {
       delta = Math.min(delta, Math.max(0, config.sizeCapTier - tier))
     }
+    // stubborn_frame's "tier never drifts down" is a forward guard — no negative
+    // path exists today; the <= 0 return below already enforces it for everyone.
     if (delta <= 0) return 0
     lastGrowth = lastGrowth
       ? { delta: lastGrowth.delta + delta, tierBefore: lastGrowth.tierBefore }
       : { delta, tierBefore: tier }
     tier += delta
-    cooldown = Math.max(0, Math.floor(config.growthCooldownBeats))
+    // greedy_flesh: her body recovers a beat faster.
+    cooldown = Math.max(0, Math.floor(config.growthCooldownBeats) - (isGreedyFlesh ? 1 : 0))
     grewThisTurn = true
     return delta
+  }
+
+  /** Quirk-adjusted event intensity (fast_metabolizer +1 on catalyst; stubborn_frame −1). */
+  const adjustedIntensity = (event: BeEvent): number => {
+    let value = clampIntensity(event.intensity)
+    if (isFastMetabolizer && event.kind === 'catalyst') value += 1
+    if (isStubbornFrame) value -= 1
+    return clampIntensity(value)
   }
 
   // ---- Step 1: condition decay (exactly once, before derivation re-upserts) ----
@@ -166,14 +188,29 @@ export function reduceCharacterBody(
 
   // ---- Step 3: land the anticipation remainder (locked or off-screen holds it staged) ----
   if (pendingGrowth && !state.locked && ticksEnabled) {
+    const tierBeforeLand = tier
     const landed = landGrowth(pendingGrowth.delta)
+    // slow_burn: her delayed growth lingers — when the land crosses an
+    // interaction milestone, it settles one tier deeper (research/48 hook table).
+    let slowBurnBonus = 0
+    if (isSlowBurn && landed > 0) {
+      const massBefore = measurements({ ...state, tier: tierBeforeLand }).nowTotalKg
+      const massAfter = measurements({ ...state, tier }).nowTotalKg
+      const crossed = INTERACTION_MILESTONES.some(
+        (m) => massBefore < m.massKg && massAfter >= m.massKg,
+      )
+      if (crossed) slowBurnBonus = landGrowth(1)
+    }
     log.push({
       character: characterName,
       kind: 'pending',
       outcome: landed > 0 ? 'success' : 'none',
-      delta: landed,
+      delta: landed + slowBurnBonus,
       tierAfter: tier,
-      note: landed > 0 ? `anticipation lands +${landed}` : 'capped out',
+      note:
+        landed > 0
+          ? `anticipation lands +${landed}${slowBurnBonus > 0 ? ` (+${slowBurnBonus} slow burn)` : ''}`
+          : 'capped out',
     })
     pendingGrowth = undefined
   }
@@ -186,7 +223,11 @@ export function reduceCharacterBody(
       moodNotes.push(`attitude→${attitude}`)
     }
     if (softState.arousal !== undefined) {
-      const next = Math.round(clampPercent(softState.arousal))
+      // needy_nipples: arousal climbs faster — but ONLY upward; a scene that
+      // calms her still calms her.
+      const proposed = Math.round(clampPercent(softState.arousal))
+      const rising = proposed > (arousal ?? 0)
+      const next = rising && isNeedyNipples ? Math.round(clampPercent(proposed + 10)) : proposed
       if (next !== arousal) {
         arousal = next
         moodNotes.push(`arousal→${next}`)
@@ -226,9 +267,9 @@ export function reduceCharacterBody(
     fillPercent = next
   }
 
-  // ---- Step 6: events (roll → capped delta, anticipation split at threshold) ----
+  // ---- Step 6: events (quirk-adjusted roll → capped delta, anticipation split) ----
   events.forEach((event, index) => {
-    const intensity = clampIntensity(event.intensity)
+    const intensity = adjustedIntensity(event)
 
     if (event.kind === 'stabilize') {
       pendingGrowth = undefined
@@ -310,12 +351,19 @@ export function reduceCharacterBody(
     }
 
     const roll = seededRoll(`${seed}:${index}`)
-    const outcome = resolveOutcome(roll, intensity)
+    const outcome = resolveGrowthOutcome(roll, intensity)
     const bandDelta = GROWTH_DELTA_BY_OUTCOME[outcome] ?? 0
     let landed = 0
 
     if (bandDelta > 0) {
-      if (bandDelta >= ANTICIPATION_THRESHOLD) {
+      if (isSlowBurn) {
+        // slow_burn: nothing lands now — the WHOLE delta stages for next
+        // turn's step 3, where the milestone-crossing bonus may deepen it.
+        // ACCUMULATE within the turn: a second growth event must not silently
+        // drop the first event's staged delta (prior turn's pending already
+        // landed and cleared at step 3, so this only ever sums this turn).
+        pendingGrowth = { delta: (pendingGrowth?.delta ?? 0) + bandDelta, source: event.kind }
+      } else if (bandDelta >= ANTICIPATION_THRESHOLD) {
         // Two-beat anticipation: land half now, stage the remainder for the
         // next turn's step 3 (re-clamped against the cap at land time).
         const landNow = Math.floor(bandDelta / 2)
@@ -335,12 +383,75 @@ export function reduceCharacterBody(
       outcome,
       delta: landed,
       tierAfter: tier,
-      note: `roll ${roll} @i${intensity}`,
+      note: `roll ${roll} @i${intensity}${isSlowBurn && bandDelta > 0 ? ' (slow burn: staged)' : ''}`,
     })
   })
 
-  // ---- Step 7: growth-pressure escalator ----
-  growthPressure += PRESSURE_ACCRUAL * dryBeats
+  // ---- Step 7: harem tracks — bond, exposure/dependence, attitude pull ----
+  // Track fields materialize only when something moves them (research/48 risk 7:
+  // no eager default writes; read-through defaults live in tracks.ts).
+  let bond = state.bond
+  let dependence = state.dependence
+  let beatsSinceExposure = state.beatsSinceExposure
+  const bondEvents = extras?.bondEvents ?? []
+  const exposureEvents = extras?.exposureEvents ?? []
+
+  if (bondEvents.length > 0) {
+    // devoted_heart: +1 per event, folded in BEFORE the velocity cap binds.
+    const result = applyBondEvents(bondOf(state), bondEvents, isDevotedHeart ? 1 : 0)
+    if (result.delta !== 0) bond = result.value
+    log.push({
+      character: characterName,
+      kind: 'bond',
+      outcome: 'none',
+      delta: 0,
+      tierAfter: tier,
+      note: `${result.delta >= 0 ? '+' : ''}${result.delta} → ${result.value}${result.capped ? ' (velocity-capped)' : ''}`,
+    })
+  }
+
+  if (exposureEvents.length > 0) {
+    const result = applyExposure(dependenceOf(state), exposureEvents)
+    if (result.delta !== 0) dependence = result.value
+    beatsSinceExposure = 0
+    log.push({
+      character: characterName,
+      kind: 'exposure',
+      outcome: 'none',
+      delta: 0,
+      tierAfter: tier,
+      note: `+${result.delta} → ${result.value}${result.capped ? ' (gain-capped)' : ''}`,
+    })
+  } else if (ticksEnabled && dependenceOf(state) > 0) {
+    // Idle beat: decay + the withdrawal clock. The dependence > 0 guard is
+    // load-bearing — without it every untouched girl gets a write per turn
+    // (research/48 risk 4).
+    const decayed = decayDependence(dependenceOf(state))
+    if (decayed !== dependenceOf(state)) dependence = decayed
+    beatsSinceExposure = (state.beatsSinceExposure ?? 0) + 1
+  }
+
+  // Craving pull: heavy dependence colors an attitude-less turn. An explicit
+  // classifier attitude always wins.
+  const effectiveDependence = dependence ?? dependenceOf(state)
+  if (
+    effectiveDependence >= CRAVING_PULL_DEPENDENCE &&
+    !softState?.attitude &&
+    attitude !== 'craving'
+  ) {
+    attitude = 'craving'
+    log.push({
+      character: characterName,
+      kind: 'mood',
+      outcome: 'none',
+      delta: 0,
+      tierAfter: tier,
+      note: 'attitude→craving (dependence pull)',
+    })
+  }
+
+  // ---- Step 8: growth-pressure escalator (greedy_flesh accrues faster) ----
+  growthPressure += PRESSURE_ACCRUAL * (isGreedyFlesh ? 1.5 : 1) * dryBeats
   // Overfill couples through growthFactor ALONE (review ruling B1): a neutral
   // fluid (milk, gf 0) saturates quietly and the state converges — only
   // growth-coupled fluids feed the intentional FIL loop, at registry strength.
@@ -353,7 +464,7 @@ export function reduceCharacterBody(
   } else if (ticksEnabled && growthPressure >= PRESSURE_FIRE && !state.locked && cooldown === 0) {
     // One non-guaranteed pity roll, then reset regardless (fire-once-then-reset).
     const roll = seededRoll(`${seed}:pressure`)
-    const outcome = resolveOutcome(roll, 1)
+    const outcome = resolveGrowthOutcome(roll, 1)
     const landed = outcome === 'success' || outcome === 'critical' ? landGrowth(1) : 0
     log.push({
       character: characterName,
@@ -366,7 +477,7 @@ export function reduceCharacterBody(
     growthPressure = 0
   }
 
-  // ---- Step 8: conditions — derived from POST-tick fill, then classifier merge ----
+  // ---- Step 9: conditions — derived from POST-tick fill/tracks, then classifier merge ----
   // Label matching is case-insensitive throughout (a classifier "engorged" must
   // not duplicate the derived "Engorged"; effectiveSupport lowercases too).
   const sameLabel = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
@@ -375,6 +486,28 @@ export function reduceCharacterBody(
     // carried conditions already sit at the limit (review finding S1).
     const engorged: BodyCondition = { label: 'Engorged', ttl: ENGORGED_TTL }
     conditions = [engorged, ...conditions.filter((c) => !sameLabel(c.label, 'Engorged'))]
+  }
+  // Withdrawal (research/48 R8): front-inserted like Engorged so the cap slice
+  // can never evict it; re-upserted every turn the condition holds.
+  // (The local is initialized from state, so a single ?? 0 covers the unset case.)
+  const withdrawal = withdrawalCondition(
+    effectiveDependence,
+    beatsSinceExposure ?? 0,
+    isDevotedHeart,
+  )
+  if (withdrawal) {
+    const isNew = !conditions.some((c) => sameLabel(c.label, 'Withdrawal'))
+    conditions = [withdrawal, ...conditions.filter((c) => !sameLabel(c.label, 'Withdrawal'))]
+    if (isNew) {
+      log.push({
+        character: characterName,
+        kind: 'withdrawal',
+        outcome: 'none',
+        delta: 0,
+        tierAfter: tier,
+        note: `dependence ${effectiveDependence}, ${beatsSinceExposure ?? 0} beats without exposure`,
+      })
+    }
   }
   if (extras?.softConditions) {
     for (const candidate of extras.softConditions) {
@@ -396,7 +529,7 @@ export function reduceCharacterBody(
   }
   conditions = conditions.slice(0, MAX_BE_CONDITIONS)
 
-  // ---- Step 9: drift note (one-turn carrier; prior note expired above) ----
+  // ---- Step 10: drift note (one-turn carrier; prior note expired above) ----
   const driftNote =
     extras?.driftFindings && extras.driftFindings.length > 0
       ? { note: extras.driftFindings.map((f) => f.note).join('; ') }
@@ -419,6 +552,11 @@ export function reduceCharacterBody(
       // on the next readBodyState (all-or-nothing schema parse).
       growthPressure: Number.isFinite(growthPressure) ? growthPressure : 0,
       driftNote,
+      // Track fields spread conditionally: an untouched girl's state stays
+      // key-identical (the store's stringify no-op-write skip depends on it).
+      ...(bond !== undefined ? { bond } : {}),
+      ...(dependence !== undefined ? { dependence } : {}),
+      ...(beatsSinceExposure !== undefined ? { beatsSinceExposure } : {}),
     },
     log,
   }

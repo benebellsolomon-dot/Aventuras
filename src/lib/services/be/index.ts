@@ -73,7 +73,16 @@ export {
   sizingString,
   weightFeel,
 } from './measurements'
-export { reduceCharacterBody, seededRoll } from './reducer'
+export { reduceCharacterBody } from './reducer'
+export {
+  CRIT_MARGIN,
+  CRIT_NAT,
+  PARTIAL_MISS_WINDOW,
+  resolveCheckBand,
+  resolveGrowthOutcome,
+  seededRoll,
+  type CheckBand,
+} from './roll'
 export {
   beConditionSchema,
   beConditionsFromResult,
@@ -81,11 +90,45 @@ export {
   beEventsFromResult,
   beSoftStateSchema,
   beSoftStatesFromResult,
+  bondEventSchema,
+  bondEventsFromResult,
   buildBeEventInstructions,
+  exposureEventSchema,
+  exposureEventsFromResult,
   extendClassificationSchemaWithBeEvents,
   type BeCharacterCondition,
 } from './schema'
-export { buildBeStateBlock, type BeStateEntry } from './context'
+export {
+  buildBeStateBlock,
+  buildHaremStateBlock,
+  HAREM_STATE_HEADER,
+  type BeStateEntry,
+} from './context'
+export {
+  applyBondEvents,
+  applyExposure,
+  bondCheckModifier,
+  bondOf,
+  bondStance,
+  clampTrack,
+  decayDependence,
+  dependenceOf,
+  dependenceStage,
+  withdrawalCondition,
+  type BondStance,
+  type DependenceStage,
+  type TrackDelta,
+} from './tracks'
+export {
+  assignQuirks,
+  hasQuirk,
+  QUIRK_BY_ID,
+  QUIRK_IDS,
+  QUIRKS,
+  readQuirks,
+  type QuirkDef,
+  type QuirkId,
+} from './quirks'
 export { detectDrift } from './drift'
 export { INTERACTION_MILESTONES, nextMilestone, type InteractionMilestone } from './milestones'
 export {

@@ -9,6 +9,7 @@
   import { type ImageGenerationContext } from '$lib/services/ai'
   import { hasRequiredCredentials, getProviderDisplayName } from '$lib/services/ai/image'
   import { TranslationService } from '$lib/services/ai/utils/TranslationService'
+  import type { CheckRecord } from '$lib/services/rpg'
   import {
     Send,
     Wand2,
@@ -261,6 +262,7 @@
         ),
       getRelevantLorebookEntries: aiService.getRelevantLorebookEntries.bind(aiService),
       streamNarrative: aiService.streamNarrative.bind(aiService),
+      assessRisk: aiService.assessRisk.bind(aiService),
       classifyResponse: aiService.classifyResponse.bind(aiService),
       translateNarration: aiService.translateNarration.bind(aiService),
       generateImagesForNarrative: (ctx) =>
@@ -540,14 +542,22 @@
         disableSuggestions: settings.uiSettings.disableSuggestions,
         activeThreads: story.pendingQuests,
         cachedRetrievalResult: options?.cachedRetrievalResult ?? null,
+        pendingChoiceTag: ui.pendingChoiceTag,
       }
+      // Consumed for this turn; CheckPhase text-matches it against the actual
+      // submitted action, so a stale/edited tag falls back to risk assessment.
+      ui.clearPendingChoiceTag()
 
       const deps = buildPipelineDependencies()
       const pipeline = new GenerationPipeline(deps)
+      // Every turn starts with a clean check slate — a card stranded by a
+      // stopped/failed previous turn must not bleed into this one.
+      ui.setPendingCheckRecord(null)
 
       let fullResponse = ''
       let fullReasoning = ''
       let narrationEntry: Awaited<ReturnType<typeof story.addEntry>> | null = null
+      let resolvedCheck: CheckRecord | null = null
 
       const eventState: PipelineEventState = {
         fullResponse: () => fullResponse,
@@ -603,6 +613,12 @@
 
         handleEvent(event, eventState, eventCallbacks)
 
+        if (event.type === 'check_resolved') {
+          // Surface the roll card immediately, before narration streams.
+          resolvedCheck = event.record
+          ui.setPendingCheckRecord(event.record)
+        }
+
         if (event.type === 'phase_complete' && event.phase === 'retrieval') {
           const retrievalResult = event.result as RetrievalResult | undefined
           ui.setLastLorebookRetrieval(retrievalResult?.lorebookRetrievalResult ?? null)
@@ -638,7 +654,10 @@
             messageId: narrationEntry.id,
             result: event.result,
           })
-          await story.applyClassificationResult(event.result, narrationEntry.id)
+          await story.applyClassificationResult(event.result, narrationEntry.id, resolvedCheck)
+          // The persisted delta now carries the checkLog; the transient card
+          // handoff is done.
+          ui.setPendingCheckRecord(null)
           await story.updateEntryTimeEnd(narrationEntry.id)
 
           if (currentStoryRef.settings?.imageGenerationMode !== 'none') {

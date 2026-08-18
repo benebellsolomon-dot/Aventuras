@@ -80,6 +80,22 @@ export interface BodyState {
   growthPressure?: number
   /** One-turn drift-correction carrier (Spec 1 Task 6; cleared by the next reduce). */
   driftNote?: { note: string }
+  /**
+   * Relationship/trust track 0-100 (research/46 §2.3 — the D2 model, ruled in
+   * as Phase 2). Read through tracks.ts bondOf() so an unset field defaults
+   * without an eager write.
+   */
+  bond?: number
+  /** Catalyst dependence/addiction track 0-100 (research/46 §2.3). */
+  dependence?: number
+  /**
+   * Mechanical trait ids assigned deterministically at seed time (quirks.ts).
+   * Stored as strings so unknown future ids survive an older reader; narrowed
+   * at read time via readQuirks().
+   */
+  quirks?: string[]
+  /** Beats since her last exposure event — the withdrawal clock (research/48 R8). */
+  beatsSinceExposure?: number
 }
 
 /** Classifier-extracted event kinds (research/31 §2.2). The LLM proposes EVENTS, not values. */
@@ -105,6 +121,25 @@ export interface BeSoftState {
   fluidFill?: number
 }
 
+/**
+ * Classifier-proposed bond movement (research/48 Step 4). Direction is a named
+ * enum, not a signed number — strain must be a first-class choice the model
+ * makes, and coercion can't sign-flip it.
+ */
+export interface BondEvent {
+  character: string
+  direction: 'warm' | 'strain'
+  /** 1 (a small moment) — 3 (scene-defining). Clamped by the reducer. */
+  intensity: number
+}
+
+/** Classifier-proposed catalyst exposure (dependence intake) for one character. */
+export interface ExposureEvent {
+  character: string
+  /** 1 (trace dose) — 3 (heavy/prolonged). Clamped by the reducer. */
+  intensity: number
+}
+
 export type GrowthOutcome =
   | 'critical'
   | 'success'
@@ -121,7 +156,17 @@ export type GrowthOutcome =
  */
 export interface BeLogRecord {
   character: string
-  kind: BeEventKind | 'decay' | 'seed' | 'mood' | 'fill' | 'pressure' | 'pending'
+  kind:
+    | BeEventKind
+    | 'decay'
+    | 'seed'
+    | 'mood'
+    | 'fill'
+    | 'pressure'
+    | 'pending'
+    | 'bond'
+    | 'exposure'
+    | 'withdrawal'
   outcome: GrowthOutcome
   delta: number
   tierAfter: number

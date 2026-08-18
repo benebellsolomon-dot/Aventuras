@@ -41,6 +41,7 @@ import type {
 } from '$lib/types'
 import type { StyleReviewResult } from './StyleReviewerService'
 import type { TimelineFillResult } from '../retrieval/TimelineFillService'
+import { buildCheckResultBlock, type CheckRecord } from '$lib/services/rpg'
 
 const log = createLogger('Narrative')
 
@@ -390,6 +391,9 @@ export interface NarrativeOptions {
   signal?: AbortSignal
   /** Timeline fill result for Q&A injection */
   timelineFillResult?: TimelineFillResult | null
+  /** Resolved RPG check for this turn — rendered as the immutable [CHECK
+   * RESULT] block dead last in the user prompt (research/47 Step 6). */
+  pendingCheck?: CheckRecord | null
 }
 
 /**
@@ -422,8 +426,14 @@ export class NarrativeService {
     story?: Story | null,
     options: NarrativeOptions = {},
   ): AsyncIterable<StreamChunk> {
-    const { tieredContextBlock, styleReview, retrievedChapterContext, signal, timelineFillResult } =
-      options
+    const {
+      tieredContextBlock,
+      styleReview,
+      retrievedChapterContext,
+      signal,
+      timelineFillResult,
+      pendingCheck,
+    } = options
 
     log('stream', {
       entriesCount: entries.length,
@@ -446,7 +456,13 @@ export class NarrativeService {
     // Build the user prompt from entries
     const mode = story?.mode ?? 'adventure'
     const inlineImageMode = story?.settings?.imageGenerationMode === 'inline'
-    const userPrompt = this.buildUserPrompt(entries, mode, inlineImageMode, postHistoryBlock)
+    const userPrompt = this.buildUserPrompt(
+      entries,
+      mode,
+      inlineImageMode,
+      postHistoryBlock,
+      pendingCheck ?? null,
+    )
 
     try {
       // Stream using the main narrative profile
@@ -656,6 +672,7 @@ export class NarrativeService {
     mode: 'adventure' | 'creative-writing',
     inlineImageMode: boolean = false,
     postHistoryBlock: string = '',
+    pendingCheck: CheckRecord | null = null,
   ): string {
     // Use all entries passed - these are already the visible (non-summarized) entries
     // Truncation/context management happens upstream via the memory system
@@ -698,6 +715,13 @@ export class NarrativeService {
 
     if (postHistoryBlock) {
       prompt += `[Narrative Directives]\n${postHistoryBlock}\n\n`
+    }
+
+    // Resolved-check block goes DEAD LAST (research/47 Step 6): the volatile,
+    // authority-dominant fact the narration must honor sits closest to
+    // generation, after every stable/cacheable block.
+    if (pendingCheck) {
+      prompt += `${buildCheckResultBlock(pendingCheck)}\n\n`
     }
 
     prompt += 'Continue the narrative:'

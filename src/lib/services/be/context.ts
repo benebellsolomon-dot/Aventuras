@@ -22,6 +22,8 @@ import {
   measurements,
 } from './measurements'
 import { nextMilestone } from './milestones'
+import { QUIRK_BY_ID, readQuirks, type QuirkDef } from './quirks'
+import { bondOf, bondStance, dependenceOf, dependenceStage } from './tracks'
 import type { BodyState } from './types'
 
 export interface BeStateEntry {
@@ -150,6 +152,41 @@ function characterLines(entry: BeStateEntry): string {
  * Build the [BODY STATE] narrative block. Empty string when no character carries
  * bodyState — the template's `{% if beStateBlock != '' %}` gate then skips it.
  */
+export const HAREM_STATE_HEADER = '[HAREM STATE — canonical and authoritative]'
+
+/**
+ * Build the [HAREM STATE] block (research/48 Step 6): bond stance, dependence
+ * stage, and quirks per girl carrying any track field. Concatenated AFTER
+ * [BODY STATE] into the same beStateBlock context var (R9: no template edits;
+ * appending after preserves the cache prefix). Empty string when no entry
+ * carries a track field — a Phase-1 save renders nothing.
+ */
+export function buildHaremStateBlock(entries: BeStateEntry[]): string {
+  const tracked = entries.filter(
+    (e) =>
+      e.state.bond !== undefined ||
+      e.state.dependence !== undefined ||
+      (e.state.quirks?.length ?? 0) > 0,
+  )
+  if (tracked.length === 0) return ''
+  const lines = tracked.map((entry) => {
+    const parts: string[] = []
+    const bond = bondOf(entry.state)
+    parts.push(`bond: ${bondStance(bond)}`)
+    const dependence = dependenceOf(entry.state)
+    if (dependence > 0) parts.push(`dependence: ${dependenceStage(dependence)}`)
+    const quirkBlurbs = readQuirks(entry.state)
+      .map((id) => QUIRK_BY_ID.get(id))
+      .filter((def): def is QuirkDef => def !== undefined)
+      .map((def) => `${def.label.toLowerCase()} (${def.blurb})`)
+    if (quirkBlurbs.length > 0) parts.push(`quirks: ${quirkBlurbs.join('; ')}`)
+    return `${entry.name} — ${parts.join('. ')}.`
+  })
+  return `${HAREM_STATE_HEADER}
+These stances are engine-tracked. Prose may express them; it may not advance or reverse them — a girl does not become devoted because the scene wants her to, and dependence deepens only through actual exposure.
+${lines.join('\n')}`
+}
+
 export function buildBeStateBlock(entries: BeStateEntry[]): string {
   if (entries.length === 0) return ''
   const body = entries.map(characterLines).join('\n')

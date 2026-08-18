@@ -2,6 +2,7 @@
   import { ui } from '$lib/stores/ui.svelte'
   import { story } from '$lib/stores/story.svelte'
   import { BookOpen, Volume2, Pencil, Trash2 } from 'lucide-svelte'
+  import CheckCard from './CheckCard.svelte'
   import { parseMarkdown } from '$lib/utils/markdown'
   import ReasoningBlock from './ReasoningBlock.svelte'
   import { settings } from '$lib/stores/settings.svelte'
@@ -51,6 +52,10 @@
     ? 'bg-card/60 backdrop-blur-md'
     : 'bg-card'}"
 >
+  <!-- Resolved check: shown the moment CheckPhase lands, before narration -->
+  {#if ui.pendingCheckRecord}
+    <CheckCard record={ui.pendingCheckRecord} />
+  {/if}
   <!-- Header row -->
   <div class="mb-2 flex items-center gap-2">
     <BookOpen

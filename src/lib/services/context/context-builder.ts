@@ -14,10 +14,22 @@ import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
 import {
   buildBeGenreRules,
+  bondOf,
   buildBeStateBlock,
+  buildHaremStateBlock,
+  dependenceOf,
+  measurements,
   readBodyState,
   type BeStateEntry,
 } from '$lib/services/be'
+import {
+  buildCheckTaggingInstruction,
+  buildGatedActionsInstruction,
+  buildPlayerSheetBlock,
+  buildPlayerSheetSummary,
+  sheetOrDefault,
+  type GateInput,
+} from '$lib/services/rpg'
 import type { RenderResult } from './types'
 import type { Character, Location, Item, StoryBeat, Story } from '$lib/types'
 import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
@@ -99,6 +111,8 @@ export class ContextBuilder {
     builder.loadBeStateContext(story, characters)
     // BE engine: the static genre-rules pack (research/41 precedence contract)
     builder.loadBeGenreRules(story)
+    // RPG layer: player sheet block + service summaries (empty strings when off)
+    builder.loadRpgSheetContext(story, protagonist ?? null, characters)
 
     log('forStory complete', {
       storyId,
@@ -199,7 +213,11 @@ export class ContextBuilder {
           const state = readBodyState(character.metadata)
           if (state) entries.push({ name: character.name, state })
         }
-        beStateBlock = buildBeStateBlock(entries)
+        // [HAREM STATE] concatenates AFTER [BODY STATE] (research/48 R9): no
+        // template edit, and the cache prefix stays byte-identical.
+        beStateBlock = [buildBeStateBlock(entries), buildHaremStateBlock(entries)]
+          .filter(Boolean)
+          .join('\n\n')
       }
       this.add({ beStateBlock })
     } catch (error) {
@@ -227,6 +245,55 @@ export class ContextBuilder {
     } catch (error) {
       log('loadBeGenreRules failed', { error })
       this.add({ beGenreRules: '' })
+    }
+  }
+
+  /**
+   * RPG layer (research/47 Step 7): `playerSheetBlock` for the narrative system
+   * prompt plus `playerSheetSummary`/`checkTaggingInstruction` for service
+   * templates (action choices, risk assess). All empty strings when beMode is
+   * off or there is no protagonist. A BE story whose protagonist has no stored
+   * sheet yet renders the deterministic default — the layer works from turn 1.
+   */
+  private loadRpgSheetContext(
+    story: Story,
+    protagonist: Character | null,
+    characters: Character[] = [],
+  ): void {
+    try {
+      let playerSheetBlock = ''
+      let playerSheetSummary = ''
+      let checkTaggingInstruction = ''
+      if (story.settings?.beMode === true && protagonist) {
+        const sheet = sheetOrDefault(protagonist.metadata)
+        playerSheetBlock = buildPlayerSheetBlock(sheet, protagonist.name)
+        playerSheetSummary = buildPlayerSheetSummary(sheet)
+        // Gated interactions (research/48 Step 8) append into the SAME var
+        // (R9: no template edits).
+        const gateInputs: GateInput[] = []
+        for (const character of characters) {
+          if (character.relationship === 'self') continue
+          const state = readBodyState(character.metadata)
+          if (!state) continue
+          gateInputs.push({
+            name: character.name,
+            bond: bondOf(state),
+            dependence: dependenceOf(state),
+            massKg: measurements(state).nowTotalKg,
+            quirks: state.quirks ?? [],
+          })
+        }
+        checkTaggingInstruction = [
+          buildCheckTaggingInstruction(sheet),
+          buildGatedActionsInstruction(gateInputs),
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+      }
+      this.add({ playerSheetBlock, playerSheetSummary, checkTaggingInstruction })
+    } catch (error) {
+      log('loadRpgSheetContext failed', { error })
+      this.add({ playerSheetBlock: '', playerSheetSummary: '', checkTaggingInstruction: '' })
     }
   }
 
