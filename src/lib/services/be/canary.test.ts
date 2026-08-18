@@ -171,3 +171,66 @@ describe('cross-channel claims vs the mass/volume spine (research/38 C5, the #39
     expect(109 + bustDiffCm(82, 'natural', 0)).toBeCloseTo(178, 0)
   })
 })
+
+// ---- Phase 2 golden canary (research/48 Step 10): a full-turn fixture ----
+// A girl with two quirks takes a growth event, a bond event, and an exposure
+// event in ONE reduce. Asserts the exact end state so any accidental
+// step-order change in the reducer pipeline surfaces here first.
+import { DEFAULT_BE_STORY_CONFIG } from './constants'
+import { defaultBodyState } from './metadata'
+import { reduceCharacterBody } from './reducer'
+
+describe('Phase 2 full-turn canary', () => {
+  test('quirked girl: growth + bond + exposure in one reduce', () => {
+    const state = {
+      ...defaultBodyState(6),
+      quirks: ['fast_metabolizer', 'devoted_heart'],
+      bond: 40,
+      dependence: 58,
+      beatsSinceExposure: 2,
+    }
+    const config = { ...DEFAULT_BE_STORY_CONFIG, enabled: true, passiveFillEnabled: false }
+    // Seed chosen so the (i2 → fast_metabolizer i3) catalyst roll succeeds:
+    // seededRoll('p2-canary:0') = 14; i3 total 18 = critical (delta 2 splits).
+    const { state: next, log } = reduceCharacterBody(
+      state,
+      [{ character: 'Mira', kind: 'catalyst', intensity: 2 }],
+      config,
+      'p2-canary',
+      'Mira',
+      undefined,
+      {
+        bondEvents: [{ character: 'Mira', direction: 'warm', intensity: 2 }],
+        exposureEvents: [{ character: 'Mira', intensity: 2 }],
+      },
+    )
+    // Pin the observed goldens (harvested at implementation time; identical
+    // forever after — do NOT update to make a refactor pass).
+    expect({
+      tier: next.tier,
+      pendingGrowth: next.pendingGrowth ?? null,
+      bond: next.bond,
+      dependence: next.dependence,
+      beatsSinceExposure: next.beatsSinceExposure,
+      attitude: next.attitude ?? null,
+      cooldown: next.cooldown,
+      kinds: log.map((r) => r.kind),
+    }).toMatchInlineSnapshot(`
+      {
+        "attitude": "craving",
+        "beatsSinceExposure": 0,
+        "bond": 45,
+        "cooldown": 2,
+        "dependence": 62,
+        "kinds": [
+          "catalyst",
+          "bond",
+          "exposure",
+          "mood",
+        ],
+        "pendingGrowth": null,
+        "tier": 7,
+      }
+    `)
+  })
+})

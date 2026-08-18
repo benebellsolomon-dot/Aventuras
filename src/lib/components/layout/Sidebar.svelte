@@ -10,12 +10,14 @@
     Clock,
     GitBranch,
     Dices,
+    Heart,
     BookOpen,
     BookMarked,
     Brain,
   } from 'lucide-svelte'
   import CharacterPanel from '$lib/components/world/CharacterPanel.svelte'
   import SheetPanel from '$lib/components/world/SheetPanel.svelte'
+  import HaremPanel from '$lib/components/world/HaremPanel.svelte'
   import { readRpgSheet } from '$lib/services/rpg'
 
   import LocationPanel from '$lib/components/world/LocationPanel.svelte'
@@ -42,12 +44,20 @@
   // Derived so the swipe handlers below always index the live array.
   const isBeMode = $derived(story.currentStory?.settings?.beMode === true)
   const tabs = $derived(
-    isBeMode ? [...baseTabs, { id: 'sheet' as const, icon: Dices, label: 'Sheet' }] : baseTabs,
+    isBeMode
+      ? [
+          ...baseTabs,
+          { id: 'sheet' as const, icon: Dices, label: 'Sheet' },
+          { id: 'harem' as const, icon: Heart, label: 'Harem' },
+        ]
+      : baseTabs,
   )
 
-  // If beMode flips off while the Sheet tab is active, land somewhere real.
+  // If beMode flips off while a BE-only tab is active, land somewhere real.
   $effect(() => {
-    if (!isBeMode && ui.sidebarTab === 'sheet') ui.setSidebarTab('characters')
+    if (!isBeMode && (ui.sidebarTab === 'sheet' || ui.sidebarTab === 'harem')) {
+      ui.setSidebarTab('characters')
+    }
   })
 
   // Badge the Sheet tab when a level-up left points to spend.
@@ -144,6 +154,9 @@
       {#if isBeMode}
         <Tabs.Content value="sheet" class="mt-0 h-full space-y-4">
           <SheetPanel />
+        </Tabs.Content>
+        <Tabs.Content value="harem" class="mt-0 h-full space-y-4">
+          <HaremPanel />
         </Tabs.Content>
       {/if}
     </div>

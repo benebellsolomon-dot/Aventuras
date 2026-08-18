@@ -704,6 +704,7 @@ export type SidebarTab =
   | 'time'
   | 'branches'
   | 'sheet'
+  | 'harem'
 
 export interface UIState {
   activePanel: ActivePanel
