@@ -502,7 +502,10 @@
       const base64 = await sdkGeneratePortrait(portraitPrompt, {
         name: character.name,
         visualDescriptors: stringToDescriptors(editVisualDescriptors),
-        imageTags: editImageTags.trim() || character.imageTags || null,
+        // The editor draft is authoritative here (portrait is only generated
+        // from within the edit form): an emptied field means no bank, not "fall
+        // back to the saved value".
+        imageTags: editImageTags.trim() || null,
         metadata: character.metadata,
       })
 

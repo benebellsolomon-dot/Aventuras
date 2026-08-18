@@ -160,13 +160,16 @@ export function bridgeTierIndex(tier: number): number {
 
 function appearanceExcerpt(subject: BridgeSpecSubject): string | undefined {
   const d = subject.visualDescriptors
-  if (!d) return undefined
-  const joined = [d.face, d.hair, d.eyes, d.build, d.distinguishing]
+  const joined = [d?.face, d?.hair, d?.eyes, d?.build, d?.distinguishing]
     .map((part) => (part ?? '').trim())
     .filter((part) => part.length > 0)
     .join('; ')
-  if (!joined) return undefined
-  return joined.length > MAX_APPEARANCE_CHARS ? joined.slice(0, MAX_APPEARANCE_CHARS) : joined
+  // The bridge reads appearance_excerpt only for skin-tone inference. When a
+  // character relies on the image-tag bank and leaves descriptors empty, fall
+  // back to the bank text so skin tone is still recoverable from it.
+  const source = joined || (subject.imageTags ?? '').trim()
+  if (!source) return undefined
+  return source.length > MAX_APPEARANCE_CHARS ? source.slice(0, MAX_APPEARANCE_CHARS) : source
 }
 
 function growthMoments(state: { lastGrowth?: { delta: number } }): string[] {
