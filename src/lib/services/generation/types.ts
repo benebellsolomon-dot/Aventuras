@@ -15,12 +15,14 @@ import type {
   Entry,
 } from '$lib/types'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
+import type { CheckRecord } from '$lib/services/rpg'
 import type { TimelineFillResult } from '$lib/services/ai/retrieval'
 import type { EntryRetrievalResult } from '$lib/services/ai/retrieval/EntryRetrievalService'
 
 // Generation Phases
 export type GenerationPhase =
   | 'pre' // Retry state backup, time tracking init
+  | 'check' // RPG skill-check resolution (resolve-then-narrate)
   | 'retrieval' // Memory retrieval, lorebook retrieval
   | 'narrative' // Streaming narrative generation
   | 'classification' // World state extraction
@@ -90,6 +92,13 @@ export interface ClassificationCompleteEvent {
   result: ClassificationResult
 }
 
+/** Emitted the moment a check resolves — BEFORE narration streams — so the UI
+ * can render the roll card immediately (research/47 Step 6). */
+export interface CheckResolvedEvent {
+  type: 'check_resolved'
+  record: CheckRecord
+}
+
 export interface ErrorEvent {
   type: 'error'
   phase: GenerationPhase
@@ -108,5 +117,6 @@ export type GenerationEvent =
   | NarrativeChunkEvent
   | NarrativeCompleteEvent
   | ClassificationCompleteEvent
+  | CheckResolvedEvent
   | ErrorEvent
   | AbortedEvent

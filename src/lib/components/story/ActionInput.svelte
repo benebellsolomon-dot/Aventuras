@@ -261,6 +261,7 @@
         ),
       getRelevantLorebookEntries: aiService.getRelevantLorebookEntries.bind(aiService),
       streamNarrative: aiService.streamNarrative.bind(aiService),
+      assessRisk: aiService.assessRisk.bind(aiService),
       classifyResponse: aiService.classifyResponse.bind(aiService),
       translateNarration: aiService.translateNarration.bind(aiService),
       generateImagesForNarrative: (ctx) =>
@@ -540,7 +541,11 @@
         disableSuggestions: settings.uiSettings.disableSuggestions,
         activeThreads: story.pendingQuests,
         cachedRetrievalResult: options?.cachedRetrievalResult ?? null,
+        pendingChoiceTag: ui.pendingChoiceTag,
       }
+      // Consumed for this turn; CheckPhase text-matches it against the actual
+      // submitted action, so a stale/edited tag falls back to risk assessment.
+      ui.clearPendingChoiceTag()
 
       const deps = buildPipelineDependencies()
       const pipeline = new GenerationPipeline(deps)
@@ -602,6 +607,11 @@
         if (stopRequested) break
 
         handleEvent(event, eventState, eventCallbacks)
+
+        if (event.type === 'check_resolved') {
+          // Surface the roll card immediately, before narration streams.
+          ui.setPendingCheckRecord(event.record)
+        }
 
         if (event.type === 'phase_complete' && event.phase === 'retrieval') {
           const retrievalResult = event.result as RetrievalResult | undefined

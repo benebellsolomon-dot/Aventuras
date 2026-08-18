@@ -131,6 +131,9 @@ End with a natural opening for action, not a direct question.{% endif %}
 {% if beGenreRules != '' %}
 {{ beGenreRules }}
 {% endif %}
+{% if playerSheetBlock and playerSheetBlock != '' %}
+{{ playerSheetBlock }}
+{% endif %}
 
 {% if storyTime != '' %}
 [CURRENT STORY TIME]
@@ -306,6 +309,9 @@ End at a natural narrative beat.{% endif %}
 {% endif %}
 {% if beGenreRules != '' %}
 {{ beGenreRules }}
+{% endif %}
+{% if playerSheetBlock and playerSheetBlock != '' %}
+{{ playerSheetBlock }}
 {% endif %}
 
 {% if storyTime != '' %}

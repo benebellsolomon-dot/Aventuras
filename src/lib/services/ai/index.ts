@@ -81,6 +81,7 @@ import type {
 } from './generation'
 import { EntryRetrievalService, getEntryRetrievalConfigFromSettings } from './retrieval'
 import type { TimelineFillResult, EntryRetrievalResult, ActivationTracker } from './retrieval'
+import type { CheckRecord } from '$lib/services/rpg'
 import type {
   AgenticRetrievalResult,
   RetrievalContext as AgenticRetrievalContext,
@@ -209,6 +210,7 @@ class AIService {
     retrievedChapterContext?: string | null,
     signal?: AbortSignal,
     timelineFillResult?: TimelineFillResult | null,
+    pendingCheck?: CheckRecord | null,
   ): AsyncIterable<StreamChunk> {
     log('streamNarrative called', {
       entriesCount: entries.length,
@@ -239,7 +241,16 @@ class AIService {
       retrievedChapterContext,
       signal,
       timelineFillResult,
+      pendingCheck,
     })
+  }
+
+  /**
+   * Assess whether a free-text player action warrants a skill check
+   * (research/47 Step 5). Fails safe to not-risky inside the service.
+   */
+  assessRisk(storyId: string, actionText: string) {
+    return serviceFactory.createRiskAssessService().assess(storyId, actionText)
   }
 
   /**

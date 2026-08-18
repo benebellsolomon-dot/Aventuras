@@ -18,9 +18,13 @@ import type {
 import type { StoryMode, POV, Tense } from '$lib/types'
 import type { StyleReviewResult } from '$lib/services/ai/generation/StyleReviewerService'
 import type { ActivationTracker } from '$lib/services/ai/retrieval/EntryRetrievalService'
+import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
+import type { CheckRecord } from '$lib/services/rpg'
 import {
   PreGenerationPhase,
   RetrievalPhase,
+  CheckPhase,
+  type CheckDependencies,
   NarrativePhase,
   ClassificationPhase,
   TranslationPhase,
@@ -52,6 +56,7 @@ import { mergeGenerators } from '$lib/utils/async'
 export interface PipelineDependencies
   extends
     RetrievalDependencies,
+    CheckDependencies,
     NarrativeDependencies,
     BackgroundImageDependencies,
     ClassificationDependencies,
@@ -76,10 +81,13 @@ export interface PipelineConfig {
   disableSuggestions: boolean
   activeThreads: StoryBeat[]
   cachedRetrievalResult?: RetrievalResult | null
+  /** The clicked action choice's RPG tag, when this turn came from a choice. */
+  pendingChoiceTag?: ActionChoice | null
 }
 
 export interface PipelineResult {
   preGeneration: PreGenerationResult | null
+  check: CheckRecord | null
   narrative: NarrativeResult | null
   background: BackgroundImageResult | null
   classification: ClassificationPhaseResult | null
@@ -93,6 +101,7 @@ export interface PipelineResult {
 export class GenerationPipeline {
   private prePhase = new PreGenerationPhase()
   private retrievalPhase = new RetrievalPhase()
+  private checkPhase: CheckPhase
   private narrativePhase: NarrativePhase
   private backgroundPhase: BackgroundImagePhase
   private classificationPhase: ClassificationPhase
@@ -101,6 +110,7 @@ export class GenerationPipeline {
   private postPhase: PostGenerationPhase
 
   constructor(private deps: PipelineDependencies) {
+    this.checkPhase = new CheckPhase(deps)
     this.narrativePhase = new NarrativePhase(deps)
     this.backgroundPhase = new BackgroundImagePhase(deps)
     this.classificationPhase = new ClassificationPhase(deps)
@@ -115,6 +125,7 @@ export class GenerationPipeline {
   ): AsyncGenerator<GenerationEvent, PipelineResult> {
     const r: PipelineResult = {
       preGeneration: null,
+      check: null,
       narrative: null,
       background: null,
       classification: null,
@@ -132,6 +143,14 @@ export class GenerationPipeline {
         rawInput: cfg.rawInput,
         actionType: cfg.actionType,
         wasRawActionChoice: cfg.wasRawActionChoice,
+      })
+      if (ctx.abortSignal?.aborted) return { ...r, aborted: true }
+
+      // RPG check resolves BEFORE narration (resolve-then-narrate, research/47)
+      r.check = yield* this.checkPhase.execute({
+        context: ctx,
+        actionType: cfg.actionType,
+        choiceTag: cfg.pendingChoiceTag ?? null,
       })
       if (ctx.abortSignal?.aborted) return { ...r, aborted: true }
 
@@ -161,6 +180,7 @@ export class GenerationPipeline {
         retrievalResult: retrieval,
         styleReview: cfg.styleReview,
         abortSignal: ctx.abortSignal,
+        pendingCheck: r.check,
       })
       if (!r.narrative || ctx.abortSignal?.aborted) return { ...r, aborted: true }
 

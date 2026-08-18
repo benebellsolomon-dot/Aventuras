@@ -9,6 +9,9 @@ export type { RetryBackupData, PreGenerationResult, PreGenerationInput } from '.
 export { RetrievalPhase } from './RetrievalPhase'
 export type { RetrievalDependencies, RetrievalInput } from './RetrievalPhase'
 
+export { CheckPhase } from './CheckPhase'
+export type { CheckDependencies, CheckInput } from './CheckPhase'
+
 export { NarrativePhase } from './NarrativePhase'
 export type { NarrativeDependencies, NarrativeInput, NarrativeResult } from './NarrativePhase'
 

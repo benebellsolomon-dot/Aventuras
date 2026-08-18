@@ -15,6 +15,7 @@ import type {
   PersistentCharacterSnapshot,
 } from '$lib/types'
 import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
+import type { CheckRecord } from '$lib/services/rpg'
 import type { Suggestion } from '$lib/services/ai/sdk/schemas/suggestions'
 import type { StyleReviewResult } from '$lib/services/ai/generation/StyleReviewerService'
 import type {
@@ -940,6 +941,15 @@ class UIStore {
 
   clearPendingChoiceTag() {
     this.pendingChoiceTag = null
+  }
+
+  /** The turn-in-flight resolved check (set at check_resolved, cleared when the
+   * narration entry persists) — read by StreamingEntry to show the roll card
+   * before narration streams. */
+  pendingCheckRecord = $state<CheckRecord | null>(null)
+
+  setPendingCheckRecord(record: CheckRecord | null) {
+    this.pendingCheckRecord = record
   }
 
   // Suggestions methods (creative writing mode)

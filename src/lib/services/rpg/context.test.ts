@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  buildCheckResultBlock,
+  buildCheckTaggingInstruction,
+  buildPlayerSheetBlock,
+  buildPlayerSheetSummary,
+  CHECK_RESULT_HEADER,
+  PLAYER_SHEET_HEADER,
+} from './context'
+import { defaultRpgSheet } from './derive'
+import type { CheckRecord, RpgSheet } from './types'
+
+function sheet(): RpgSheet {
+  return {
+    ...defaultRpgSheet(),
+    level: 3,
+    attributes: { ...defaultRpgSheet().attributes, int: 16, cha: 8 },
+    skills: { alchemy: 2, seduction: 1 },
+    essence: { current: 6, max: 12 },
+  }
+}
+
+function record(overrides: Partial<CheckRecord> = {}): CheckRecord {
+  return {
+    action: 'Brew the catalyst',
+    skill: 'alchemy',
+    dc: 14,
+    nat: 15,
+    bonusBreakdown: { attribute: 3, ranks: 2, modifiers: [] },
+    bonus: 5,
+    total: 20,
+    margin: 6,
+    band: 'success',
+    essenceSpent: 2,
+    ...overrides,
+  }
+}
+
+describe('buildPlayerSheetBlock', () => {
+  it('header is the exact stable string, first line (cache-prefix contract)', () => {
+    const block = buildPlayerSheetBlock(sheet(), 'Ben')
+    expect(block.startsWith(`${PLAYER_SHEET_HEADER}\n`)).toBe(true)
+    expect(PLAYER_SHEET_HEADER).toBe('[PLAYER SHEET]')
+  })
+
+  it('renders signed mods, ranked skills, essence, and the anti-invention rule', () => {
+    const block = buildPlayerSheetBlock(sheet(), 'Ben')
+    expect(block).toContain('INT +3')
+    expect(block).toContain('CHA -1')
+    expect(block).toContain('Alchemy +5')
+    expect(block).toContain('Seduction +0') // CHA -1 + 1 rank
+    expect(block).toContain('Catalytic essence: 6/12.')
+    expect(block).toContain('Do not invent stats, skills, spells, or levels')
+  })
+
+  it('carries the one-turn continuity note when present', () => {
+    const s = { ...sheet(), driftNote: { note: 'Last turn credited an unknown spell.' } }
+    expect(buildPlayerSheetBlock(s, 'Ben')).toContain('[CONTINUITY] Last turn credited')
+  })
+})
+
+describe('buildCheckResultBlock', () => {
+  it('shows the full math, band directive, spend, and the immutability rule', () => {
+    const block = buildCheckResultBlock(record())
+    expect(block.startsWith(`${CHECK_RESULT_HEADER}\n`)).toBe(true)
+    expect(block).toContain('d20 15 +5 = 20 vs DC 14 → SUCCESS')
+    expect(block).toContain('Catalytic essence spent: 2.')
+    expect(block).toContain('already-resolved fact')
+  })
+
+  it.each(['crit', 'success', 'partial', 'fail'] as const)('band %s gets its directive', (band) => {
+    const block = buildCheckResultBlock(record({ band }))
+    const expectations = {
+      crit: 'Critical success',
+      success: 'Success:',
+      partial: 'Partial success',
+      fail: 'Failure:',
+    }
+    expect(block).toContain(expectations[band])
+  })
+
+  it('insufficient essence renders the not-attempted variant', () => {
+    const block = buildCheckResultBlock(
+      record({ insufficientEssence: true, nat: 0, essenceSpent: 0 }),
+    )
+    expect(block).toContain('NOT attempted — insufficient catalytic essence')
+    expect(block).not.toContain('d20 0')
+  })
+})
+
+describe('summaries and tagging instruction', () => {
+  it('summary is one line with level, mods, and essence', () => {
+    const summary = buildPlayerSheetSummary(sheet())
+    expect(summary).toContain('L3')
+    expect(summary).toContain('INT+3')
+    expect(summary).toContain('essence 6/12')
+    expect(summary).not.toContain('\n')
+  })
+
+  it('tagging instruction lists valid skill ids and the DC rubric', () => {
+    const instruction = buildCheckTaggingInstruction(sheet())
+    expect(instruction).toContain('alchemy (INT)')
+    expect(instruction).toContain('stealth (DEX)')
+    expect(instruction).toContain('DC rubric')
+    expect(instruction).toContain('essenceCost')
+  })
+})
