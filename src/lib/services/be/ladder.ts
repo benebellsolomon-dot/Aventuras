@@ -51,6 +51,31 @@ export function imageSizePhrase(tier: number): string {
 }
 
 /**
+ * Compact relative-size anchor for image prompts, keyed above the point where
+ * band vocabulary flattens (gigantic 30–39, hyper 40+∞ are single words for an
+ * unbounded range). Body-relative comparisons are what diffusion models
+ * actually render at these scales; "breasts bigger than head" is a real
+ * Danbooru tag, the rest read naturally in both dialects. Null below tier 30 —
+ * the band word alone is accurate there.
+ */
+const IMAGE_SIZE_ANCHORS: ReadonlyArray<readonly [number, string]> = [
+  [120, 'breasts larger than her entire body'],
+  [80, 'breasts bigger than her torso'],
+  [60, 'breasts wider than her shoulders'],
+  [48, 'breasts as large as her torso'],
+  [40, 'breasts wider than her hips'],
+  [30, 'breasts bigger than head'],
+]
+
+export function imageSizeAnchor(tier: number): string | null {
+  const t = clampTier(tier)
+  for (const [minTier, anchor] of IMAGE_SIZE_ANCHORS) {
+    if (t >= minTier) return anchor
+  }
+  return null
+}
+
+/**
  * Reverse map for card seeding: cup letter → first tier reaching it (derived
  * anchors). Doubled letters outside the canonical ladder (FF, GG, …) resolve to
  * their base letter's anchor. Null when unknown.
@@ -142,8 +167,14 @@ export function groundImagePromptSize(prompt: string, tier: number): string {
   const canonical = bandWord(tier)
   const hasBandWords = ALL_BAND_WORDS_PATTERN.test(prompt)
   ALL_BAND_WORDS_PATTERN.lastIndex = 0
-  if (hasBandWords) {
-    return prompt.replace(ALL_BAND_WORDS_PATTERN, canonical)
+  let grounded = hasBandWords
+    ? prompt.replace(ALL_BAND_WORDS_PATTERN, canonical)
+    : `${prompt.trimEnd().replace(/[.,]$/, '')}, ${canonical}`
+  // Above band saturation the single band word flattens an unbounded range —
+  // append the body-relative anchor so renders keep scaling with the tier.
+  const anchor = imageSizeAnchor(tier)
+  if (anchor && !grounded.toLowerCase().includes(anchor.toLowerCase())) {
+    grounded = `${grounded.trimEnd().replace(/[.,]$/, '')}, ${anchor}`
   }
-  return `${prompt.trimEnd().replace(/[.,]$/, '')}, ${canonical}`
+  return grounded
 }

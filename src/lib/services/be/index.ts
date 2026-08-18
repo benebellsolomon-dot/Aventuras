@@ -35,6 +35,7 @@ export {
   comparative,
   cupLetter,
   groundImagePromptSize,
+  imageSizeAnchor,
   imageSizePhrase,
   sniffTierFromText,
   tierForCupLetter,

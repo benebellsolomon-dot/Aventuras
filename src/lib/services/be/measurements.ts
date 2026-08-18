@@ -214,8 +214,16 @@ export function measurements(state: BodyState): BodyMeasurements {
  */
 export function imageStateCues(state: BodyState): string[] {
   const cues: string[] = []
-  if (state.fluids.fillPercent >= 75) {
+  const fill = state.fluids.fillPercent
+  // Graduated fill rungs — one cue, strongest wins (avoid prompt bloat).
+  if (fill >= 90) {
+    cues.push(
+      `breasts hugely engorged with ${state.fluids.fluidType}, skin stretched shiny-taut, visibly leaking`,
+    )
+  } else if (fill >= 75) {
     cues.push(`breasts visibly engorged, taut and heavy with ${state.fluids.fluidType}`)
+  } else if (fill >= 40) {
+    cues.push(`breasts subtly swollen with ${state.fluids.fluidType}, skin gently taut`)
   }
   if ((state.arousal ?? 0) >= 70) {
     cues.push('flushed, visibly aroused expression')

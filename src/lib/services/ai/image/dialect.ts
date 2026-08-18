@@ -8,6 +8,8 @@
  * Flux, DALL-E, plain SDXL finetunes) want natural language instead.
  */
 
+import { BAND_WORD_THRESHOLDS } from '$lib/services/be'
+
 export type PromptDialect = 'prose' | 'booru'
 
 /**
@@ -28,3 +30,25 @@ export const BOORU_QUALITY_PREFIX = 'masterpiece, best quality, highly detailed'
 /** Default negative prompt for booru models when the profile doesn't configure one. */
 export const BOORU_DEFAULT_NEGATIVE =
   'lowres, worst quality, low quality, bad anatomy, bad hands, extra digits, extra fingers, missing fingers, extra arms, extra limbs, fused fingers, jpeg artifacts, signature, watermark, username, artist name, text, speech bubble, blurry, bad proportions, cropped, multiple views'
+
+/**
+ * Size-aware negative: SD models constantly pull large sizes back toward
+ * defaults — suppressing the smaller band words is the standard counter.
+ * Derived from the band vocabulary already in the prompt (no tier plumbing
+ * needed): find the LARGEST band present, suppress every band two or more
+ * steps below it that is not itself in the prompt (multi-character scenes
+ * keep each character's own band renderable). Empty for small sizes or
+ * band-less prompts.
+ */
+export function sizeNegativeForPrompt(prompt: string): string {
+  const words = BAND_WORD_THRESHOLDS.map((row) => row.word)
+  const present = words.map((word) =>
+    new RegExp(`\\b${word.replace(/ /g, '[\\s,]+')}\\b`, 'i').test(prompt),
+  )
+  const largest = present.lastIndexOf(true)
+  if (largest < 2) return ''
+  return words
+    .slice(0, largest - 1)
+    .filter((_, i) => !present[i])
+    .join(', ')
+}

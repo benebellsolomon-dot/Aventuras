@@ -4,6 +4,8 @@ import {
   bandWord,
   comparative,
   cupLetter,
+  groundImagePromptSize,
+  imageSizeAnchor,
   imageSizePhrase,
   tierForCupLetter,
 } from './ladder'
@@ -82,6 +84,25 @@ describe('tierForCupLetter', () => {
   test('A/B clamp to the genre floor instead of failing to seed', () => {
     expect(tierForCupLetter('A')).toBe(0)
     expect(tierForCupLetter('B-cup')).toBe(0)
+  })
+})
+
+describe('imageSizeAnchor + grounding above band saturation', () => {
+  test('null below tier 30; escalating anchors above', () => {
+    expect(imageSizeAnchor(29)).toBeNull()
+    expect(imageSizeAnchor(30)).toBe('breasts bigger than head')
+    expect(imageSizeAnchor(45)).toBe('breasts wider than her hips')
+    expect(imageSizeAnchor(200)).toBe('breasts larger than her entire body')
+  })
+
+  test('groundImagePromptSize appends the anchor at saturated tiers, once', () => {
+    const grounded = groundImagePromptSize('a woman with huge breasts in a garden', 45)
+    expect(grounded).toContain('hyper breasts')
+    expect(grounded).toContain('breasts wider than her hips')
+    // Idempotent: grounding an already-anchored prompt adds nothing
+    expect(groundImagePromptSize(grounded, 45).match(/wider than her hips/g)?.length).toBe(1)
+    // Below saturation: no anchor
+    expect(groundImagePromptSize('portrait', 14)).not.toContain('bigger than head')
   })
 })
 

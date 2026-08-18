@@ -20,7 +20,13 @@ import { createLogger } from '$lib/log'
 import { stripPicTags } from '$lib/utils/inlineImageParser'
 import { settings } from '$lib/stores/settings.svelte'
 import { detectPromptDialect } from '../image/dialect'
-import { bandWord, cupLetter, readBodyState } from '$lib/services/be'
+import {
+  bandWord,
+  cupLetter,
+  imageSizeAnchor,
+  imageStateCues,
+  readBodyState,
+} from '$lib/services/be'
 import type { StreamChunk } from '../core/types'
 import type {
   Story,
@@ -183,13 +189,17 @@ function buildBodyStateReinforcementBlock(characters: Character[]): string {
     .map((c) => {
       const state = readBodyState(c.metadata)
       if (!state) return null
-      return `- ${c.name}: ${bandWord(state.tier)} (${cupLetter(state.tier)}-cup)`
+      const parts = [`${bandWord(state.tier)} (${cupLetter(state.tier)}-cup)`]
+      const anchor = imageSizeAnchor(state.tier)
+      if (anchor) parts.push(anchor)
+      parts.push(...imageStateCues(state))
+      return `- ${c.name}: ${parts.join('; ')}`
     })
     .filter(Boolean)
   if (lines.length === 0) return ''
   return `
 **CURRENT BODY STATE (canonical — overrides story memory):**
-Use EXACTLY these size bands for these characters in every <pic> prompt. The engine tracks growth; the band below is always current.
+Use EXACTLY these size bands and state cues for these characters in every <pic> prompt — copy each listed phrase into any prompt depicting that character. The engine tracks growth; the line below is always current. Match clothing to the size: at large sizes clothes strain, gape, or fail — show it.
 ${lines.join('\n')}
 `
 }

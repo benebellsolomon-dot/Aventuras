@@ -209,11 +209,18 @@ describe('sizing strings (metric convention, corrected letters)', () => {
 describe('image state cues', () => {
   const at = (extra: Partial<BodyState>): BodyState => ({ ...defaultBodyState(30), ...extra })
 
-  test('engorgement cue at 75%+ fill, arousal cue at 70+', () => {
+  test('graduated fill cues (40/75/90 rungs, strongest wins), arousal cue at 70+', () => {
     expect(imageStateCues(at({}))).toEqual([])
+    const subtle = imageStateCues(at({ fluids: { fillPercent: 50, fluidType: 'milk' } }))
+    expect(subtle).toHaveLength(1)
+    expect(subtle[0]).toContain('subtly swollen')
     const engorged = imageStateCues(at({ fluids: { fillPercent: 80, fluidType: 'milk' } }))
-    expect(engorged.join(' ')).toContain('engorged')
-    expect(engorged.join(' ')).toContain('milk')
+    expect(engorged).toHaveLength(1)
+    expect(engorged[0]).toContain('engorged')
+    expect(engorged[0]).toContain('milk')
+    const bursting = imageStateCues(at({ fluids: { fillPercent: 95, fluidType: 'milk' } }))
+    expect(bursting).toHaveLength(1)
+    expect(bursting[0]).toContain('leaking')
     const aroused = imageStateCues(at({ arousal: 85 }))
     expect(aroused.join(' ')).toContain('aroused')
   })

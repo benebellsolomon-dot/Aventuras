@@ -68,10 +68,14 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   const groundedScene = beTier !== null ? groundImagePromptSize(tagPrompt, beTier) : tagPrompt
   let groundedPrompt = groundedScene
 
-  // State cues (engorgement/arousal) apply only for a single unambiguous subject.
+  // State cues (engorgement/arousal) apply only for a single unambiguous
+  // subject. The prompt writer now sees the same cues in its body-state block,
+  // so skip any it already copied in — this append is the enforcement backstop.
   if (beMode) {
     const solo = soloBodyState(presentCharacters, tagCharacters)
-    const cues = solo ? imageStateCues(solo) : []
+    const cues = (solo ? imageStateCues(solo) : []).filter(
+      (cue) => !groundedPrompt.toLowerCase().includes(cue.slice(0, 24).toLowerCase()),
+    )
     if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
   }
 

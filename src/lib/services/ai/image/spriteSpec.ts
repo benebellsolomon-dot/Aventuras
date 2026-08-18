@@ -12,7 +12,12 @@
 
 import type { StructuredImageSpecInput } from './providers/types'
 import { curatedIdentityTags, resolveIdentityTags, mapBridgeBuild } from './bridgeSpec'
-import { bandRepresentativeTier, bandWord, type SpriteExpression } from '$lib/services/be'
+import {
+  bandRepresentativeTier,
+  bandWord,
+  imageSizeAnchor,
+  type SpriteExpression,
+} from '$lib/services/be'
 
 export interface SpriteCellInput {
   name: string
@@ -149,7 +154,10 @@ export function buildAnchorPrompt(
   visualDescriptors: SpriteCellInput['visualDescriptors'],
   imageTags?: string | null,
 ): string {
-  const parts: string[] = [...SPRITE_FRAMING_TAGS, bandWord(Math.max(0, Math.round(tier)))]
+  const anchorTier = Math.max(0, Math.round(tier))
+  const parts: string[] = [...SPRITE_FRAMING_TAGS, bandWord(anchorTier)]
+  const sizeAnchor = imageSizeAnchor(anchorTier)
+  if (sizeAnchor) parts.push(sizeAnchor)
   const appearance = identityFallback(imageTags, visualDescriptors)
   if (appearance) parts.push(appearance)
   return parts.join(', ')
@@ -164,6 +172,8 @@ export function buildSpritePrompt(input: SpriteCellInput): string {
     bandWord(tier),
     ...EXPRESSION_MOMENTS[expression].map((m) => m.replace(/_/g, ' ')),
   ]
+  const sizeAnchor = imageSizeAnchor(tier)
+  if (sizeAnchor) parts.push(sizeAnchor)
   if (expression === 'flushed') parts.push(FLUSH_CUE)
   if (input.engorged) parts.push(engorgedCue(input.fluidType))
   const appearance = identityFallback(input.imageTags, input.visualDescriptors)
