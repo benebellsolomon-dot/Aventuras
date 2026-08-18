@@ -71,7 +71,16 @@ export {
   sizingString,
   weightFeel,
 } from './measurements'
-export { reduceCharacterBody, seededRoll } from './reducer'
+export { reduceCharacterBody } from './reducer'
+export {
+  CRIT_MARGIN,
+  CRIT_NAT,
+  PARTIAL_MISS_WINDOW,
+  resolveCheckBand,
+  resolveGrowthOutcome,
+  seededRoll,
+  type CheckBand,
+} from './roll'
 export {
   beConditionSchema,
   beConditionsFromResult,

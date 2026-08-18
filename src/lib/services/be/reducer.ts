@@ -20,7 +20,6 @@ import {
   ENGORGED_FILL_THRESHOLD,
   ENGORGED_TTL,
   GROWTH_DELTA_BY_OUTCOME,
-  INTENSITY_ROLL_BONUS,
   MAX_BE_CONDITIONS,
   MILKING_DRAIN_PER_INTENSITY,
   OVERFILL_ADD_BASE,
@@ -29,9 +28,12 @@ import {
   PRESSURE_CAP,
   PRESSURE_FIRE,
   PRESSURE_RELEASE,
-  ROLL_BANDS,
   fluidProfile,
 } from './constants'
+import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
+
+// Re-export: pre-extraction callers (and tests) import seededRoll from here.
+export { seededRoll } from './roll'
 import type {
   BeEvent,
   BeLogRecord,
@@ -49,27 +51,6 @@ const GROWTH_KINDS = new Set(['catalyst', 'contact', 'attempt'])
 /** Dry outcomes accrue escalator pressure. `ineligible` is deliberately absent —
  * pity-firing growth the story's canon forbids would recreate the research/41 bug. */
 const DRY_OUTCOMES = new Set<GrowthOutcome>(['fail', 'partial', 'cooldown', 'muzzled'])
-
-const clampIntensity = (value: number): number =>
-  Number.isFinite(value) ? Math.min(3, Math.max(1, Math.round(value))) : 1
-
-/** FNV-1a 32-bit hash → deterministic d20 roll for a seed string. */
-export function seededRoll(seed: string): number {
-  let hash = 0x811c9dc5
-  for (let i = 0; i < seed.length; i++) {
-    hash ^= seed.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return ((hash >>> 0) % 20) + 1
-}
-
-function resolveOutcome(roll: number, intensity: number): GrowthOutcome {
-  const total = roll + (clampIntensity(intensity) - 1) * INTENSITY_ROLL_BONUS
-  if (total >= ROLL_BANDS.critical) return 'critical'
-  if (total >= ROLL_BANDS.success) return 'success'
-  if (total >= ROLL_BANDS.partial) return 'partial'
-  return 'fail'
-}
 
 function decayConditions(conditions: ReadonlyArray<BodyCondition>): BodyCondition[] {
   const next: BodyCondition[] = []
@@ -310,7 +291,7 @@ export function reduceCharacterBody(
     }
 
     const roll = seededRoll(`${seed}:${index}`)
-    const outcome = resolveOutcome(roll, intensity)
+    const outcome = resolveGrowthOutcome(roll, intensity)
     const bandDelta = GROWTH_DELTA_BY_OUTCOME[outcome] ?? 0
     let landed = 0
 
@@ -353,7 +334,7 @@ export function reduceCharacterBody(
   } else if (ticksEnabled && growthPressure >= PRESSURE_FIRE && !state.locked && cooldown === 0) {
     // One non-guaranteed pity roll, then reset regardless (fire-once-then-reset).
     const roll = seededRoll(`${seed}:pressure`)
-    const outcome = resolveOutcome(roll, 1)
+    const outcome = resolveGrowthOutcome(roll, 1)
     const landed = outcome === 'success' || outcome === 'critical' ? landGrowth(1) : 0
     log.push({
       character: characterName,
