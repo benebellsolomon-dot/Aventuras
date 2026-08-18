@@ -48,6 +48,14 @@ export {
 } from './metadata'
 export { applyLevelGrants, crossingKey, spendPoint, type SpendTarget } from './leveling'
 export { detectRpgDrift } from './drift'
+export { buildTargetCheckModifiers } from './modifiers'
+export {
+  availableInteractions,
+  buildGatedActionsInstruction,
+  GATED_INTERACTIONS,
+  type GateInput,
+  type InteractionAvailability,
+} from './gating'
 export { resolveCheck, type ResolveCheckInput } from './CheckService'
 export {
   buildCheckResultBlock,

@@ -84,4 +84,6 @@ export interface CheckRecord {
   essenceSpent: number
   insufficientEssence?: boolean
   drift?: RpgDriftFinding[]
+  /** Resolved target character NAME when the check targeted a girl (Phase 2). */
+  target?: string
 }

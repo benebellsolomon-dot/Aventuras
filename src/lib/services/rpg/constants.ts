@@ -70,6 +70,15 @@ export const SKILL_RANK_CAP = 10
 // so the whole tuning surface is visible in one table) ----
 export { CRIT_MARGIN, CRIT_NAT, PARTIAL_MISS_WINDOW } from '$lib/services/be'
 
+// ---- Skill sets the bond modifier applies to (research/48 Step 7) ----
+export const SOCIAL_SKILLS: ReadonlyArray<SkillId> = [
+  'seduction',
+  'persuasion',
+  'deception',
+  'enchantment',
+]
+export const INTIMATE_SKILLS: ReadonlyArray<SkillId> = ['handling', 'milking', 'aftercare']
+
 // ---- DC bounds for generator-tagged choices ----
 export const DC_MIN = 1
 export const DC_MAX = 40

@@ -27,6 +27,10 @@ export const riskAssessResultSchema = z.object({
     .max(ESSENCE_COST_MAX)
     .optional()
     .describe('Essence cost 1-3 when the action channels catalytic power'),
+  targetCharacter: z
+    .string()
+    .optional()
+    .describe('Exact name of the character this action targets, when it targets one'),
   rationale: z.string().optional().describe('One short sentence of reasoning'),
 })
 

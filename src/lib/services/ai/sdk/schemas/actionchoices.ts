@@ -36,6 +36,11 @@ export const actionChoiceSchema = z.object({
     .max(DC_MAX)
     .optional()
     .describe('Difficulty class 8-24 for a risky choice'),
+  /** The girl this action targets — enables bond/quirk check modifiers. */
+  targetCharacter: z
+    .string()
+    .optional()
+    .describe('Exact name of the character this action targets, when it targets one'),
   /** Catalytic essence cost when the choice channels the player's power. */
   essenceCost: z
     .number()

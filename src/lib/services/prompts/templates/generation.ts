@@ -74,7 +74,8 @@ Characters present: {{ npcsPresent }}
 Decide: is this action risky enough to deserve a skill check?
 - risky=false for: talking, observing, trivial movement, anything with no meaningful failure mode.
 - risky=true needs: a governing skill and a DC. DC rubric: 8 trivial-but-fumblable · 11 easy · 14 moderate · 17 hard · 20 very hard · 24 near-impossible.
-- If the action channels the player's catalytic power (growth influence, transformation magic), set essenceCost 1-3 by potency.`,
+- If the action channels the player's catalytic power (growth influence, transformation magic), set essenceCost 1-3 by potency.
+- When the action targets a specific character, set targetCharacter to her exact name.`,
 }
 
 const timelineFillPromptTemplate: PromptTemplate = {

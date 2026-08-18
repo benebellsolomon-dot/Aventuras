@@ -96,7 +96,12 @@ export {
   extendClassificationSchemaWithBeEvents,
   type BeCharacterCondition,
 } from './schema'
-export { buildBeStateBlock, type BeStateEntry } from './context'
+export {
+  buildBeStateBlock,
+  buildHaremStateBlock,
+  HAREM_STATE_HEADER,
+  type BeStateEntry,
+} from './context'
 export {
   applyBondEvents,
   applyExposure,
