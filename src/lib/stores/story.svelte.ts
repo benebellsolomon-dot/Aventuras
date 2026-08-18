@@ -28,11 +28,13 @@ import { ui } from './ui.svelte'
 import { settings } from './settings.svelte'
 import {
   DEFAULT_BE_STORY_CONFIG,
+  INTERACTION_MILESTONES,
   beConditionsFromResult,
   beEventsFromResult,
   beSoftStatesFromResult,
   defaultBodyState,
   detectDrift,
+  measurements,
   parseGrowthEligibleKinds,
   readBodyState,
   reduceCharacterBody,
@@ -42,6 +44,18 @@ import {
   type BeSoftState,
   type BodyCondition,
 } from '$lib/services/be'
+import {
+  ESSENCE_REGEN_PER_PERIOD,
+  applyLevelGrants,
+  crossingKey,
+  defaultRpgSheet,
+  detectRpgDrift,
+  essenceMax,
+  periodIndex,
+  readRpgSheet,
+  writeRpgSheet,
+  type CheckRecord,
+} from '$lib/services/rpg'
 import { extractInlineCustomVars } from '$lib/services/ai/sdk/schemas/runtime-variables'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
 import type { RuntimeVariable } from '$lib/services/packs/types'
@@ -1944,7 +1958,11 @@ class StoryStore {
    * Apply classification results to update world state.
    * This is Phase 4 of the processing pipeline per design doc.
    */
-  async applyClassificationResult(result: ClassificationResult, entryId?: string): Promise<void> {
+  async applyClassificationResult(
+    result: ClassificationResult,
+    entryId?: string,
+    checkRecord: CheckRecord | null = null,
+  ): Promise<void> {
     if (!this.currentStory) {
       log('applyClassificationResult: No story loaded, skipping')
       return
@@ -2717,13 +2735,26 @@ class StoryStore {
     // entity loop and BEFORE the delta is built/saved so its writes are
     // rollback-visible (research/31 §2.2).
     let beLog: BeLogRecord[] = []
+    let checkLog: CheckRecord[] = []
     if (this.currentStory.settings?.beMode === true) {
-      beLog = await this.applyBeEvents(
+      const beResult = await this.applyBeEvents(
         result,
         entryId,
         trackingEnabled,
         charactersBefore,
         createdCharacterIds,
+      )
+      beLog = beResult.beLog
+      // RPG layer: protagonist sheet apply (essence/regen/leveling/drift) —
+      // after the girls' reducer, before the delta, same rollback contract.
+      checkLog = await this.applyRpgTurn(
+        checkRecord,
+        entryId,
+        trackingEnabled,
+        charactersBefore,
+        createdCharacterIds,
+        timeTrackerBefore,
+        beResult.crossings,
       )
     }
 
@@ -2747,6 +2778,7 @@ class StoryStore {
             storyBeatIds: createdStoryBeatIds,
           },
           ...(beLog.length > 0 ? { beLog } : {}),
+          ...(checkLog.length > 0 ? { checkLog } : {}),
         }
 
         await database.updateStoryEntry(entryId, { worldStateDelta: delta })
@@ -2785,6 +2817,7 @@ class StoryStore {
     // Emit state updated event if there were any changes
     const hasChanges =
       beLog.length > 0 ||
+      checkLog.length > 0 ||
       result.entryUpdates.newCharacters.length > 0 ||
       result.entryUpdates.newLocations.length > 0 ||
       result.entryUpdates.newItems.length > 0 ||
@@ -2821,16 +2854,19 @@ class StoryStore {
     trackingEnabled: boolean,
     charactersBefore: CharacterBeforeState[],
     createdCharacterIds: string[],
-  ): Promise<BeLogRecord[]> {
+  ): Promise<{ beLog: BeLogRecord[]; crossings: string[] }> {
     const beLog: BeLogRecord[] = []
+    // Milestone crossings this turn (`${characterId}:${massKg}`) — the RPG
+    // layer's leveling trigger (research/47 Step 8).
+    const crossings: string[] = []
     const storyId = this.currentStory?.id
-    if (!storyId) return beLog
+    if (!storyId) return { beLog, crossings }
     // No entry means no delta carrier AND no stable roll seed — skip rather than
     // resolve with a degenerate constant seed. (The sole production caller always
     // passes an entry id; a retried turn gets a NEW entry id and re-rolls by design.)
     if (!entryId) {
       log('applyBeEvents: no entryId, skipping BE reduction this apply')
-      return beLog
+      return { beLog, crossings }
     }
 
     const events = beEventsFromResult(result as unknown as Record<string, unknown>)
@@ -2978,6 +3014,18 @@ class StoryStore {
         continue
       }
 
+      // Milestone crossings: carried mass passing an interaction threshold this
+      // turn. Seeding is not a crossing — her starting size was not earned.
+      if (!seeded) {
+        const massBefore = measurements(state).nowTotalKg
+        const massAfter = measurements(nextState).nowTotalKg
+        for (const milestone of INTERACTION_MILESTONES) {
+          if (massBefore < milestone.massKg && massAfter >= milestone.massKg) {
+            crossings.push(crossingKey(character.id, milestone.massKg))
+          }
+        }
+      }
+
       // Widened before-state capture: the reducer touches characters the
       // classifier never flagged, and rollback must cover them too.
       if (
@@ -3014,7 +3062,121 @@ class StoryStore {
       })
     }
 
-    return beLog
+    return { beLog, crossings }
+  }
+
+  /**
+   * RPG layer (research/47 Step 8): the ONLY writer of the protagonist's
+   * rpgSheet during a turn. Applies, in order: check essence spend →
+   * time-period regen → milestone level grants → one-turn drift note. Runs
+   * right after applyBeEvents (which owns every non-self row and skips self;
+   * this method owns the self row exclusively) and BEFORE the delta is built,
+   * so the write is rollback-visible via the protagonist's before-state.
+   *
+   * The check RESOLVED before narration (CheckPhase) but is WRITTEN here, at
+   * classification time — an abort after narration costs no essence and logs
+   * nothing, mirroring applyBeEvents' no-entryId skip. Do not move this spend
+   * pre-narration: it would break rollback and the single-writer rule.
+   */
+  private async applyRpgTurn(
+    checkRecord: CheckRecord | null,
+    entryId: string | undefined,
+    trackingEnabled: boolean,
+    charactersBefore: CharacterBeforeState[],
+    createdCharacterIds: string[],
+    timeTrackerBefore: TimeTracker | null,
+    crossings: string[],
+  ): Promise<CheckRecord[]> {
+    if (!this.currentStory || !entryId) return checkRecord ? [checkRecord] : []
+    const protagonist = this.characters.find((c) => c.relationship === 'self')
+    if (!protagonist) return checkRecord ? [checkRecord] : []
+
+    const storedSheet = readRpgSheet(protagonist.metadata)
+    let sheet = storedSheet ?? defaultRpgSheet()
+    const sheetBeforeJson = JSON.stringify(sheet)
+
+    // 1. Essence spend from the resolved check (never below zero; an
+    //    insufficient-essence record spent nothing by construction).
+    if (checkRecord && checkRecord.essenceSpent > 0 && !checkRecord.insufficientEssence) {
+      sheet = {
+        ...sheet,
+        essence: {
+          ...sheet.essence,
+          current: Math.max(0, sheet.essence.current - checkRecord.essenceSpent),
+        },
+      }
+    }
+
+    // 2. Time-period regen: +2 per 6h period crossed this turn, clamped to max.
+    if (timeTrackerBefore && this.currentStory.timeTracker) {
+      const periods = periodIndex(this.currentStory.timeTracker) - periodIndex(timeTrackerBefore)
+      if (periods > 0) {
+        sheet = {
+          ...sheet,
+          essence: {
+            ...sheet.essence,
+            current: Math.min(
+              essenceMax(sheet.level),
+              sheet.essence.current + periods * ESSENCE_REGEN_PER_PERIOD,
+            ),
+          },
+        }
+      }
+    }
+
+    // 3. Milestone level grants (idempotent via awardedMilestones).
+    sheet = applyLevelGrants(sheet, crossings).sheet
+
+    // 4. Drift: previous turn's note expires; this turn's findings (if any)
+    //    ride BOTH carriers — the record (roll-card tag) and the sheet
+    //    ([CONTINUITY] prompt line next turn).
+    const narrativeContent = this.entries.find((e) => e.id === entryId)?.content ?? ''
+    const findings = detectRpgDrift(narrativeContent, sheet, checkRecord)
+    const nextDriftNote =
+      findings.length > 0 ? { note: findings.map((f) => f.note).join(' ') } : undefined
+    if (sheet.driftNote || nextDriftNote) {
+      sheet = { ...sheet }
+      if (nextDriftNote) sheet.driftNote = nextDriftNote
+      else delete sheet.driftNote
+    }
+    const recordOut: CheckRecord | null = checkRecord
+      ? findings.length > 0
+        ? { ...checkRecord, drift: findings }
+        : checkRecord
+      : null
+
+    const sheetChanged = storedSheet === null || JSON.stringify(sheet) !== sheetBeforeJson
+    if (sheetChanged) {
+      if (
+        trackingEnabled &&
+        !createdCharacterIds.includes(protagonist.id) &&
+        !charactersBefore.some((cb) => cb.id === protagonist.id)
+      ) {
+        charactersBefore.push({
+          id: protagonist.id,
+          name: protagonist.name,
+          status: protagonist.status,
+          relationship: protagonist.relationship,
+          traits: [...protagonist.traits],
+          visualDescriptors: { ...protagonist.visualDescriptors },
+          metadata: protagonist.metadata ? { ...protagonist.metadata } : null,
+        })
+      }
+
+      await this.wrapUpdate('RPG sheet', protagonist.name, async () => {
+        const { entity: owned, wasCowed } = await this.cowCharacter(protagonist)
+        const metadata = writeRpgSheet(owned.metadata, sheet)
+        await database.updateCharacter(owned.id, { metadata })
+        this.characters = this.characters.map((c) => (c.id === owned.id ? { ...c, metadata } : c))
+        if (wasCowed && trackingEnabled) {
+          createdCharacterIds.push(owned.id)
+          const idx = charactersBefore.findIndex((cb) => cb.id === protagonist.id)
+          if (idx !== -1) charactersBefore.splice(idx, 1)
+        }
+      })
+    }
+
+    return recordOut ? [recordOut] : []
   }
 
   // Clear current story (when switching or closing)

@@ -9,6 +9,7 @@
   import { type ImageGenerationContext } from '$lib/services/ai'
   import { hasRequiredCredentials, getProviderDisplayName } from '$lib/services/ai/image'
   import { TranslationService } from '$lib/services/ai/utils/TranslationService'
+  import type { CheckRecord } from '$lib/services/rpg'
   import {
     Send,
     Wand2,
@@ -553,6 +554,7 @@
       let fullResponse = ''
       let fullReasoning = ''
       let narrationEntry: Awaited<ReturnType<typeof story.addEntry>> | null = null
+      let resolvedCheck: CheckRecord | null = null
 
       const eventState: PipelineEventState = {
         fullResponse: () => fullResponse,
@@ -610,6 +612,7 @@
 
         if (event.type === 'check_resolved') {
           // Surface the roll card immediately, before narration streams.
+          resolvedCheck = event.record
           ui.setPendingCheckRecord(event.record)
         }
 
@@ -648,7 +651,10 @@
             messageId: narrationEntry.id,
             result: event.result,
           })
-          await story.applyClassificationResult(event.result, narrationEntry.id)
+          await story.applyClassificationResult(event.result, narrationEntry.id, resolvedCheck)
+          // The persisted delta now carries the checkLog; the transient card
+          // handoff is done.
+          ui.setPendingCheckRecord(null)
           await story.updateEntryTimeEnd(narrationEntry.id)
 
           if (currentStoryRef.settings?.imageGenerationMode !== 'none') {

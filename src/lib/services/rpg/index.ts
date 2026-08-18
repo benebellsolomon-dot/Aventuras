@@ -38,6 +38,8 @@ export {
   type OddsBand,
 } from './derive'
 export { RPG_SHEET_KEY, readRpgSheet, rpgSheetSchema, writeRpgSheet } from './metadata'
+export { applyLevelGrants, crossingKey, spendPoint, type SpendTarget } from './leveling'
+export { detectRpgDrift } from './drift'
 export { resolveCheck, type ResolveCheckInput } from './CheckService'
 export {
   buildCheckResultBlock,

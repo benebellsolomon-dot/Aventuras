@@ -1042,6 +1042,9 @@ export interface WorldStateDelta {
 
   /** BE reducer outcome log for this turn (cadence instrumentation; rollback-aware by riding the delta) */
   beLog?: import('$lib/services/be/types').BeLogRecord[]
+
+  /** RPG check log for this turn (roll card + turn log; rollback-aware by riding the delta) */
+  checkLog?: import('$lib/services/rpg/types').CheckRecord[]
 }
 
 /**
