@@ -66,11 +66,14 @@ Aventuras is a desktop and mobile interactive fiction application offering multi
 
 ### Image Generation
 
-- Embedded image generation in story entries
-- AI-powered imageable scene detection
-- NanoGPT provider integration
-- Character portrait support for visual consistency
-- Configurable image size (512x512 or 1024x1024)
+- Embedded image generation in story entries (inline `<pic>` tags or AI-powered scene detection)
+- Structured prompt build order (rating → camera → character count → isolated per-character descriptions → environment) with anti-bleed rules for multi-character scenes
+- Automatic prompt dialect per model: Danbooru tags + quality prefix + negative prompts for anime tag models (Illustrious/Pony/NoobAI), natural language for LLM-encoder models
+- Per-character locked identity tag banks (hand-curated or AI-generated from the character description) copied verbatim into every prompt
+- Character portraits and sprite anchors as img2img references for visual consistency
+- Providers: NanoGPT, ComfyUI (incl. IPAdapter identity workflow), A1111, OpenAI, Google, OpenRouter, Pollinations, and more
+- Per-character LoRA binding (trigger words + tier-scaled weights on ComfyUI)
+- Selectable art styles (Classic Anime default) and configurable image sizes up to 2048x2048
 
 ### Save and Restore
 
