@@ -23,15 +23,9 @@ import { database } from '$lib/services/database'
 import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
-import { sizeBandMarker } from './sizeBandMarker'
-import {
-  groundImagePromptSize,
-  imageStateCues,
-  soloBodyState,
-  uniformBodyStateTier,
-} from '$lib/services/be'
+import { assembleInlineImage } from './inlineAssembly'
+import { type ResolvedLora } from './loraBinding'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
-import { maybeBuildBridgeSpec } from './bridgeSpec'
 import type { StructuredImageSpecInput } from './providers/types'
 import { createLogger } from '$lib/log'
 import type { Character, EmbeddedImage } from '$lib/types'
@@ -142,32 +136,18 @@ export class InlineImageTracker {
     if (!profile) return
     if (!supportsImageGeneration(profile.providerType)) return
 
-    // Build full prompt with style (BE grounding mirrors InlineImageService:
-    // beMode-gated; uniform-band only — mixed-band prompts stay ungrounded).
+    // Assemble the request via the shared helper — this streaming tracker is the
+    // LIVE inline path, so it must produce the same grounding + per-character
+    // LoRA/trigger words + spec as the post-hoc InlineImageService.
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const beTier = this.getBeMode()
-      ? uniformBodyStateTier(this.getCharacters(), tag.characters)
-      : null
-    // Cue-less grounded prompt = the spec builder's scene text (cues ride the
-    // spec's extra_tags; appending first would duplicate them into scene_tags).
-    const groundedScene = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
-    let groundedPrompt = groundedScene
-    if (this.getBeMode()) {
-      const solo = soloBodyState(this.getCharacters(), tag.characters)
-      const cues = solo ? imageStateCues(solo) : []
-      if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
-    }
-    const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
-
-    // si-bridge native path (mirrors InlineImageService — this streaming
-    // tracker is the LIVE inline path, so the spec must assemble here too).
-    const bridgeSpec = maybeBuildBridgeSpec({
-      providerType: profile.providerType,
-      beMode: this.getBeMode(),
+    const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters: this.getCharacters(),
-      tagCharacterNames: tag.characters,
-      sceneText: groundedScene,
+      tagPrompt: tag.prompt,
+      tagCharacters: tag.characters,
+      beMode: this.getBeMode(),
+      stylePrompt,
       narrativeText: narrativeSoFar,
+      providerType: profile.providerType,
     })
     if (bridgeSpec) {
       log('Built si-bridge structured spec', {
@@ -200,6 +180,7 @@ export class InlineImageTracker {
       imageSettings.size,
       referenceImageUrls,
       bridgeSpec,
+      loraOverride,
     )
 
     this.pendingImages.push({
@@ -224,6 +205,7 @@ export class InlineImageTracker {
     size: string,
     referenceImageUrls?: string[],
     spec?: StructuredImageSpecInput,
+    loraOverride?: ResolvedLora,
   ): Promise<{ base64: string | null; error?: string }> {
     try {
       const result = await registryGenerateImage({
@@ -233,6 +215,7 @@ export class InlineImageTracker {
         size,
         referenceImages: referenceImageUrls,
         spec,
+        loraOverride,
       })
 
       if (!result.base64) {

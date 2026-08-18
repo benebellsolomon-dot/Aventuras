@@ -21,16 +21,9 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
-import { sizeBandMarker } from './sizeBandMarker'
-import { maybeBuildBridgeSpec } from './bridgeSpec'
-import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
+import { assembleInlineImage } from './inlineAssembly'
+import { type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
-import {
-  groundImagePromptSize,
-  imageStateCues,
-  soloBodyState,
-  uniformBodyStateTier,
-} from '$lib/services/be'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { createLogger } from '$lib/log'
 
@@ -172,57 +165,19 @@ export class InlineImageGenerationService {
       return
     }
 
-    // Build full prompt with style. BE grounding first (beMode stories only —
-    // same gate as the narrative block): when the tagged characters carrying
-    // bodyState share one size band, that canonical band word overrides the
-    // model's own size vocabulary; mixed-band multi-character prompts are left
-    // ungrounded (one size would render the others wrong). The bridge marker is
-    // then derived from the grounded prompt.
+    // Assemble the request (BE grounding + cues + per-character LoRA/trigger
+    // words + style + si-bridge spec) via the shared helper, so this post-hoc
+    // path and the streaming tracker cannot drift.
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const beTier = context.beMode
-      ? uniformBodyStateTier(context.presentCharacters, tag.characters)
-      : null
-    // The cue-less grounded prompt is what the spec builder sees as the scene —
-    // cues ride the spec's extra_tags; appending them first would duplicate them
-    // into scene_tags.
-    const groundedScene = beTier !== null ? groundImagePromptSize(tag.prompt, beTier) : tag.prompt
-    let groundedPrompt = groundedScene
-    // State cues (engorgement/arousal) apply only for a single unambiguous subject.
-    if (context.beMode) {
-      const solo = soloBodyState(context.presentCharacters, tag.characters)
-      const cues = solo ? imageStateCues(solo) : []
-      if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
-    }
-
-    // Per-character LoRA: trigger words for every tagged character (prompt text,
-    // provider-agnostic) prepended up front; a LoRA file only for a single
-    // unambiguous subject, since one workflow slot can't stack several. The
-    // weight scales with that subject's engine tier.
-    const taggedChars = context.presentCharacters.filter((c) =>
-      tag.characters.some((n) => n.toLowerCase() === c.name.toLowerCase()),
-    )
-    const triggerText = loraTriggerText(taggedChars.map((c) => c.loraConfig))
-    if (triggerText) groundedPrompt = `${triggerText}, ${groundedPrompt}`
-    let loraOverride: ResolvedLora | null = null
-    if (taggedChars.length === 1) {
-      const soloTier = soloBodyState(context.presentCharacters, tag.characters)?.tier ?? 0
-      loraOverride = resolveLora(taggedChars[0].loraConfig, soloTier)
-    }
-
-    const fullPrompt = `${sizeBandMarker(groundedPrompt)}${groundedPrompt}. ${stylePrompt}`
-
-    // si-bridge native path: send structure beside the prompt. The spec (when
-    // one assembles — needs at least one tagged character with bodyState)
-    // OVERRIDES the prompt bridge-side; the marker/grounded prompt above stays
-    // as the recorded fallback and serves every other provider unchanged.
     const activeProviderType = settings.getImageProfile(profileId)?.providerType
-    const bridgeSpec: StructuredImageSpecInput | undefined = maybeBuildBridgeSpec({
-      providerType: activeProviderType,
-      beMode: context.beMode,
+    const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters: context.presentCharacters,
-      tagCharacterNames: tag.characters,
-      sceneText: groundedScene,
+      tagPrompt: tag.prompt,
+      tagCharacters: tag.characters,
+      beMode: context.beMode,
+      stylePrompt,
       narrativeText: context.narrativeContent,
+      providerType: activeProviderType,
     })
     if (bridgeSpec) {
       log('Built si-bridge structured spec', {

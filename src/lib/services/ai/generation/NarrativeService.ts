@@ -55,6 +55,7 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 - Write prompts as vivid natural-language visual descriptions (the image backend uses an LLM-class text encoder — flowing descriptive English works best): open with content-rating words, then character appearance, clothing and its state, action/pose, setting and lighting
 - Include character names in the "characters" attribute if they appear in the image
 - Re-describe each character's physical appearance IN FULL in every prompt (hair, eyes, build, notable body proportions, current clothing and its state) — the image model cannot see the story, previous images, or other prompts
+- MULTIPLE CHARACTERS (prevent feature-bleeding): when two or more people appear, (1) start the character section with a count tag — "two women", "a man and a woman"; (2) describe each person in ONE self-contained clause with a spatial anchor ("on the left, ...", "on the right, ...", "in the center, ..."), never interleaving their traits; (3) give each a distinguishing anchor (hair colour, outfit) so the model keeps them apart. Example: "two women — on the left, a tall woman with long red hair in a green dress; on the right, a petite woman with short black hair in a white blouse"
 - Use sparingly: 1-3 images per response maximum, reserved for impactful visual moments
 
 **RATING AND BODY WORDS (required in every prompt):**
