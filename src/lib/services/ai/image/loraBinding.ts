@@ -33,7 +33,12 @@ export function resolveLoraWeight(config: CharacterLoraConfig, tier: number): nu
   const scale = Number.isFinite(config.tierScale)
     ? (config.tierScale as number)
     : DEFAULT_TIER_SCALE
-  const max = Number.isFinite(config.maxWeight) ? (config.maxWeight as number) : DEFAULT_MAX_WEIGHT
+  // Floor max at 0 so a negative maxWeight can't invert the clamp into a
+  // negative result (the contract is clamp(..., 0, maxWeight)).
+  const max = Math.max(
+    0,
+    Number.isFinite(config.maxWeight) ? (config.maxWeight as number) : DEFAULT_MAX_WEIGHT,
+  )
   const t = Number.isFinite(tier) ? Math.max(0, tier) : 0
   const raw = base + scale * t
   return Math.min(Math.max(raw, 0), max)

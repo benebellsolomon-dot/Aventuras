@@ -27,6 +27,11 @@ describe('resolveLoraWeight', () => {
   it('falls back to defaults on non-finite inputs', () => {
     expect(resolveLoraWeight({ baseWeight: NaN, tierScale: NaN, maxWeight: NaN }, NaN)).toBe(1)
   })
+
+  it('never returns negative even when maxWeight is negative', () => {
+    // A negative maxWeight must not invert the clamp into a negative weight.
+    expect(resolveLoraWeight({ baseWeight: 1, maxWeight: -3 }, 0)).toBe(0)
+  })
 })
 
 describe('resolveLora', () => {
