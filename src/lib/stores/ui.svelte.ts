@@ -178,6 +178,11 @@ class UIStore {
   actionChoices = $state<ActionChoice[]>([])
   actionChoicesLoading = $state(false)
   pendingActionChoice = $state<string | null>(null)
+  /** Full choice object behind pendingActionChoice — carries the RPG check tag
+   * (skill/dc/essenceCost) from a clicked choice to the generation pipeline.
+   * Survives the input handoff; cleared when the turn starts (CheckPhase reads
+   * it) or the input is abandoned. */
+  pendingChoiceTag = $state<ActionChoice | null>(null)
 
   // Creative writing suggestions (displayed after narration)
   suggestions = $state<Suggestion[]>([])
@@ -919,14 +924,22 @@ class UIStore {
     }
   }
 
-  setPendingActionChoice(text: string, _storyId?: string) {
+  setPendingActionChoice(text: string, _storyId?: string, choice?: ActionChoice) {
     // Only set the pending choice text - don't clear action choices yet
     // They will be cleared when the message is actually sent (in handleSubmit)
     this.pendingActionChoice = text
+    this.pendingChoiceTag = choice ?? null
   }
 
   clearPendingActionChoice() {
+    // Deliberately does NOT clear pendingChoiceTag: the tag must survive the
+    // input handoff until the turn starts (consumed by CheckPhase) or the
+    // input is edited/cleared (clearPendingChoiceTag).
     this.pendingActionChoice = null
+  }
+
+  clearPendingChoiceTag() {
+    this.pendingChoiceTag = null
   }
 
   // Suggestions methods (creative writing mode)

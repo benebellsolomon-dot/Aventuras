@@ -36,6 +36,7 @@ const TEMPLATE_GROUP_MAP: Record<string, string> = {
   // Suggestions & Actions
   suggestions: 'Suggestions & Actions',
   'action-choices': 'Suggestions & Actions',
+  'risk-assess': 'Suggestions & Actions',
   'timeline-fill': 'Suggestions & Actions',
   'timeline-fill-answer': 'Suggestions & Actions',
 

@@ -24,7 +24,7 @@
 
   function handleChoiceClick(choice: ActionChoice) {
     // Set the pending action choice - ActionInput will pick this up and submit
-    ui.setPendingActionChoice(choice.text, story.currentStory?.id)
+    ui.setPendingActionChoice(choice.text, story.currentStory?.id, choice)
   }
 
   // Key bindings for quick selection (1-4)

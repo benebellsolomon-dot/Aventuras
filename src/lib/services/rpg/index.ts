@@ -39,3 +39,11 @@ export {
 } from './derive'
 export { RPG_SHEET_KEY, readRpgSheet, rpgSheetSchema, writeRpgSheet } from './metadata'
 export { resolveCheck, type ResolveCheckInput } from './CheckService'
+export {
+  buildCheckResultBlock,
+  buildCheckTaggingInstruction,
+  buildPlayerSheetBlock,
+  buildPlayerSheetSummary,
+  CHECK_RESULT_HEADER,
+  PLAYER_SHEET_HEADER,
+} from './context'

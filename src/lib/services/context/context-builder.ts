@@ -18,6 +18,13 @@ import {
   readBodyState,
   type BeStateEntry,
 } from '$lib/services/be'
+import {
+  buildCheckTaggingInstruction,
+  buildPlayerSheetBlock,
+  buildPlayerSheetSummary,
+  defaultRpgSheet,
+  readRpgSheet,
+} from '$lib/services/rpg'
 import type { RenderResult } from './types'
 import type { Character, Location, Item, StoryBeat, Story } from '$lib/types'
 import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
@@ -99,6 +106,8 @@ export class ContextBuilder {
     builder.loadBeStateContext(story, characters)
     // BE engine: the static genre-rules pack (research/41 precedence contract)
     builder.loadBeGenreRules(story)
+    // RPG layer: player sheet block + service summaries (empty strings when off)
+    builder.loadRpgSheetContext(story, protagonist ?? null)
 
     log('forStory complete', {
       storyId,
@@ -227,6 +236,31 @@ export class ContextBuilder {
     } catch (error) {
       log('loadBeGenreRules failed', { error })
       this.add({ beGenreRules: '' })
+    }
+  }
+
+  /**
+   * RPG layer (research/47 Step 7): `playerSheetBlock` for the narrative system
+   * prompt plus `playerSheetSummary`/`checkTaggingInstruction` for service
+   * templates (action choices, risk assess). All empty strings when beMode is
+   * off or there is no protagonist. A BE story whose protagonist has no stored
+   * sheet yet renders the deterministic default — the layer works from turn 1.
+   */
+  private loadRpgSheetContext(story: Story, protagonist: Character | null): void {
+    try {
+      let playerSheetBlock = ''
+      let playerSheetSummary = ''
+      let checkTaggingInstruction = ''
+      if (story.settings?.beMode === true && protagonist) {
+        const sheet = readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+        playerSheetBlock = buildPlayerSheetBlock(sheet, protagonist.name)
+        playerSheetSummary = buildPlayerSheetSummary(sheet)
+        checkTaggingInstruction = buildCheckTaggingInstruction(sheet)
+      }
+      this.add({ playerSheetBlock, playerSheetSummary, checkTaggingInstruction })
+    } catch (error) {
+      log('loadRpgSheetContext failed', { error })
+      this.add({ playerSheetBlock: '', playerSheetSummary: '', checkTaggingInstruction: '' })
     }
   }
 

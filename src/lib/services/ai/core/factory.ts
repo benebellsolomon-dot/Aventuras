@@ -12,6 +12,7 @@ import { MemoryService } from '../generation/MemoryService'
 import { SuggestionsService } from '../generation/SuggestionsService'
 import { ActionChoicesService } from '../generation/ActionChoicesService'
 import { StyleReviewerService } from '../generation/StyleReviewerService'
+import { RiskAssessService } from '../generation/RiskAssessService'
 import { EntryInjector, type ContextConfig } from '../generation/EntryInjector'
 import { LoreManagementService } from '../lorebook/LoreManagementService'
 import { AgenticRetrievalService } from '../retrieval/AgenticRetrievalService'
@@ -75,6 +76,13 @@ export class ServiceFactory {
    */
   createStyleReviewerService(): StyleReviewerService {
     return new StyleReviewerService('styleReviewer')
+  }
+
+  /**
+   * Create a risk assess service instance (free-text check pre-pass).
+   */
+  createRiskAssessService(): RiskAssessService {
+    return new RiskAssessService('riskAssess')
   }
 
   /**

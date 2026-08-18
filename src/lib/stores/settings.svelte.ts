@@ -1149,6 +1149,7 @@ export const DEFAULT_SERVICE_PRESET_ASSIGNMENTS: Record<string, string> = {
   suggestions: 'suggestions',
   actionChoices: 'suggestions',
   styleReviewer: 'suggestions',
+  riskAssess: 'classification',
   loreManagement: 'agentic',
   agenticRetrieval: 'agentic',
   interactiveVault: 'agentic',
