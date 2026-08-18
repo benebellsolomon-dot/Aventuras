@@ -359,7 +359,10 @@ export function reduceCharacterBody(
       if (isSlowBurn) {
         // slow_burn: nothing lands now — the WHOLE delta stages for next
         // turn's step 3, where the milestone-crossing bonus may deepen it.
-        pendingGrowth = { delta: bandDelta, source: event.kind }
+        // ACCUMULATE within the turn: a second growth event must not silently
+        // drop the first event's staged delta (prior turn's pending already
+        // landed and cleared at step 3, so this only ever sums this turn).
+        pendingGrowth = { delta: (pendingGrowth?.delta ?? 0) + bandDelta, source: event.kind }
       } else if (bandDelta >= ANTICIPATION_THRESHOLD) {
         // Two-beat anticipation: land half now, stage the remainder for the
         // next turn's step 3 (re-clamped against the cap at land time).
@@ -486,9 +489,10 @@ export function reduceCharacterBody(
   }
   // Withdrawal (research/48 R8): front-inserted like Engorged so the cap slice
   // can never evict it; re-upserted every turn the condition holds.
+  // (The local is initialized from state, so a single ?? 0 covers the unset case.)
   const withdrawal = withdrawalCondition(
     effectiveDependence,
-    beatsSinceExposure ?? state.beatsSinceExposure ?? 0,
+    beatsSinceExposure ?? 0,
     isDevotedHeart,
   )
   if (withdrawal) {

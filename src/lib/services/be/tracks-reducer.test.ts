@@ -92,6 +92,29 @@ describe('quirk hooks in isolation', () => {
     expect(next.state.tier).toBeGreaterThanOrEqual(7)
   })
 
+  it('slow_burn: two growth events in one turn ACCUMULATE in pendingGrowth', () => {
+    // Find a seed where BOTH event rolls (index 0 and 1) succeed at i2.
+    let seed = ''
+    for (let i = 0; i < 10_000; i++) {
+      const candidate = `dual-${i}`
+      if (
+        resolveGrowthOutcome(seededRoll(`${candidate}:0`), 2) === 'success' &&
+        resolveGrowthOutcome(seededRoll(`${candidate}:1`), 2) === 'success'
+      ) {
+        seed = candidate
+        break
+      }
+    }
+    const result = reduceCharacterBody(
+      stateWith({ quirks: ['slow_burn'] }),
+      [catalyst(2), catalyst(2)],
+      config,
+      seed,
+      'Mira',
+    )
+    expect(result.state.pendingGrowth?.delta).toBe(2) // 1 + 1, not overwritten to 1
+  })
+
   it('greedy_flesh: armed cooldown is one beat shorter', () => {
     const seed = seedFor((r) => resolveGrowthOutcome(r, 2) === 'success')
     const plain = reduceCharacterBody(stateWith(), [catalyst(2)], config, seed, 'Mira')
