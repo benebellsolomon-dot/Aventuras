@@ -24,7 +24,16 @@ transaction; the `worldStateDelta` (the rollback record) is persisted LAST at
   or write the delta FIRST/atomically with the mutations. Central to the 5223-line store —
   build a real store test harness first (this is the W5-D1 harness that's been flagged).
 
-### CR-2 — `refreshServiceTemplatesAllPacks` silently reverts user-customized service templates every startup  *(self-inflicted, commit 264aa8fc, LIVE)*
+### CR-2 — `refreshServiceTemplatesAllPacks` silently reverts user-customized service templates every startup  *(self-inflicted, commit 264aa8fc)* — ✅ FIXED
+**FIXED 2026-08-19:** replaced the every-startup refresh with a **version-gated one-time sync**
+(`syncServiceTemplatesIfStale` + `SERVICE_TEMPLATE_SYNC_VERSION` + a `service_template_sync_version`
+settings key). Service templates now sync from code to all packs only ONCE per version bump, not
+every startup, so a user's own edit survives normal restarts; overwrite happens only on a deliberate
+bump (like an app update resetting a built-in). The same commit fixed **CR-2b** (the sync now SEEDS a
+service template missing from a pack, not just updates existing) and **L-9** (code-baseline hashes
+computed once, outside the pack loop). The version stamp is written only after a successful sync (a
+throw retries next startup); a corrupt/NaN key fails safe (re-syncs once). *Original finding below.*
+
 `pack-service.ts:298–328` (called from `initialize()` :79) overwrites a pack's service-template
 row whenever `cur.contentHash !== hashContent(code)` — which is EXACTLY the "user customized
 it" condition. The Prompts UI exposes all 27 `category:'service'` templates as editable in

@@ -5,6 +5,17 @@ import { getBundledPack } from './bundled'
 import type { PresetPack, FullPack } from './types'
 
 /**
+ * Bump this when a SERVICE-category template's code baseline changes and the fix
+ * should reach existing custom packs. Service templates sync from code to every
+ * pack ONCE per version (see syncServiceTemplatesIfStale) — NOT every startup, so
+ * a user's own edit to a service template survives normal restarts and is only
+ * overwritten on a deliberate version bump. Log the reason on each bump:
+ *   1 — 2026-08-19: classifier now lists present characters (presentCharacterNames).
+ */
+const SERVICE_TEMPLATE_SYNC_VERSION = 1
+const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
+
+/**
  * Pack Service
  *
  * Business logic for preset pack management.
@@ -70,13 +81,12 @@ class PackService {
     await this.refreshDefaultPackTemplates(existingByTemplateId)
 
     // Service-category templates (classifier, suggestions, memory, etc.) are
-    // internal machinery, not the intended per-pack customization surface — yet
-    // they were frozen-copied into every custom pack at creation and never
-    // updated, so code improvements (e.g. the classifier's present-character
-    // guidance) never reached existing custom-pack stories. Refresh them across
-    // ALL packs so service-template fixes always propagate. Narrative/user-facing
-    // templates in custom packs stay frozen (still never auto-updated).
-    await this.refreshServiceTemplatesAllPacks()
+    // internal machinery that was frozen-copied into every custom pack at creation
+    // and never updated, so code fixes (e.g. the classifier's present-character
+    // guidance) never reached existing custom-pack stories. Sync them across ALL
+    // packs — but only ONCE per SERVICE_TEMPLATE_SYNC_VERSION bump, never on every
+    // startup, so a user's own service-template edit survives normal restarts.
+    await this.syncServiceTemplatesIfStale()
 
     this.initialized = true
   }
@@ -288,39 +298,57 @@ class PackService {
   }
 
   /**
-   * Refresh SERVICE-category templates across ALL packs (default + custom) whose
-   * code baseline has changed. Service templates are internal machinery (classifier,
-   * suggestions, memory, etc.), not the per-pack customization surface — keeping them
-   * in sync with code prevents stale copies in custom packs (the classifier
-   * present-character gap). Only updates a template when its stored hash differs
-   * from the current code hash, so it is idempotent and cheap on unchanged packs.
+   * Sync SERVICE-category templates from code into ALL packs ONCE per
+   * SERVICE_TEMPLATE_SYNC_VERSION. Version-gated (a stored settings key) so it runs
+   * only after a deliberate bump, NOT every startup — that every-startup behavior
+   * silently reverted user edits to service templates in custom packs (research/54
+   * CR-2). Between bumps, a user's own service-template edit survives restarts.
    */
-  private async refreshServiceTemplatesAllPacks(): Promise<void> {
+  private async syncServiceTemplatesIfStale(): Promise<void> {
+    const stored = Number((await database.getSetting(SERVICE_TEMPLATE_SYNC_KEY)) ?? '0')
+    if (Number.isFinite(stored) && stored >= SERVICE_TEMPLATE_SYNC_VERSION) return
+
+    await this.syncServiceTemplatesAllPacks()
+    await database.setSetting(SERVICE_TEMPLATE_SYNC_KEY, String(SERVICE_TEMPLATE_SYNC_VERSION))
+  }
+
+  /**
+   * One-time sync body: for every SERVICE-category template, seed it into any pack
+   * missing it (research/54 CR-2b) and update packs whose stored hash differs from
+   * code. Code baseline hashes are computed once, outside the pack loop (CR-2/L-9).
+   */
+  private async syncServiceTemplatesAllPacks(): Promise<void> {
     const serviceTemplates = PROMPT_TEMPLATES.filter((t) => t.category === 'service')
     if (serviceTemplates.length === 0) return
+
+    // Precompute code-baseline hashes once (not per pack).
+    const baselines = await Promise.all(
+      serviceTemplates.map(async (t) => ({
+        id: t.id,
+        content: t.content,
+        contentHash: await hashContent(t.content),
+        userContentId: t.userContent ? `${t.id}-user` : null,
+        userContent: t.userContent ?? null,
+        userContentHash: t.userContent ? await hashContent(t.userContent) : null,
+      })),
+    )
 
     const packs = await database.getAllPacks()
     for (const pack of packs) {
       const existing = await database.getPackTemplates(pack.id)
       const byId = new Map(existing.map((t) => [t.templateId, t]))
 
-      for (const template of serviceTemplates) {
-        const cur = byId.get(template.id)
-        if (cur) {
-          const newHash = await hashContent(template.content)
-          if (cur.contentHash !== newHash) {
-            await database.setPackTemplateContent(pack.id, template.id, template.content)
-          }
+      for (const b of baselines) {
+        const cur = byId.get(b.id)
+        // Seed missing OR update a stale copy.
+        if (!cur || cur.contentHash !== b.contentHash) {
+          await database.setPackTemplateContent(pack.id, b.id, b.content)
         }
 
-        if (template.userContent) {
-          const userContentId = `${template.id}-user`
-          const curUser = byId.get(userContentId)
-          if (curUser) {
-            const newUserHash = await hashContent(template.userContent)
-            if (curUser.contentHash !== newUserHash) {
-              await database.setPackTemplateContent(pack.id, userContentId, template.userContent)
-            }
+        if (b.userContentId && b.userContent !== null) {
+          const curUser = byId.get(b.userContentId)
+          if (!curUser || curUser.contentHash !== b.userContentHash) {
+            await database.setPackTemplateContent(pack.id, b.userContentId, b.userContent)
           }
         }
       }
