@@ -31,6 +31,10 @@ export const riskAssessResultSchema = z.object({
     .string()
     .optional()
     .describe('Exact name of the character this action targets, when it targets one'),
+  spellId: z
+    .string()
+    .optional()
+    .describe('Lorebook entry id of the known spell this action casts, when it is a cast'),
   rationale: z.string().optional().describe('One short sentence of reasoning'),
 })
 

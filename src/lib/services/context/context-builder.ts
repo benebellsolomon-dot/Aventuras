@@ -32,7 +32,16 @@ import {
   type GateInput,
 } from '$lib/services/rpg'
 import type { RenderResult } from './types'
-import type { Branch, Character, Location, Item, StoryBeat, Story, StoryEntry } from '$lib/types'
+import type {
+  Branch,
+  Character,
+  Entry,
+  Location,
+  Item,
+  StoryBeat,
+  Story,
+  StoryEntry,
+} from '$lib/types'
 import type { RuntimeVariable, RuntimeVarsMap } from '$lib/services/packs/types'
 
 const log = createLogger('ContextBuilder')
@@ -143,8 +152,18 @@ export class ContextBuilder {
     await builder.loadBeStateContext(story, characters, protagonist, actionText)
     // BE engine: the static genre-rules pack (research/41 precedence contract)
     builder.loadBeGenreRules(story)
-    // RPG layer: player sheet block + service summaries (empty strings when off)
-    builder.loadRpgSheetContext(story, protagonist ?? null, characters)
+    // RPG layer: player sheet block + service summaries (empty strings when off).
+    // Spell entries resolve knownSpells ids → display names for the sheet block.
+    // Only fetched when the protagonist actually knows spells — a non-caster
+    // (the common case) skips the per-turn read entirely.
+    const hasSpells =
+      story.settings?.beMode === true &&
+      !!protagonist &&
+      sheetOrDefault(protagonist.metadata).knownSpells.length > 0
+    const spellEntries = hasSpells
+      ? (await database.getEntries(storyId)).filter((e) => e.type === 'spell')
+      : []
+    builder.loadRpgSheetContext(story, protagonist ?? null, characters, spellEntries)
 
     log('forStory complete', {
       storyId,
@@ -363,6 +382,7 @@ export class ContextBuilder {
     story: Story,
     protagonist: Character | null,
     characters: Character[] = [],
+    spellEntries: Entry[] = [],
   ): void {
     try {
       let playerSheetBlock = ''
@@ -370,7 +390,15 @@ export class ContextBuilder {
       let checkTaggingInstruction = ''
       if (story.settings?.beMode === true && protagonist) {
         const sheet = sheetOrDefault(protagonist.metadata)
-        playerSheetBlock = buildPlayerSheetBlock(sheet, protagonist.name)
+        // Resolve knownSpells ids → compact display strings (name · school · cost),
+        // preserving learn order; a stale id (entry deleted) is silently skipped.
+        const spellById = new Map(spellEntries.map((e) => [e.id, e]))
+        const knownSpellDisplays = sheet.knownSpells.flatMap((id) => {
+          const entry = spellById.get(id)
+          if (!entry || entry.state.type !== 'spell') return []
+          return [`${entry.name} (${entry.state.school}, ⬡${entry.state.essenceCost})`]
+        })
+        playerSheetBlock = buildPlayerSheetBlock(sheet, protagonist.name, knownSpellDisplays)
         playerSheetSummary = buildPlayerSheetSummary(sheet)
         // Gated interactions (research/48 Step 8) append into the SAME var
         // (R9: no template edits).

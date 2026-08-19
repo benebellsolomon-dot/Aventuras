@@ -12,6 +12,8 @@ import {
   bondCheckModifier,
   bondOf,
   bondStance,
+  CHECK_DEBUFF_CONDITION_PREFIX,
+  CHECK_DEBUFF_DC_PENALTY,
   EARLY_BLOOMER_INDUCTION_BONUS,
   hasQuirk,
   lactationOf,
@@ -67,6 +69,14 @@ export function buildTargetCheckModifiers(
   // proud: Persuasion +2 harder → bonus −2; Seduction explicitly untouched.
   if (hasQuirk(state, 'proud') && skill === 'persuasion') {
     modifiers.push({ label: 'proud (reason will not move her)', value: -2 })
+  }
+
+  // check_debuff (Phase 4, research/50 R2): a spell hex weakens her defenses, so
+  // the caster's checks against her land EASIER — a bonus. Applies to any skill
+  // (a hex is general), for as long as the condition's ttl keeps it alive. One
+  // bonus regardless of how many hex labels stack (a ward is a ward).
+  if (state.conditions?.some((c) => c.label.startsWith(CHECK_DEBUFF_CONDITION_PREFIX))) {
+    modifiers.push({ label: 'hexed (her guard is weakened)', value: CHECK_DEBUFF_DC_PENALTY })
   }
 
   return modifiers

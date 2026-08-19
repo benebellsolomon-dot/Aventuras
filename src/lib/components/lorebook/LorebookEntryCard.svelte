@@ -9,6 +9,7 @@
     Calendar,
     BookOpen,
     ChevronRight,
+    Sparkles,
   } from 'lucide-svelte'
   import { ui } from '$lib/stores/ui.svelte'
   import { Checkbox } from '$lib/components/ui/checkbox'
@@ -30,6 +31,7 @@
     faction: Shield,
     concept: Lightbulb,
     event: Calendar,
+    spell: Sparkles,
   }
 
   const typeColors: Record<EntryType, string> = {
@@ -39,6 +41,7 @@
     faction: 'text-purple-400',
     concept: 'text-pink-400',
     event: 'text-cyan-400',
+    spell: 'text-violet-400',
   }
 
   const injectionLabels: Record<string, string> = {

@@ -60,6 +60,16 @@ const MASTERY_PATTERNS = SKILLS.map((skill) => ({
   reversed: new RegExp(`\\b${skill.label}\\s+${MASTERY_WORDS}\\b`, 'i'),
 }))
 
+// Spell invention (Phase 4, research/50 R7): a spell-less protagonist narrated as
+// a master spellcaster. Conservative and gated on knowing NO spells — once she
+// has learned any spell, casting prose is legitimate and this never fires (per-
+// spell-name contradiction is intentionally out of scope: naming detection is
+// too false-positive-prone against the be/drift lesson).
+const SPELL_MASTERY_PATTERN = new RegExp(
+  `\\b${MASTERY_WORDS}\\s+(?:\\w+\\s+)?(?:spellcraft|sorcery|arcane\\s+magic|the\\s+arcane\\s+arts?)\\b`,
+  'i',
+)
+
 function detectStatInvention(narrative: string, sheet: RpgSheet): RpgDriftFinding | null {
   for (const { id, label, pattern, reversed } of MASTERY_PATTERNS) {
     if (skillRanks(sheet, id) > 0) continue
@@ -68,6 +78,12 @@ function detectStatInvention(narrative: string, sheet: RpgSheet): RpgDriftFindin
         kind: 'stat_invention',
         note: `The prose credits mastery of ${label}, but the protagonist has no training in it. Keep his abilities within the sheet.`,
       }
+    }
+  }
+  if (sheet.knownSpells.length === 0 && SPELL_MASTERY_PATTERN.test(narrative)) {
+    return {
+      kind: 'stat_invention',
+      note: 'The prose credits spellcasting mastery, but the protagonist has learned no spells. Keep his abilities within the sheet.',
     }
   }
   return null

@@ -41,7 +41,8 @@ export function extractEmbeddedLorebook(
 
   const vaultEntries: VaultLorebookEntry[] = result.entries.map((e) => {
     const { originalData: _originalData, ...rest } = e
-    return rest
+    // Spells are not vault-portable (research/50 O2); degrade to concept lore.
+    return { ...rest, type: rest.type === 'spell' ? ('concept' as const) : rest.type }
   })
 
   return {

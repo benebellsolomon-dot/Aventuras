@@ -83,4 +83,14 @@ describe('buildTargetCheckModifiers (research/48 R4 sign contract)', () => {
     expect(mods.map((m) => m.value)).toEqual([-2, -2, -2]) // bond wary, skittish, proud
     expect(mods.every((m) => m.label.length > 0)).toBe(true)
   })
+
+  it('a check_debuff hex condition grants the caster a bonus on any skill (Phase 4)', () => {
+    const hexed = girl({ conditions: [{ label: 'hex:arcane snare', ttl: 2 }] })
+    expect(sum(hexed, 'transmutation')).toBe(2)
+    expect(sum(hexed, 'athletics')).toBe(2) // general — not just social/intimate
+    // No hex → no bonus.
+    expect(sum(girl(), 'transmutation')).toBe(0)
+    // A non-hex condition does not trigger it.
+    expect(sum(girl({ conditions: [{ label: 'Engorged', ttl: 2 }] }), 'transmutation')).toBe(0)
+  })
 })

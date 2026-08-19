@@ -24,6 +24,8 @@ export interface ResolveCheckInput {
   action: string
   essenceCost?: number
   modifiers?: ReadonlyArray<CheckModifier>
+  /** Set when the check is a spell cast (Phase 4). Validated against knownSpells. */
+  spellId?: string
 }
 
 export function resolveCheck(input: ResolveCheckInput): CheckRecord {
@@ -36,6 +38,24 @@ export function resolveCheck(input: ResolveCheckInput): CheckRecord {
   const ranks = skillRanks(sheet, skill)
   const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0)
   const bonus = checkBonus(sheet, skill) + modifierSum
+
+  // Unknown spell (Phase 4, research/50 R4): a cast of a spell not in knownSpells
+  // is refused before rolling — no roll, no spend. The stat_invention detector
+  // flags the narrative side; here we only guarantee no unearned essence burn.
+  if (input.spellId !== undefined && !sheet.knownSpells.includes(input.spellId)) {
+    return {
+      action,
+      skill,
+      dc,
+      nat: 0,
+      bonusBreakdown: { attribute, ranks, modifiers },
+      bonus,
+      total: 0,
+      margin: -dc,
+      band: 'fail',
+      essenceSpent: 0,
+    }
+  }
 
   // Insufficient essence: the action can't be powered, so the check never
   // rolls — a fail-band record with no spend, never a negative pool.

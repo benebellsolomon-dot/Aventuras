@@ -11,6 +11,7 @@ const db = {
   getLocations: vi.fn(async () => []),
   getItems: vi.fn(async () => []),
   getStoryBeats: vi.fn(async () => []),
+  getEntries: vi.fn(async () => []),
   getPackVariables: vi.fn(async () => []),
   getStoryCustomVariables: vi.fn(async () => null),
   getRuntimeVariables: vi.fn(async () => []),

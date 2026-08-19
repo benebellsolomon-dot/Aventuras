@@ -13,6 +13,7 @@ import { SuggestionsService } from '../generation/SuggestionsService'
 import { ActionChoicesService } from '../generation/ActionChoicesService'
 import { StyleReviewerService } from '../generation/StyleReviewerService'
 import { RiskAssessService } from '../generation/RiskAssessService'
+import { SpellResearchService } from '../generation/SpellResearchService'
 import { EntryInjector, type ContextConfig } from '../generation/EntryInjector'
 import { LoreManagementService } from '../lorebook/LoreManagementService'
 import { AgenticRetrievalService } from '../retrieval/AgenticRetrievalService'
@@ -83,6 +84,13 @@ export class ServiceFactory {
    */
   createRiskAssessService(): RiskAssessService {
     return new RiskAssessService('riskAssess')
+  }
+
+  /**
+   * Create a spell research service instance (in-game spell generation, Phase 4).
+   */
+  createSpellResearchService(): SpellResearchService {
+    return new SpellResearchService('spellResearch')
   }
 
   /**

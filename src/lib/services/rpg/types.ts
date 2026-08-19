@@ -86,4 +86,7 @@ export interface CheckRecord {
   drift?: RpgDriftFinding[]
   /** Resolved target character NAME when the check targeted a girl (Phase 2). */
   target?: string
+  /** Spell lorebook Entry id when this check was a cast (Phase 4). Drives effect
+   * application in the store and marks the turn log / drift as a cast. */
+  spellId?: string
 }

@@ -49,6 +49,11 @@ export const actionChoiceSchema = z.object({
     .max(ESSENCE_COST_MAX)
     .optional()
     .describe('Essence cost 1-3 when the choice channels catalytic power'),
+  /** Spell lorebook entry id when this choice casts a known spell (Phase 4). */
+  spellId: z
+    .string()
+    .optional()
+    .describe('Lorebook entry id of the known spell this choice casts, when it is a cast'),
 })
 
 /**

@@ -77,4 +77,22 @@ describe('stat_invention', () => {
       detectRpgDrift('Her perception of him shifted; his deception stung.', sheet, null),
     ).toEqual([])
   })
+
+  it('fires when a spell-less protagonist is credited with spellcasting mastery (Phase 4)', () => {
+    const findings = detectRpgDrift(
+      'His mastery of the arcane arts let the incantation land perfectly.',
+      sheet, // defaultRpgSheet → knownSpells: []
+      null,
+    )
+    expect(findings.some((f) => f.kind === 'stat_invention')).toBe(true)
+  })
+
+  it('does NOT fire once she has learned a spell (casting is now legitimate)', () => {
+    const caster = { ...sheet, knownSpells: ['spell-1'] }
+    expect(detectRpgDrift('His mastery of sorcery was on full display.', caster, null)).toEqual([])
+  })
+
+  it('does not fire on plain mentions of magic without a mastery claim', () => {
+    expect(detectRpgDrift('Magic hummed in the old stones of the hall.', sheet, null)).toEqual([])
+  })
 })

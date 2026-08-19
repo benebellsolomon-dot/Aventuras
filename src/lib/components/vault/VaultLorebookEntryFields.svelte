@@ -5,7 +5,7 @@
   import { Label } from '$lib/components/ui/label'
   import SelectTrigger from '../ui/select/select-trigger.svelte'
   import { Select, SelectContent, SelectItem } from '../ui/select'
-  import type { EntryType, EntryInjectionMode } from '$lib/types'
+  import type { VaultEntryType, EntryInjectionMode } from '$lib/types'
 
   interface Props {
     data: VaultLorebookEntry
@@ -27,7 +27,7 @@
       : ''
 
   // Type options
-  const entryTypes: EntryType[] = ['character', 'location', 'item', 'faction', 'concept', 'event']
+  const entryTypes: VaultEntryType[] = ['character', 'location', 'item', 'faction', 'concept', 'event']
   const injectionModes: Array<{ value: EntryInjectionMode; label: string; description: string }> = [
     { value: 'always', label: 'Always Active', description: 'Always included in every response' },
     { value: 'keyword', label: 'Automatic', description: 'Matched by keywords or AI relevance' },
@@ -51,7 +51,7 @@
       type="single"
       value={data.type}
       onValueChange={(v) => {
-        data.type = v as EntryType
+        data.type = v as VaultEntryType
         handleInput()
       }}
     >

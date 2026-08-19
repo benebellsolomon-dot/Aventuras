@@ -254,6 +254,14 @@ class AIService {
   }
 
   /**
+   * Research a new spell in-game (RPG Phase 4). Returns a validated spell to be
+   * learned via StoryStore.learnSpell, or null on failure (research fizzled).
+   */
+  researchSpell(brief: string, sheetSummary: string) {
+    return serviceFactory.createSpellResearchService().research(brief, sheetSummary)
+  }
+
+  /**
    * Classify a narrative response to extract world state changes.
    */
   async classifyResponse(

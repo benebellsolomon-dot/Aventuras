@@ -97,6 +97,7 @@ class LorebookVaultStore {
       faction: 0,
       concept: 0,
       event: 0,
+      spell: 0,
     }
     for (const entry of entries) {
       entryBreakdown[entry.type]++
@@ -135,6 +136,7 @@ class LorebookVaultStore {
       faction: 0,
       concept: 0,
       event: 0,
+      spell: 0,
     }
     for (const entry of entries) {
       entryBreakdown[entry.type]++
@@ -227,10 +229,12 @@ class LorebookVaultStore {
       faction: 0,
       concept: 0,
       event: 0,
+      spell: 0,
     }
 
     const vaultEntries: VaultLorebookEntry[] = entries.map((e) => {
-      const type = e.type || 'concept'
+      // Spells are not vault-portable (research/50 O2); degrade to concept lore.
+      const type = e.type === 'spell' ? 'concept' : e.type || 'concept'
       entryBreakdown[type]++
       return {
         name: e.name,
@@ -282,7 +286,7 @@ class LorebookVaultStore {
       metadata: {
         format: 'unknown',
         totalEntries: 0,
-        entryBreakdown: { character: 0, location: 0, item: 0, faction: 0, concept: 0, event: 0 },
+        entryBreakdown: { character: 0, location: 0, item: 0, faction: 0, concept: 0, event: 0, spell: 0 },
         importing: true,
         sourceUrl: card.imageUrl,
       },
@@ -318,7 +322,8 @@ class LorebookVaultStore {
 
     const vaultEntries = entries.map((e) => {
       const { originalData: _originalData, ...rest } = e
-      return rest
+      // Spells are not vault-portable (research/50 O2); degrade to concept lore.
+      return { ...rest, type: rest.type === 'spell' ? ('concept' as const) : rest.type }
     })
 
     const entryBreakdown: Record<EntryType, number> = {
@@ -328,6 +333,7 @@ class LorebookVaultStore {
       faction: 0,
       concept: 0,
       event: 0,
+      spell: 0,
     }
     for (const entry of vaultEntries) {
       entryBreakdown[entry.type]++
@@ -381,7 +387,7 @@ class LorebookVaultStore {
       metadata: {
         format: 'unknown',
         totalEntries: 0,
-        entryBreakdown: { character: 0, location: 0, item: 0, faction: 0, concept: 0, event: 0 },
+        entryBreakdown: { character: 0, location: 0, item: 0, faction: 0, concept: 0, event: 0, spell: 0 },
         importing: true,
       },
     }
@@ -414,7 +420,8 @@ class LorebookVaultStore {
 
     const vaultEntries = entries.map((e) => {
       const { originalData: _originalData, ...rest } = e
-      return rest
+      // Spells are not vault-portable (research/50 O2); degrade to concept lore.
+      return { ...rest, type: rest.type === 'spell' ? ('concept' as const) : rest.type }
     })
 
     const entryBreakdown: Record<EntryType, number> = {
@@ -424,6 +431,7 @@ class LorebookVaultStore {
       faction: 0,
       concept: 0,
       event: 0,
+      spell: 0,
     }
     for (const entry of vaultEntries) {
       entryBreakdown[entry.type]++

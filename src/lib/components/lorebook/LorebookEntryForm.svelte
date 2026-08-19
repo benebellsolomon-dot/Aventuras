@@ -119,6 +119,8 @@
           witnesses: [],
           consequences: [],
         }
+      case 'spell':
+        return { type: 'spell', school: 'transmutation', essenceCost: 1, dc: 12, effects: [], revealed: true }
     }
   }
 

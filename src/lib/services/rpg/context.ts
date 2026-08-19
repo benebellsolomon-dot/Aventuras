@@ -32,7 +32,12 @@ function notableSkills(sheet: RpgSheet): string {
  * The system-prompt sheet block. Qualitative-first: the narrator needs
  * capability context, not an invitation to do math.
  */
-export function buildPlayerSheetBlock(sheet: RpgSheet, protagonistName: string): string {
+export function buildPlayerSheetBlock(
+  sheet: RpgSheet,
+  protagonistName: string,
+  /** Preformatted known-spell display strings (Phase 4), e.g. "Swell (transmutation, ⬡2)". */
+  knownSpells: ReadonlyArray<string> = [],
+): string {
   const mods = ATTRIBUTE_IDS.map(
     (id) => `${ATTRIBUTE_LABELS[id]} ${signed(attributeMod(sheet.attributes[id]))}`,
   ).join(' · ')
@@ -43,8 +48,15 @@ export function buildPlayerSheetBlock(sheet: RpgSheet, protagonistName: string):
     `Attribute modifiers: ${mods}.`,
     skills ? `Trained skills: ${skills}.` : 'No trained skills yet.',
     `Catalytic essence: ${sheet.essence.current}/${sheet.essence.max}.`,
-    'These are the ONLY abilities that exist. Do not invent stats, skills, spells, or levels the sheet does not show.',
   ]
+  // Known-spells line renders ONLY when she has learned spells, so a non-caster's
+  // block is byte-identical to Phase 1-3 (prompt-cache guard, research/50 R8).
+  if (knownSpells.length > 0) {
+    lines.push(`Known spells: ${knownSpells.join('; ')}.`)
+  }
+  lines.push(
+    'These are the ONLY abilities that exist. Do not invent stats, skills, spells, or levels the sheet does not show.',
+  )
   if (sheet.driftNote?.note) {
     lines.push(`[CONTINUITY] ${sheet.driftNote.note}`)
   }
@@ -88,6 +100,16 @@ export function buildCheckResultBlock(record: CheckRecord): string {
     )
     if (record.essenceSpent > 0) {
       lines.push(`Catalytic essence spent: ${record.essenceSpent}.`)
+    }
+    // Spell cast (Phase 4, research/50 R8): the directive claims mechanical
+    // effects were applied, so it must fire ONLY when they actually were —
+    // mirror computeSpellCast's gate: a non-fail band AND a resolved target
+    // girl. A fizzle (fail) applied nothing; an untargeted "narrative-only"
+    // cast (R10, no `target`) applied nothing either — neither may claim effects.
+    if (record.spellId && record.band !== 'fail' && record.target) {
+      lines.push(
+        'This was a spell cast; its effects are already applied mechanically. Narrate exactly those effects — do not invent additional powers or omit the result.',
+      )
     }
   }
   lines.push(

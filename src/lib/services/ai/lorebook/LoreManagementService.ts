@@ -74,7 +74,8 @@ export function getDefaultLoreManagementSettings(): LoreManagementSettings {
 function entryToVaultEntry(entry: Entry): VaultLorebookEntry {
   return {
     name: entry.name,
-    type: entry.type,
+    // Spells are not vault-portable (research/50 O2); degrade to concept lore.
+    type: entry.type === 'spell' ? 'concept' : entry.type,
     description: entry.description,
     keywords: entry.injection.keywords,
     aliases: entry.aliases,
@@ -332,6 +333,15 @@ function createDefaultState(type: Entry['type']): Entry['state'] {
         occurredAt: null,
         witnesses: [],
         consequences: [],
+      }
+    case 'spell':
+      return {
+        type: 'spell',
+        school: 'transmutation',
+        essenceCost: 1,
+        dc: 12,
+        effects: [],
+        revealed: true,
       }
   }
 }

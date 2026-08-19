@@ -58,6 +58,19 @@ describe('buildPlayerSheetBlock', () => {
     const s = { ...sheet(), driftNote: { note: 'Last turn credited an unknown spell.' } }
     expect(buildPlayerSheetBlock(s, 'Ben')).toContain('[CONTINUITY] Last turn credited')
   })
+
+  it('a non-caster block is byte-identical with and without the empty spell arg (cache guard)', () => {
+    expect(buildPlayerSheetBlock(sheet(), 'Ben')).toBe(buildPlayerSheetBlock(sheet(), 'Ben', []))
+  })
+
+  it('renders a known-spells line only when spells are learned (Phase 4)', () => {
+    const withSpells = buildPlayerSheetBlock(sheet(), 'Ben', [
+      'Swell of the Vale (transmutation, ⬡2)',
+    ])
+    expect(withSpells).toContain('Known spells: Swell of the Vale (transmutation, ⬡2).')
+    // The line is absent for a non-caster — no empty "Known spells:" noise.
+    expect(buildPlayerSheetBlock(sheet(), 'Ben')).not.toContain('Known spells:')
+  })
 })
 
 describe('buildCheckResultBlock', () => {
@@ -67,6 +80,19 @@ describe('buildCheckResultBlock', () => {
     expect(block).toContain('d20 15 +5 = 20 vs DC 14 → SUCCESS')
     expect(block).toContain('Catalytic essence spent: 2.')
     expect(block).toContain('already-resolved fact')
+  })
+
+  it('adds a cast directive only for a LANDED, TARGETED spell cast (Phase 4)', () => {
+    expect(buildCheckResultBlock(record())).not.toContain('spell cast')
+    // Landed + a resolved target → effects applied → the directive fires.
+    const cast = buildCheckResultBlock(record({ spellId: 'spell-1', target: 'Amelia' }))
+    expect(cast).toContain('This was a spell cast; its effects are already applied')
+    // A fizzled cast (fail band) applied nothing — no effect claim.
+    const fizzle = buildCheckResultBlock(record({ spellId: 'spell-1', band: 'fail', target: 'Amelia' }))
+    expect(fizzle).not.toContain('spell cast')
+    // An untargeted "narrative-only" cast (R10) applied nothing either.
+    const untargeted = buildCheckResultBlock(record({ spellId: 'spell-1' }))
+    expect(untargeted).not.toContain('spell cast')
   })
 
   it.each(['crit', 'success', 'partial', 'fail'] as const)('band %s gets its directive', (band) => {

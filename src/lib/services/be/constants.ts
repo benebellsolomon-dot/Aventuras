@@ -8,6 +8,7 @@
  */
 
 import type { BeEventKind, BeStoryConfig, BodyShape, GrowthOutcome } from './types'
+import type { CheckBand } from './roll'
 
 /** Growth per outcome band — small and capped, never continuous off the roll margin (31a §3.4). */
 export const GROWTH_DELTA_BY_OUTCOME: Readonly<Partial<Record<GrowthOutcome, number>>> = {
@@ -162,3 +163,20 @@ export const MILK_UNIT_ML = 100
 /** Apparent (presentation-only) tier bump while Engorged — never a real tier write. */
 export const APPARENT_TIER_ENGORGED = 1
 export const APPARENT_TIER_PRESSURE_PRONE = 2
+
+// ---- Magic / spells, BE side (research/50 Phase 4; D5 reference defaults) ----
+// Co-located with be/effects.ts (the effect translation), which must not import
+// rpg/. rpg/modifiers reads the check-debuff pair below from $lib/services/be.
+/** Band → emitted spell-effect intensity delta (R4). fail = null → no effects. */
+export const SPELL_BAND_INTENSITY_DELTA: Readonly<Record<CheckBand, number | null>> = {
+  crit: 1,
+  success: 0,
+  partial: -1,
+  fail: null,
+}
+/** Max supplyTier bump a single supply_surge effect may apply. */
+export const SUPPLY_SURGE_MAX_DELTA = 2
+/** DC penalty a check_debuff condition imposes on checks targeting the afflicted girl. */
+export const CHECK_DEBUFF_DC_PENALTY = 2
+/** Condition-label prefix the RPG modifier layer recognizes as a spell check-debuff. */
+export const CHECK_DEBUFF_CONDITION_PREFIX = 'hex:'

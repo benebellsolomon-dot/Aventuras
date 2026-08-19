@@ -1,4 +1,11 @@
 // Core entity types for Aventura
+
+// Type-only (fully erased at compile): the spell effect vocabulary a
+// SpellEntryState carries. `be/` never imports `$lib/types`, so this edge is
+// acyclic. `school` stays a plain string here; the SkillId constraint is
+// enforced at the spellSchema validation boundary (RPG Phase 4, research/50 R1).
+import type { EffectTag } from '$lib/services/be/effects'
+
 export type StoryMode = 'adventure' | 'creative-writing'
 export type POV = 'first' | 'second' | 'third'
 export type Tense = 'past' | 'present'
@@ -298,9 +305,14 @@ export interface VaultLorebook {
  * A lorebook entry stored in the vault.
  * Similar to ImportedEntry but without originalData for cleaner storage.
  */
+/** Vault entries deliberately exclude spells — spells are in-game-generated,
+ * not vault-portable (research/50 O2). Decoupled so the 'spell' EntryType does
+ * not leak into the vault/import/lore-management path. */
+export type VaultEntryType = Exclude<EntryType, 'spell'>
+
 export interface VaultLorebookEntry {
   name: string
-  type: EntryType
+  type: VaultEntryType
   description: string
   keywords: string[]
   aliases: string[]
@@ -495,7 +507,14 @@ export interface Branch {
 
 // ===== Entry/Lorebook System (per design doc section 3.2) =====
 
-export type EntryType = 'character' | 'location' | 'item' | 'faction' | 'concept' | 'event'
+export type EntryType =
+  | 'character'
+  | 'location'
+  | 'item'
+  | 'faction'
+  | 'concept'
+  | 'event'
+  | 'spell'
 export type EntryInjectionMode = 'always' | 'keyword' | 'never'
 export type EntryCreator = 'user' | 'ai' | 'import'
 
@@ -618,6 +637,23 @@ export interface EventEntryState extends BaseEntryState {
   consequences: string[]
 }
 
+// Spell-specific state (RPG Phase 4, research/50 R1). A spell IS a lorebook
+// Entry of type 'spell'; the mechanical block lives here, the narrative-facing
+// text is the Entry.description. knownSpells (on rpgSheet) holds the Entry.id.
+export interface SpellEntryState extends BaseEntryState {
+  type: 'spell'
+  /** Governing skill/school — a SkillId; validated as such at the schema boundary. */
+  school: string
+  /** Essence cost to cast (0..ESSENCE_COST_MAX). */
+  essenceCost: number
+  /** Difficulty class fed straight into resolveCheck (DC_MIN..DC_MAX). */
+  dc: number
+  /** Engine-executed effects, restricted to the EffectTag vocabulary. */
+  effects: EffectTag[]
+  /** Whether the player has discovered/learned it (parallels concept.revealed). */
+  revealed: boolean
+}
+
 export type EntryState =
   | CharacterEntryState
   | LocationEntryState
@@ -625,6 +661,7 @@ export type EntryState =
   | FactionEntryState
   | ConceptEntryState
   | EventEntryState
+  | SpellEntryState
 
 // Adventure mode specific state
 export interface AdventureEntryState {

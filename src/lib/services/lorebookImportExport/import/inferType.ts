@@ -104,6 +104,7 @@ const TYPE_KEYWORDS: Record<EntryType, string[]> = {
     'anniversary',
     'historical',
   ],
+  spell: [], // Imported entries must never be auto-classified as spells
 }
 
 export function inferEntryType(name: string, content: string): EntryType {
@@ -116,6 +117,7 @@ export function inferEntryType(name: string, content: string): EntryType {
     faction: 0,
     concept: 0,
     event: 0,
+    spell: 0,
   }
 
   for (const [type, keywords] of Object.entries(TYPE_KEYWORDS) as [EntryType, string[]][]) {

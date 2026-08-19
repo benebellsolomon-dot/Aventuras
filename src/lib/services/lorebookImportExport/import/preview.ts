@@ -42,6 +42,7 @@ export function groupEntriesByType(entries: ImportedEntry[]): Record<EntryType, 
     faction: [],
     concept: [],
     event: [],
+    spell: [],
   }
 
   for (const entry of entries) {
@@ -66,6 +67,7 @@ export function getImportSummary(entries: ImportedEntry[]): {
     faction: 0,
     concept: 0,
     event: 0,
+    spell: 0,
   }
 
   let withContent = 0

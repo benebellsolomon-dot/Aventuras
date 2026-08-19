@@ -19,6 +19,7 @@
     type SpendTarget,
   } from '$lib/services/rpg'
   import { Button } from '$lib/components/ui/button'
+  import SpellbookSection from './SpellbookSection.svelte'
 
   const protagonist = $derived(story.characters.find((c) => c.relationship === 'self') ?? null)
   const sheet = $derived.by<RpgSheet | null>(() => {
@@ -146,5 +147,8 @@
         {/if}
       </div>
     </div>
+
+    <!-- Spellbook (Phase 4) -->
+    <SpellbookSection />
   </div>
 {/if}

@@ -13,6 +13,7 @@
     Pencil,
     Trash2,
     ArrowLeft,
+    Sparkles,
   } from 'lucide-svelte'
   import LorebookEntryForm from './LorebookEntryForm.svelte'
 
@@ -33,6 +34,7 @@
     faction: Shield,
     concept: Lightbulb,
     event: Calendar,
+    spell: Sparkles,
   }
 
   const typeColors: Record<EntryType, string> = {
@@ -42,6 +44,7 @@
     faction: 'text-purple-400 bg-purple-500/20',
     concept: 'text-pink-400 bg-pink-500/20',
     event: 'text-cyan-400 bg-cyan-500/20',
+    spell: 'text-violet-400 bg-violet-500/20',
   }
 
   const injectionLabels: Record<string, string> = {

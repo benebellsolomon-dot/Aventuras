@@ -78,6 +78,11 @@ export class CheckPhase {
     // Note: because the tag only applies on a text match, an edited input
     // drops the target (and its modifiers) along with the tag — re-assessed.
     let targetName = tagApplies ? choiceTag!.targetCharacter : undefined
+    // Spell cast marker (Phase 4, research/50 R3): carried onto the record so
+    // the store applies the spell's effects and the turn log marks it a cast.
+    // v1 casts are UI-initiated with authoritative skill/dc/essenceCost already
+    // filled from the spell entry, so CheckPhase needs no DB resolution here.
+    let spellId = tagApplies ? choiceTag!.spellId : undefined
 
     if (!tagApplies) {
       if (context.abortSignal?.aborted) {
@@ -90,6 +95,7 @@ export class CheckPhase {
         dc = verdict.dc
         essenceCost = verdict.essenceCost ?? 0
         targetName = verdict.targetCharacter
+        spellId = verdict.spellId
       }
     }
 
@@ -123,8 +129,10 @@ export class CheckPhase {
         action: context.userAction.content,
         essenceCost,
         modifiers,
+        ...(spellId ? { spellId } : {}),
       }),
       ...(target ? { target: target.name } : {}),
+      ...(spellId ? { spellId } : {}),
     }
     log('check resolved', { skill, dc, nat: record.nat, total: record.total, band: record.band })
 

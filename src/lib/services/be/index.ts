@@ -11,6 +11,8 @@ export {
   ANTICIPATION_THRESHOLD,
   APPARENT_TIER_ENGORGED,
   APPARENT_TIER_PRESSURE_PRONE,
+  CHECK_DEBUFF_CONDITION_PREFIX,
+  CHECK_DEBUFF_DC_PENALTY,
   CHRONIC_SUPPLY_BEATS,
   CHRONIC_SUPPLY_TIER,
   DEFAULT_BE_STORY_CONFIG,
@@ -30,10 +32,12 @@ export {
   PRESSURE_ACCRUAL,
   PRESSURE_FIRE,
   PRESSURE_RELEASE,
+  SPELL_BAND_INTENSITY_DELTA,
   SUPPLY_ADAPT_UP_BEATS,
   SUPPLY_EASE_IDLE_BEATS,
   SUPPLY_FILL_RATE_BONUS,
   SUPPLY_LABELS,
+  SUPPLY_SURGE_MAX_DELTA,
   SUPPLY_TIER_MAX,
   fluidProfile,
   parseGrowthEligibleKinds,
@@ -169,6 +173,16 @@ export {
   type SupplyAdapt,
   type SupplyMeterView,
 } from './lactation'
+export {
+  EFFECT_KINDS,
+  coerceEffectTags,
+  dedupeForCast,
+  effectTagSchema,
+  translateSpellEffects,
+  type EffectKind,
+  type EffectTag,
+  type SpellTranslation,
+} from './effects'
 export { detectDrift } from './drift'
 export { INTERACTION_MILESTONES, nextMilestone, type InteractionMilestone } from './milestones'
 export {

@@ -11,6 +11,8 @@ export type {
   SkillId,
 } from './types'
 export {
+  ALCHEMY_MILK_BONUS_INTENSITY,
+  ALCHEMY_MILK_COST_REDUCTION,
   ATTRIBUTE_CAP,
   ATTRIBUTE_IDS,
   ATTRIBUTE_LABELS,
@@ -24,6 +26,7 @@ export {
   SKILL_IDS,
   SKILL_RANK_CAP,
   SKILLS,
+  SPELL_SCHOOLS,
   type SkillDef,
 } from './constants'
 export {

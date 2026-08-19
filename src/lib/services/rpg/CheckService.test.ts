@@ -117,3 +117,34 @@ describe('resolveCheck', () => {
     ).not.toThrow()
   })
 })
+
+describe('resolveCheck — spell casts (Phase 4 Step 4)', () => {
+  it('resolves normally when the spellId is a known spell', () => {
+    const record = resolveCheck({
+      seed: SEED,
+      sheet: sheetWith({ knownSpells: ['spell-1'] }),
+      skill: 'alchemy',
+      dc: 14,
+      action: 'Cast Swell',
+      essenceCost: 2,
+      spellId: 'spell-1',
+    })
+    expect(record.band).toBe('success')
+    expect(record.essenceSpent).toBe(2)
+  })
+
+  it('refuses an unknown spellId: fail band, no roll, no spend', () => {
+    const record = resolveCheck({
+      seed: SEED,
+      sheet: sheetWith({ knownSpells: ['spell-1'] }),
+      skill: 'alchemy',
+      dc: 14,
+      action: 'Cast a spell she never learned',
+      essenceCost: 3,
+      spellId: 'spell-unknown',
+    })
+    expect(record.band).toBe('fail')
+    expect(record.nat).toBe(0)
+    expect(record.essenceSpent).toBe(0)
+  })
+})

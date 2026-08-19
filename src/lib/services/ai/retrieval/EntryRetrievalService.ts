@@ -49,6 +49,7 @@ export const STICKINESS_BY_TYPE: Record<EntryType, number> = {
   location: 3, // Nearby/mentioned locations
   event: 2, // Historical references fade quickly
   item: 2, // Items are situational
+  spell: 5, // Spell rules are foundational, concept-like
 }
 
 /**
@@ -702,6 +703,7 @@ export class EntryRetrievalService extends BaseAIService {
       faction: [],
       concept: [],
       event: [],
+      spell: [],
     }
 
     for (const retrieved of all) {

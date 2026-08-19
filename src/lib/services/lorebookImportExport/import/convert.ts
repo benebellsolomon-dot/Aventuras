@@ -8,7 +8,8 @@ import type { ImportedEntry } from '../types'
 export function entryToVaultEntry(entry: Entry): VaultLorebookEntry {
   return {
     name: entry.name,
-    type: entry.type,
+    // Spells are not vault-portable (research/50 O2); degrade to concept lore.
+    type: entry.type === 'spell' ? 'concept' : entry.type,
     description: entry.description,
     keywords: entry.injection.keywords,
     aliases: entry.aliases,

@@ -23,6 +23,7 @@
     GitMerge,
     Bot,
     Download,
+    Sparkles,
   } from 'lucide-svelte'
   import { untrack, onDestroy } from 'svelte'
   import TagInput from '$lib/components/tags/TagInput.svelte'
@@ -447,6 +448,7 @@
     faction: Flag,
     concept: Brain,
     event: Calendar,
+    spell: Sparkles,
   }
 
   async function handleSaveClick(
@@ -485,6 +487,7 @@
         faction: 0,
         concept: 0,
         event: 0,
+        spell: 0,
       }
       entries.forEach((e) => {
         if (breakdown[e.type] !== undefined) breakdown[e.type]++

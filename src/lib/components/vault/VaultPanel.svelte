@@ -306,6 +306,7 @@
           faction: 0,
           concept: 0,
           event: 0,
+          spell: 0,
         },
       },
     })

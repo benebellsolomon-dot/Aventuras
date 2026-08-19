@@ -530,3 +530,51 @@ describe('milkYield (R7 drain diff)', () => {
     expect(result.milkYield).toBeUndefined()
   })
 })
+
+// ---- Phase 4: supply_surge (research/50 R2) ----
+
+describe('supply surge (research/50 Phase 4)', () => {
+  it('raises an active girl by the delta, before organic adaptation', () => {
+    const result = reduceCharacterBody(
+      stateWith({ lactation: lactating({ supplyTier: 0 }) }),
+      [],
+      CONFIG,
+      's',
+      'Mira',
+      undefined,
+      { supplyDelta: 2 },
+    )
+    expect(result.state.lactation?.supplyTier).toBe(2)
+    expect(result.log.some((r) => r.kind === 'supply' && r.note?.includes('surge →'))).toBe(true)
+  })
+
+  it('clamps at SUPPLY_TIER_MAX and logs the ceiling', () => {
+    const result = reduceCharacterBody(
+      stateWith({ lactation: lactating({ supplyTier: 2 }) }),
+      [],
+      CONFIG,
+      's',
+      'Mira',
+      undefined,
+      { supplyDelta: 5 },
+    )
+    expect(result.state.lactation?.supplyTier).toBe(3)
+  })
+
+  it('is a logged no-op when she is not lactating (surge does not induce)', () => {
+    const result = reduceCharacterBody(stateWith(), [], CONFIG, 's', 'Mira', undefined, {
+      supplyDelta: 2,
+    })
+    expect(result.state.lactation).toBeUndefined()
+    expect(result.log.some((r) => r.kind === 'supply' && r.note?.includes('not lactating'))).toBe(
+      true,
+    )
+  })
+
+  it('leaves output byte-identical when no supplyDelta is passed (neutral passthrough)', () => {
+    const state = stateWith({ lactation: lactating({ supplyTier: 1 }) })
+    const withField = reduceCharacterBody(state, [], CONFIG, 's', 'Mira', undefined, {})
+    const without = reduceCharacterBody(state, [], CONFIG, 's', 'Mira')
+    expect(withField).toEqual(without)
+  })
+})

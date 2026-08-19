@@ -83,3 +83,19 @@ export const INTIMATE_SKILLS: ReadonlyArray<SkillId> = ['handling', 'milking', '
 export const DC_MIN = 1
 export const DC_MAX = 40
 export const ESSENCE_COST_MAX = 6
+
+// ---- Magic / spells (research/50 Phase 4; D5 reference defaults) ----
+// The BE-side spell constants (band→intensity, supply-surge cap, check-debuff
+// label/penalty) live in be/constants.ts, co-located with the effect translation
+// (be/effects.ts) which must not import rpg/. rpg/modifiers reads the check-debuff
+// pair from $lib/services/be. Here we keep only the RPG-level spell constants.
+/** Spell schools (§2.2). Any SkillId is castable, but generation prefers these four. */
+export const SPELL_SCHOOLS: ReadonlyArray<SkillId> = [
+  'transmutation',
+  'enchantment',
+  'arcana',
+  'ritualism',
+]
+/** Alchemy-milk consumption bonus (R11): one prime/rich unit → one of these. */
+export const ALCHEMY_MILK_BONUS_INTENSITY = 1
+export const ALCHEMY_MILK_COST_REDUCTION = 1

@@ -289,3 +289,61 @@ describe('Phase 3 full-turn canary', () => {
     `)
   })
 })
+
+// ---- Phase 4 golden canary (research/50 Step 9): a full spell-cast turn ----
+// A success-band cast of a growth + supply_surge spell on an actively-lactating
+// girl. translateSpellEffects → reduceCharacterBody in one reduce: the growth
+// catalyst lands through the normal gates and the surge raises supply, all
+// deterministic off the seed. Pins the effect→reducer integration.
+import { translateSpellEffects } from './effects'
+
+describe('Phase 4 full-cast canary', () => {
+  test('success cast (growth + supply_surge) lands through the reducer', () => {
+    const state = {
+      ...defaultBodyState(15),
+      lactation: { active: true, supplyTier: 1, beatsSinceMilked: 1, demandBeats: 0 },
+      fluids: { fillPercent: 20, fluidType: 'milk' },
+    }
+    const config = { ...DEFAULT_BE_STORY_CONFIG, enabled: true }
+    const cast = translateSpellEffects(
+      [
+        { kind: 'growth', intensity: 2 },
+        { kind: 'supply_surge', intensity: 1 },
+      ],
+      'success',
+      'Vale',
+    )
+    const result = reduceCharacterBody(state, cast.events, config, 'p4-canary', 'Vale', undefined, {
+      supplyDelta: cast.supplyDelta,
+    })
+    expect({
+      tier: result.state.tier,
+      supplyTier: result.state.lactation?.supplyTier,
+      castEvents: cast.events,
+      castSupplyDelta: cast.supplyDelta,
+      kinds: result.log.map((r) => r.kind),
+      catalystOutcomes: result.log.filter((r) => r.kind === 'catalyst').map((r) => r.outcome),
+    }).toMatchInlineSnapshot(`
+      {
+        "castEvents": [
+          {
+            "character": "Vale",
+            "intensity": 2,
+            "kind": "catalyst",
+          },
+        ],
+        "castSupplyDelta": 1,
+        "catalystOutcomes": [
+          "fail",
+        ],
+        "kinds": [
+          "fill",
+          "catalyst",
+          "supply",
+        ],
+        "supplyTier": 2,
+        "tier": 15,
+      }
+    `)
+  })
+})

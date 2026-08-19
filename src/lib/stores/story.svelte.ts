@@ -34,6 +34,8 @@ import {
   beEventsFromResult,
   beSoftStatesFromResult,
   bondEventsFromResult,
+  coerceEffectTags,
+  dedupeForCast,
   defaultBodyState,
   exposureEventsFromResult,
   detectDrift,
@@ -48,7 +50,9 @@ import {
   reduceCharacterBody,
   seedBaselineFromText,
   sniffTierFromText,
+  translateSpellEffects,
   writeBodyState,
+  type BeEvent,
   type BeLogRecord,
   type BeSoftState,
   type BodyCondition,
@@ -58,6 +62,7 @@ import {
   type MilkQuality,
 } from '$lib/services/be'
 import {
+  ALCHEMY_MILK_BONUS_INTENSITY,
   ESSENCE_REGEN_PER_PERIOD,
   applyLevelGrants,
   crossingKey,
@@ -66,9 +71,11 @@ import {
   essenceMax,
   periodIndex,
   readRpgSheet,
+  sheetOrDefault,
   writeRpgSheet,
   type CheckRecord,
 } from '$lib/services/rpg'
+import { buildSpellEntryData, type SpellGeneration } from '$lib/services/ai/sdk/schemas/spell'
 import { extractInlineCustomVars } from '$lib/services/ai/sdk/schemas/runtime-variables'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
 import type { RuntimeVariable } from '$lib/services/packs/types'
@@ -1833,6 +1840,45 @@ class StoryStore {
     return entry
   }
 
+  /**
+   * Learn a (validated, generated) spell (RPG Phase 4, research/50 R6). Two
+   * persistence surfaces: the spell becomes a `type:'spell'` lorebook Entry AND
+   * its id is pushed into the protagonist's knownSpells. They must move together
+   * — so a failure on the sheet write DELETES the just-created entry, leaving no
+   * orphaned entry and no phantom knownSpell (the R6 rollback hazard). Direct
+   * action like Rest / point-spend — not a narrative turn.
+   */
+  async learnSpell(gen: SpellGeneration): Promise<Entry> {
+    if (!this.currentStory) throw new Error('No story loaded')
+    const protagonist = this.characters.find((c) => c.relationship === 'self')
+    if (!protagonist) throw new Error('No protagonist to learn the spell')
+
+    const entry = await this.addLorebookEntry(buildSpellEntryData(gen))
+    try {
+      const sheet = readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+      if (!sheet.knownSpells.includes(entry.id)) {
+        const nextSheet = { ...sheet, knownSpells: [...sheet.knownSpells, entry.id] }
+        await this.updateCharacter(protagonist.id, {
+          metadata: writeRpgSheet(protagonist.metadata, nextSheet),
+        })
+      }
+      log('Spell learned:', entry.name, entry.id)
+      return entry
+    } catch (err) {
+      // Sheet write failed — remove the orphan entry so no phantom spell remains.
+      // If the compensating delete ALSO fails, surface it: an orphaned spell
+      // Entry (no knownSpells reference) is now in the lorebook and must be
+      // cleaned up manually. The prompt layer tolerates it (stale ids are skipped).
+      await this.deleteLorebookEntry(entry.id).catch((delErr) =>
+        log('learnSpell: orphan cleanup FAILED, entry left in lorebook', {
+          entryId: entry.id,
+          delErr,
+        }),
+      )
+      throw err
+    }
+  }
+
   async addLorebookEntries(
     entriesData: Omit<Entry, 'id' | 'storyId' | 'createdAt' | 'updatedAt' | 'branchId'>[],
   ): Promise<number> {
@@ -2859,6 +2905,74 @@ class StoryStore {
   }
 
   /**
+   * Spell cast → engine effects (Phase 4, research/50 R4/R5). When this turn's
+   * check was a cast (spellId set) and the band landed (non-fail), resolve the
+   * spell entry and translate its EffectTag[] into reducer inputs for the target
+   * girl. Returns null when the cast applies no BE effects — a fizzle (fail
+   * band), an unknown/unlearned spell (a stat_invention signal, not an effect),
+   * or an untargeted cast (v1 effects require a girl, R10). Essence is spent by
+   * applyRpgTurn regardless; this method never touches the sheet.
+   */
+  private computeSpellCast(checkRecord: CheckRecord | null): {
+    targetId: string
+    events: BeEvent[]
+    bondEvents: BondEvent[]
+    exposureEvents: ExposureEvent[]
+    softConditions: BodyCondition[]
+    softState?: BeSoftState
+    supplyDelta: number
+  } | null {
+    if (!checkRecord?.spellId || checkRecord.band === 'fail') return null
+    // Defense-in-depth: only a KNOWN spell casts. An unknown spellId is refused
+    // here and flagged by the stat_invention detector, never applied.
+    const protagonist = this.characters.find((c) => c.relationship === 'self')
+    const known = protagonist ? sheetOrDefault(protagonist.metadata).knownSpells : []
+    if (!known.includes(checkRecord.spellId)) return null
+    const entry = this.lorebookEntries.find(
+      (e) => e.id === checkRecord.spellId && e.type === 'spell',
+    )
+    if (!entry || entry.state.type !== 'spell') return null
+    // v1: effects act on a girl (research/50 R10). No target → narrative-only cast.
+    const targetName = checkRecord.target
+    if (!targetName) return null
+    const target = this.characters.find(
+      (c) => c.relationship !== 'self' && c.name.toLowerCase() === targetName.toLowerCase(),
+    )
+    if (!target) return null
+    // Alchemy-milk empowerment (research/50 R11, non-consuming v1): an alchemy-
+    // school cast lands +1 intensity while a prime/rich milk unit sits in the
+    // inventory — her milk makes a stronger catalyst. No decrement in v1.
+    const milkBonus =
+      checkRecord.skill === 'alchemy' &&
+      this.items.some(
+        (i) =>
+          i.location === 'inventory' &&
+          i.quantity > 0 &&
+          (i.metadata?.quality === 'prime' || i.metadata?.quality === 'rich'),
+      )
+        ? ALCHEMY_MILK_BONUS_INTENSITY
+        : 0
+    const translation = translateSpellEffects(
+      coerceEffectTags(entry.state.effects),
+      checkRecord.band,
+      target.name,
+      milkBonus,
+    )
+    // Nothing applicable translated (e.g. every effect was dropped as out-of-vocab
+    // by coerceEffectTags on a corrupt/legacy spell) → no cast, so the target is
+    // not force-seeded and the [CHECK RESULT] cast directive stays honest.
+    const empty =
+      translation.events.length === 0 &&
+      translation.bondEvents.length === 0 &&
+      translation.exposureEvents.length === 0 &&
+      translation.softConditions.length === 0 &&
+      translation.softState === undefined &&
+      translation.supplyDelta === 0
+    if (empty) return null
+    return { targetId: target.id, ...translation }
+  }
+
+  /**
    * BE engine (Phase A): run the deterministic body-state reducer for every
    * non-protagonist character carrying (or gaining) bodyState, feeding it this
    * turn's classifier-extracted events. This is the ONLY production caller of
@@ -2956,6 +3070,50 @@ class StoryStore {
       conditionsByCharacterId.set(target.id, bucket)
     }
 
+    // Spell cast effects (Phase 4, research/50 R5/R9): engine-authored effects
+    // merge into the target's buckets and are AUTHORITATIVE — the classifier's
+    // duplicate same-kind events for that girl are dropped so a cast-grown girl
+    // does not grow twice (spell growth prose would otherwise re-propose it).
+    const supplyDeltaByCharacterId = new SvelteMap<string, number>()
+    const spellCast = this.computeSpellCast(checkRecord)
+    if (spellCast) {
+      const id = spellCast.targetId
+      // R9 dedupe (pure helper): drop the classifier's spell-superseded same-kind
+      // events for this girl, then append the spell events in a stable order so
+      // the reducer's index-seeded growth rolls replay identically on undo/retry.
+      const keptClassifierEvents = dedupeForCast(
+        eventsByCharacterId.get(id) ?? [],
+        spellCast.events,
+      )
+      eventsByCharacterId.set(id, [...keptClassifierEvents, ...spellCast.events])
+      // Bond / exposure: APPEND the spell's shift to the classifier's (both are
+      // legitimate — the spell is mechanical, the classifier read the prose), and
+      // the reducer's per-turn velocity caps bound the total. Replacing would drop
+      // a genuine same-turn opposite movement for this girl (review finding).
+      if (spellCast.bondEvents.length > 0) {
+        bondEventsByCharacterId.set(id, [
+          ...(bondEventsByCharacterId.get(id) ?? []),
+          ...spellCast.bondEvents,
+        ])
+      }
+      if (spellCast.exposureEvents.length > 0) {
+        exposureEventsByCharacterId.set(id, [
+          ...(exposureEventsByCharacterId.get(id) ?? []),
+          ...spellCast.exposureEvents,
+        ])
+      }
+      // Conditions are additive — the reducer merges derived-first and caps at 6.
+      if (spellCast.softConditions.length > 0) {
+        conditionsByCharacterId.set(id, [
+          ...(conditionsByCharacterId.get(id) ?? []),
+          ...spellCast.softConditions,
+        ])
+      }
+      // Fill-set softState: the spell's absolute write wins.
+      if (spellCast.softState) softStateByCharacterId.set(id, spellCast.softState)
+      if (spellCast.supplyDelta > 0) supplyDeltaByCharacterId.set(id, spellCast.supplyDelta)
+    }
+
     // Present-only tick gating (Spec 1 Task 9 ruling): the passive fill/pressure
     // tick runs for characters the classifier placed in the scene.
     const presentNames = new Set(
@@ -2987,6 +3145,7 @@ class StoryStore {
       const charConditions = conditionsByCharacterId.get(character.id)
       const charBondEvents = bondEventsByCharacterId.get(character.id) ?? []
       const charExposureEvents = exposureEventsByCharacterId.get(character.id) ?? []
+      const charSupplyDelta = supplyDeltaByCharacterId.get(character.id) ?? 0
       const isPresent = presentNames.has(character.name.toLowerCase())
       let state = readBodyState(character.metadata)
 
@@ -2996,7 +3155,11 @@ class StoryStore {
       const pendingLog: BeLogRecord[] = []
       let seeded = false
       if (!state) {
-        if (charEvents.length === 0) continue // soft reads alone don't seed; events do
+        // Soft reads alone don't seed; events do — and a spell cast on a
+        // never-seeded girl seeds her too, so its event-less effects (bond,
+        // dependence, condition/check_debuff, supply_surge, fill:set) are not
+        // silently dropped against a freshly-introduced target (research/50 review).
+        if (charEvents.length === 0 && character.id !== spellCast?.targetId) continue
         const sniffSource = [
           character.visualDescriptors?.build ?? '',
           character.description ?? '',
@@ -3043,6 +3206,7 @@ class StoryStore {
         !charConditions &&
         charBondEvents.length === 0 &&
         charExposureEvents.length === 0 &&
+        charSupplyDelta === 0 &&
         state.cooldown === 0 &&
         !state.lastGrowth &&
         !state.pendingGrowth &&
@@ -3079,6 +3243,7 @@ class StoryStore {
         ...(driftFindings.length > 0 ? { driftFindings } : {}),
         ...(charBondEvents.length > 0 ? { bondEvents: charBondEvents } : {}),
         ...(charExposureEvents.length > 0 ? { exposureEvents: charExposureEvents } : {}),
+        ...(charSupplyDelta > 0 ? { supplyDelta: charSupplyDelta } : {}),
       })
       pendingLog.push(...reducerLog)
 

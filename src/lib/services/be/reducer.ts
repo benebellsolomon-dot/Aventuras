@@ -31,6 +31,7 @@ import {
   PRESSURE_CAP,
   PRESSURE_FIRE,
   PRESSURE_RELEASE,
+  SUPPLY_TIER_MAX,
   fluidProfile,
 } from './constants'
 import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
@@ -111,6 +112,13 @@ export interface ReducerExtras {
   bondEvents?: ReadonlyArray<BondEvent>
   /** Classifier-proposed catalyst exposure this turn (research/48; gain-capped). */
   exposureEvents?: ReadonlyArray<ExposureEvent>
+  /**
+   * Engine-authored supply surge from a spell cast this turn (research/50 R2,
+   * Phase 4). A positive delta bumps an ACTIVE girl's supplyTier before organic
+   * adaptation, clamped to SUPPLY_TIER_MAX; a surge on a non-lactating girl is a
+   * logged no-op (surge raises existing supply, it does not induce).
+   */
+  supplyDelta?: number
 }
 
 /**
@@ -446,7 +454,47 @@ export function reduceCharacterBody(
     })
   })
 
-  // ---- Step 7: lactation — supply adapt + chronic-supply growth (research/49 R3/R5) ----
+  // ---- Step 7: lactation — supply surge (Phase 4) + adapt + chronic growth (research/49 R3/R5, research/50 R2) ----
+  // Magical supply surge first: an explicit spell push applied before organic
+  // adaptation. It raises EXISTING supply only (a surge does not induce), clamped
+  // to SUPPLY_TIER_MAX; a surge on a non-lactating girl is a logged no-op.
+  const supplyDelta = Math.max(0, Math.floor(extras?.supplyDelta ?? 0))
+  if (supplyDelta > 0) {
+    if (lactation?.active) {
+      const before = lactation.supplyTier
+      const after = Math.min(SUPPLY_TIER_MAX, before + supplyDelta)
+      if (after !== before) {
+        lactation = { ...lactation, supplyTier: after }
+        log.push({
+          character: characterName,
+          kind: 'supply',
+          outcome: 'none',
+          delta: 0,
+          tierAfter: tier,
+          note: `supply surge → ${supplyLabel(after)}`,
+        })
+      } else {
+        log.push({
+          character: characterName,
+          kind: 'supply',
+          outcome: 'none',
+          delta: 0,
+          tierAfter: tier,
+          note: 'supply surge (already at max supply)',
+        })
+      }
+    } else {
+      log.push({
+        character: characterName,
+        kind: 'supply',
+        outcome: 'none',
+        delta: 0,
+        tierAfter: tier,
+        note: 'supply surge ignored (not lactating)',
+      })
+    }
+  }
+
   // The turn she is induced is not also a neglect beat: adaptation starts next turn.
   let milkYield: { units: number; drainedPercent: number } | undefined
   if (lactation?.active && !inducedThisTurn) {
