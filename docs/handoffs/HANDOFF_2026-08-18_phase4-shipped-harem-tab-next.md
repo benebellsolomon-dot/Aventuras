@@ -1,12 +1,12 @@
-# Handoff — RPG Phase 4 shipped; NEXT = Harem-tab visual companion layer
+# Handoff — RPG Phase 4+5 shipped, harem card landed-but-not-rendering; NEXT = make the harem card visible
 
-Written 2026-08-18, end of the Phase 4 (magic) + Phase 5 (partial hardening) session. Fable-orchestrator/Opus-agent workflow. Everything is committed and landed in the live app; Ben is mid-playtest.
+Written 2026-08-18, end of the Phase 4 (magic) + Phase 5 (partial hardening) + harem-card session. Everything is committed and landed on `be-patches` (the live app) at **`f02ae4ba`**. **READ THE "SESSION 2 ADDENDUM" AT THE BOTTOM FIRST** — it supersedes the original framing below (the harem card got BUILT this session; it just isn't rendering yet), and it carries a hard-won debugging lesson (silent model/service **config** failures).
 
 ## Goal of next session
 
-Build the **harem-tab visual companion layer**: upgrade the Harem sidebar tab's cast-member cards from text to **visual** — each female cast member (harem member) shown with a **portrait/sprite reflecting her current bust/body state**, plus affection (bond), dependence, milk supply, and the other BE stats. This is the start of the **presentation/VN phase** (Ben's ruling this session: the RPG-mechanics phases are done; the next phase is the visual/presentation layer, with the harem-member cards as its centerpiece).
+**Fix the top open bug: the harem-card visual companion is LANDED (`GirlStatusCard.svelte` at `f02ae4ba`, with body-state sprite thumbnails) but STILL NOT VISIBLE in the running app** (Ben's last report). No console errors — so first turn ON **Debug Mode** (Settings) to unhide the app's own logs (see the addendum). Likely causes to check, in order: (a) the Harem tab isn't the active sidebar tab / the panel isn't mounted; (b) no PRESENT girls in the current scene (cards render only for scene-present characters via `presentCharacterNames`); (c) a `HaremPanel`/`GirlStatusCard` render gate. Then continue the presentation/VN polish and the remaining Phase 5 hardening (W1, D1, D3, D4).
 
-**Start the established way** — this is NOT a from-scratch brainstorm (Ben was explicit: "we've already gone over mockups for this section, this is part of the plan"). Ground in the existing design, confirm the two open items below with Ben, then write an implementation plan (`research/52-...`) and build.
+The harem-card DESIGN work is DONE — the visual companion (portrait/sprite reflecting bust/body state + affection + BE stats) was built this session per `research/52-harem-card-visual-companion.md`. What remains is a rendering/visibility bug, not new design.
 
 ## The harem-tab work — where the design already lives
 
@@ -57,3 +57,24 @@ Ben is actively playtesting Phases 1–4 (first play-test of ANY of them — fou
 - Harem-tab starting points: `src/lib/components/world/GirlStatusCard.svelte`, `HaremPanel.svelte`, `src/lib/services/be/sprite.ts`
 - Project memory: `backend-roadmap.md` (Aventuras auto-memory) carries the same state in detail
 - Verify: `npx vitest run` (678), `npm run check`, `npx eslint .` (run `npx svelte-kit sync` first in a fresh worktree)
+
+---
+
+## SESSION 2 ADDENDUM (2026-08-18, late) — READ FIRST
+
+### Current live state
+- **`be-patches` == `master` == `f02ae4ba`** — the FULL latest work: Phase 4 magic + Phase 5 hardening (W3 roll-card/log settings, D5 cast-in-any-mode, W2 cast ✨ markers, D2 same-name `targetId` fix) + the spellResearch service-registration fix + the **complete harem-card visual companion** (dynamic body-state sprite thumbnails, `research/52-harem-card-visual-companion.md`). The app runs from this.
+- Branches: this session's Phase 4/5 feature branch `claude/rpg-phase-5-continuation-5a0e9b` = `60930d32` (handoff docs; behind — does NOT carry the harem card). The harem card lives on `claude/phase4-harem-tab-next-8d2524` = `f02ae4ba` (built by a parallel session acting on this handoff). Nothing pushed to origin (push URL DISABLED, be-patches local-only).
+- Suite 678, svelte-check 0, eslint clean across all of it.
+
+### TOP OPEN BUG — the harem card is landed but NOT VISIBLE
+Even with `f02ae4ba` restored (full harem card), Ben reports the harem card still does not show. No console errors (but see the Debug Mode note — errors are hidden by default). This is next session's #1 task. Debug it WITH Debug Mode on. Prime suspects (check in order): active sidebar tab not Harem / panel not mounted; no scene-present girls (cards key off `presentCharacterNames`); a `HaremPanel`/`GirlStatusCard` render/beMode gate. The card code is `GirlStatusCard.svelte` @ `f02ae4ba` and `HaremPanel.svelte`.
+
+### THE BIG LESSON — silent model/service CONFIG failures (cost this session hours)
+A long stretch went to a false alarm: **"all options + the dice card + the harem card disappeared."** After reverting Phase 5, then the harem card, then all the way to Phase 4 — and inspecting the DB — the real cause was **the "Suggestions" AI service's MODEL failing** (action choices run on a different model than narration — `deepseek/deepseek-v3.2` via the `suggestions` preset). Narration worked (its model was fine); action-choices came back empty; **nothing logged as an error**. Ben fixed it by changing/re-setting the Suggestions model in Settings → Generation.
+- **RULE for next session: for ANY "UI element silently missing / feature does nothing, no console error" symptom, turn ON Debug Mode FIRST** (Settings → the Debug Mode toggle). The app's own `createLogger` logs are SUPPRESSED without it, so "no console errors" is meaningless until it's on. Do NOT bisect code for a symptom that has no error and survives code reverts — it's almost always CONFIG/STATE (model assignment, a service not registered, a story-state row), not code.
+- Same class as the **`spellResearch` unregistered-service** bug earlier this session (fixed: added to `DEFAULT_SERVICE_PRESET_ASSIGNMENTS` in `settings.svelte.ts` + the Agent Profiles UI). New AI services MUST be registered there or they error "not assigned to an Agent Profile."
+- **DB inspection** (read-only, powerful): `sqlite3 -readonly ~/Library/Application\ Support/com.karelian.aventura/aventura.db "..."`. Useful tables: `stories.settings` (per-story JSON incl. beMode), `settings` (key-value: `system_services_settings`, `service_preset_assignments` — model/profile per service), `entries` (lorebook, incl. `type='spell'`), `characters.metadata` (rpgSheet.knownSpells). Do NOT DELETE/UPDATE the DB without Ben's explicit OK (destructive writes are correctly gated by the harness).
+
+### App run/land mechanics (unchanged, restated)
+Tauri desktop app: `cd ~/Projects/gaming/Aventuras && npm run tauri dev` (vite on :1420 + Rust window). Land work by FF'ing `be-patches` from a feature branch then restarting (`pkill -f "target/debug/aventura"; pkill -f "tauri dev"; lsof -ti:1420 | xargs kill`, then relaunch in background). `master` is checked out in the `aventuras-image-gen-quality-372ac2` worktree — FF it there. A settings-store change needs a full restart (HMR won't re-init the singleton).
