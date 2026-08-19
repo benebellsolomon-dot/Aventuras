@@ -2929,11 +2929,17 @@ class StoryStore {
    * Fire-and-forget: never awaited in the turn, never throws.
    */
   private async runIdentityHygiene(characterId: string): Promise<void> {
-    const character =
+    // Resolve the live character by id, with the COW override fallback. Passed as
+    // a thunk so applyIdentityHygiene can re-resolve AFTER the LLM extraction (FIX
+    // 3) — the character may have been updated or COW-remapped during the call.
+    const resolve = () =>
       this.characters.find((c) => c.id === characterId) ??
       this.characters.find((c) => c.overridesId === characterId)
+    const character = resolve()
     if (!character) return
-    await applyIdentityHygiene(character, (id, updates) => this.updateCharacter(id, updates))
+    await applyIdentityHygiene(character, resolve, (id, updates) =>
+      this.updateCharacter(id, updates),
+    )
   }
 
   /**

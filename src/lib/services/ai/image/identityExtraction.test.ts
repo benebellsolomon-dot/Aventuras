@@ -25,6 +25,7 @@ import {
   computeIdentityUpdates,
   extractIdentity,
   IMAGE_TAGS_AUTO_HASH_KEY,
+  mergeIdentityBaseline,
   normalizeExtraction,
   normalizeIdentityTags,
   type IdentityExtraction,
@@ -144,6 +145,53 @@ describe('normalizeExtraction', () => {
     // the polluted baseline face keeps only the stable value the model returned
     expect(result.cleanBaseline.face).toBe('delicate features, pale skin')
     expect(result.currentState.face).toBe('post-orgasm, flushed, semen on chin')
+  })
+})
+
+describe('mergeIdentityBaseline', () => {
+  const existing = {
+    face: 'polluted face, semen on chin',
+    hair: 'long chestnut hair',
+    build: 'tall, curvy',
+    clothing: 'torn dress',
+    distinguishing: 'cow ears',
+  }
+
+  it('overlays a populated cleanBaseline field, stripping pollution in that field', () => {
+    const merged = mergeIdentityBaseline(existing, { face: 'soft round face' })
+    expect(merged.face).toBe('soft round face')
+  })
+
+  it('keeps the existing value for fields the cleanBaseline omits (no wipe)', () => {
+    const merged = mergeIdentityBaseline(existing, { face: 'soft round face' })
+    expect(merged).toEqual({
+      face: 'soft round face',
+      hair: 'long chestnut hair',
+      build: 'tall, curvy',
+      clothing: 'torn dress',
+      distinguishing: 'cow ears',
+    })
+  })
+
+  it('treats empty/whitespace cleanBaseline fields as omitted (no degrade)', () => {
+    const merged = mergeIdentityBaseline(existing, { hair: '', build: '   ' })
+    expect(merged.hair).toBe('long chestnut hair')
+    expect(merged.build).toBe('tall, curvy')
+  })
+
+  it('returns the existing baseline unchanged when cleanBaseline is empty', () => {
+    expect(mergeIdentityBaseline(existing, {})).toEqual(existing)
+  })
+
+  it('does not mutate the existing baseline (immutable)', () => {
+    const snapshot = { ...existing }
+    mergeIdentityBaseline(existing, { face: 'new face' })
+    expect(existing).toEqual(snapshot)
+  })
+
+  it('trims overlaid values', () => {
+    const merged = mergeIdentityBaseline(existing, { face: '  soft round face  ' })
+    expect(merged.face).toBe('soft round face')
   })
 })
 

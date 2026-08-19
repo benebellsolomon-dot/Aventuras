@@ -255,6 +255,34 @@ const CURRENT_FIELDS: ReadonlyArray<keyof VisualDescriptors> = [
   'distinguishing',
 ]
 
+/** Every descriptor field — used when overlaying a clean baseline onto an existing one. */
+const ALL_DESCRIPTOR_FIELDS: ReadonlyArray<keyof VisualDescriptors> = CURRENT_FIELDS
+
+/**
+ * Overlay a clean baseline onto an existing baseline, field-by-field:
+ *
+ *   - a NON-EMPTY field of `cleanBaseline` REPLACES the existing value — this is
+ *     what strips pollution from that field.
+ *   - an omitted/empty `cleanBaseline` field KEEPS the existing value — so an
+ *     empty or thin (all-optional) extraction can never wipe or degrade a good
+ *     baseline.
+ *
+ * Returns a new object (immutable): `existing` is never mutated. This is the
+ * shared merge for both creation hygiene (C) and backfill (D) — a wholesale
+ * `visualDescriptors = cleanBaseline` would wipe fields the LLM omitted.
+ */
+export function mergeIdentityBaseline(
+  existing: VisualDescriptors,
+  cleanBaseline: VisualDescriptors,
+): VisualDescriptors {
+  const merged: VisualDescriptors = { ...(existing ?? {}) }
+  for (const field of ALL_DESCRIPTOR_FIELDS) {
+    const value = cleanBaseline?.[field]
+    if (value && value.trim()) merged[field] = value.trim()
+  }
+  return merged
+}
+
 /**
  * Post-process the raw LLM split into the public shape with the hard guarantees
  * tests rely on: plain/deduped identity tags, a baseline that never carries
