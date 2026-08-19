@@ -48,6 +48,12 @@ export function makeDbRecorder(): DbRecorder {
     {
       get(_t, prop: string) {
         if (prop === 'then') return undefined // not a thenable
+        // Every method (including the CR-1 batch API — beginWriteBatch,
+        // commitWriteBatch, abortWriteBatch — and the entity writes) is recorded
+        // and resolves undefined, unless failOn(method) is set for it. The store
+        // drives its own control flow (begin → buffered writes → commit → catch →
+        // in-memory rollback); the harness models a flush/write failure with
+        // failOn('commitWriteBatch') or failOn('updateCharacter').
         return (...args: unknown[]) => {
           calls.push({ method: prop, args })
           const failure = failures.get(prop)

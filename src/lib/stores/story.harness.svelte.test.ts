@@ -68,7 +68,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(aria?.traits).toContain('brave')
   })
 
-  it('records the delta write LAST after entity writes when tracking is on (documents the CR-1 seam)', async () => {
+  it('buffers entity writes then the delta inside a write batch, flushed by commitWriteBatch (CR-1 seam)', async () => {
     settingsMock.experimentalFeatures.stateTracking = true
     story.characters = [makeCharacter('Aria')] as never
 
@@ -79,33 +79,87 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     await story.applyClassificationResult(result as never, 'entry-1')
 
     const methods = db.methodsCalled()
+    const beginIdx = methods.indexOf('beginWriteBatch')
     const charWriteIdx = methods.indexOf('updateCharacter')
     const deltaWriteIdx = methods.indexOf('updateStoryEntry')
-    expect(charWriteIdx).toBeGreaterThanOrEqual(0)
-    expect(deltaWriteIdx).toBeGreaterThanOrEqual(0)
-    // The delta (rollback record) is persisted AFTER the entity mutation — the
-    // non-atomic ordering CR-1 will make transactional.
+    const commitIdx = methods.indexOf('commitWriteBatch')
+    // The whole turn is bracketed: beginWriteBatch → entity write → delta write
+    // (last) → commitWriteBatch (atomic flush). No abort on the happy path.
+    expect(beginIdx).toBeGreaterThanOrEqual(0)
+    expect(charWriteIdx).toBeGreaterThan(beginIdx)
     expect(deltaWriteIdx).toBeGreaterThan(charWriteIdx)
+    expect(commitIdx).toBeGreaterThan(deltaWriteIdx)
+    expect(methods).not.toContain('abortWriteBatch')
   })
 
-  it('CR-1 HAZARD (currently RED-by-design): a delta-write failure leaves the entity write committed with no delta', async () => {
+  it('CR-1 atomicity: a failed batch flush (commitWriteBatch) rolls the whole turn back and returns false', async () => {
     settingsMock.experimentalFeatures.stateTracking = true
     story.characters = [makeCharacter('Aria')] as never
-    // Simulate the delta write throwing (disk error / crash point).
-    db.failOn('updateStoryEntry')
+    // The atomic flush throws (the Rust transaction failed / rolled back). Every
+    // write was buffered, so nothing persisted.
+    db.failOn('commitWriteBatch')
 
     const result = makeClassificationResult({
       entryUpdates: { characterUpdates: [{ name: 'Aria', changes: { newTraits: ['brave'] } }] },
     })
 
-    await story.applyClassificationResult(result as never, 'entry-1')
+    const applied = await story.applyClassificationResult(result as never, 'entry-1')
 
-    // TODAY: the character trait write committed, but the delta write failed and was
-    // swallowed ("Non-fatal") — so the mutation is un-rollbackable. This assertion
-    // pins the CURRENT behavior; CR-1 flips it (the whole turn rolls back, so the
-    // trait is NOT committed when the delta write fails).
-    expect(db.methodsCalled()).toContain('updateCharacter')
+    // The turn opened a batch, buffered the entity + delta writes, then the flush
+    // failed → abort + in-memory revert.
+    const methods = db.methodsCalled()
+    expect(methods).toContain('beginWriteBatch')
+    expect(methods).toContain('commitWriteBatch')
+    expect(methods).toContain('abortWriteBatch')
+    expect(applied).toBe(false)
+    // Aria still exists (snapshot restore, not a wipe) and does NOT carry the
+    // un-persisted trait.
     const aria = story.characters.find((c) => c.name === 'Aria')
-    expect(aria?.traits).toContain('brave') // committed despite the missing delta — the hazard
+    expect(aria).toBeDefined()
+    expect(aria?.traits ?? []).not.toContain('brave')
+  })
+
+  it('CR-1 atomicity: a logic/write error inside the turn aborts before the flush', async () => {
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.characters = [makeCharacter('Aria')] as never
+    // A write throws during the turn. In transactional mode wrapUpdate rethrows on
+    // the first failure instead of swallowing it, aborting before commit.
+    db.failOn('updateCharacter')
+
+    const result = makeClassificationResult({
+      entryUpdates: { characterUpdates: [{ name: 'Aria', changes: { newTraits: ['brave'] } }] },
+    })
+
+    const applied = await story.applyClassificationResult(result as never, 'entry-1')
+
+    // Aborted before the delta write and before the flush; batch discarded.
+    const methods = db.methodsCalled()
+    expect(methods).toContain('beginWriteBatch')
+    expect(methods).toContain('abortWriteBatch')
+    expect(methods).not.toContain('updateStoryEntry')
+    expect(methods).not.toContain('commitWriteBatch')
+    expect(applied).toBe(false)
+    const aria = story.characters.find((c) => c.name === 'Aria')
+    expect(aria?.traits ?? []).not.toContain('brave')
+  })
+
+  it('replay guard: re-applying an entry that already has a delta is a no-op', async () => {
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.characters = [makeCharacter('Aria')] as never
+    // The entry already carries a delta — i.e. the turn already committed once.
+    story.entries = [{ id: 'entry-1', worldStateDelta: { previousState: {} } }] as never
+
+    const result = makeClassificationResult({
+      entryUpdates: { characterUpdates: [{ name: 'Aria', changes: { newTraits: ['brave'] } }] },
+    })
+
+    const applied = await story.applyClassificationResult(result as never, 'entry-1')
+
+    // Nothing was written and no stateful mutation ran — the guard returned early.
+    expect(applied).toBe(false)
+    expect(db.methodsCalled()).not.toContain('updateCharacter')
+    expect(db.methodsCalled()).not.toContain('beginWriteBatch')
+    const aria = story.characters.find((c) => c.name === 'Aria')
+    expect(aria?.traits ?? []).not.toContain('brave')
   })
 })

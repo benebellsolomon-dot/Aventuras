@@ -1,4 +1,5 @@
 import Database from '@tauri-apps/plugin-sql'
+import { invoke } from '@tauri-apps/api/core'
 import type {
   Story,
   StoryEntry,
@@ -112,10 +113,33 @@ function migrateVisualDescriptors(data: unknown): VisualDescriptors {
   return {}
 }
 
+/** A buffered write captured while a write batch is open (CR-1). */
+interface BufferedWrite {
+  sql: string
+  params: unknown[]
+}
+
 class DatabaseService {
   private db: Database | null = null
+  /**
+   * The unwrapped handle. `db` is a Proxy over this that buffers writes during a
+   * turn batch (CR-1); `rawDb` bypasses that buffer. Used for background writes
+   * (image/sprite/portrait) that can complete mid-turn and must NOT be swept
+   * into the turn's transaction — see `executeDirect`.
+   */
+  private rawDb: Database | null = null
   /** Pending open promise — prevents concurrent callers from opening the DB twice. */
   private dbPromise: Promise<Database> | null = null
+  /**
+   * When non-null, a write batch is open (CR-1): `execute` calls are buffered
+   * here instead of run, and flushed atomically by `commitWriteBatch`. Reads
+   * (`select`) are never buffered. Only one batch may be open at a time.
+   *
+   * INVARIANT: only the turn's own writes may be buffered. Writes that can be
+   * in-flight concurrently with a turn (background image/sprite/portrait saves)
+   * MUST go through `executeDirect` so they are never captured by an open batch.
+   */
+  private writeBatch: BufferedWrite[] | null = null
 
   async init(): Promise<void> {
     if (this.db) return
@@ -125,9 +149,18 @@ class DatabaseService {
           // Enable foreign key enforcement (SQLite disables by default).
           // Must run exactly once per connection; placing it here (instead of
           // after the await below) avoids concurrent callers re-issuing it.
+          // Runs on the raw handle before wrapping so it is never buffered.
           await db.execute('PRAGMA foreign_keys = ON')
-          this.db = db
-          return db
+          // WAL (persistent, file-wide) lets the dedicated turn-flush pool
+          // (Rust exec_batch_tx) and this plugin pool write the same file with
+          // concurrent readers and a short writer lock, rather than the default
+          // DELETE journal's file-wide EXCLUSIVE lock. synchronous=NORMAL is the
+          // standard, safe WAL pairing.
+          await db.execute('PRAGMA journal_mode = WAL')
+          await db.execute('PRAGMA synchronous = NORMAL')
+          this.rawDb = db
+          this.db = this.wrapDb(db)
+          return this.db
         })
         .catch((err) => {
           this.dbPromise = null
@@ -138,6 +171,80 @@ class DatabaseService {
   }
 
   /**
+   * Wrap the tauri Database so `execute` can be intercepted for write batching
+   * (CR-1). While a batch is open, a write is pushed to the buffer and a stub
+   * result is returned instead of hitting the DB; every other member (`select`,
+   * `close`, …) delegates straight to the real handle. No turn write uses the
+   * `execute` result, so the stub is safe for the batched path.
+   */
+  private wrapDb(db: Database): Database {
+    return new Proxy(db, {
+      get: (target, prop) => {
+        if (prop === 'execute') {
+          return (sql: string, params?: unknown[]) => {
+            if (this.writeBatch) {
+              this.writeBatch.push({ sql, params: params ?? [] })
+              return Promise.resolve({ rowsAffected: 0, lastInsertId: 0 })
+            }
+            return target.execute(sql, params)
+          }
+        }
+        const value = Reflect.get(target, prop)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
+  }
+
+  /**
+   * Open a write batch (CR-1). Subsequent `execute` writes are buffered, not
+   * run, until `commitWriteBatch` flushes them in a single atomic transaction.
+   * Used to make a story turn's ~12 writes + the rollback delta all-or-nothing.
+   */
+  beginWriteBatch(): void {
+    if (this.writeBatch) throw new Error('A write batch is already open')
+    this.writeBatch = []
+  }
+
+  /**
+   * Flush the buffered writes in one real transaction (Rust `exec_batch_tx`:
+   * BEGIN → all statements → COMMIT on a dedicated single connection). Throws if
+   * the transaction fails; SQLite has then rolled every statement back, so the
+   * caller reverts its in-memory snapshot. A no-op if nothing was buffered.
+   */
+  async commitWriteBatch(): Promise<void> {
+    const batch = this.writeBatch
+    this.writeBatch = null
+    if (!batch || batch.length === 0) return
+    await invoke('exec_batch_tx', { statements: batch })
+  }
+
+  /**
+   * Discard an open write batch without flushing. Nothing was executed, so there
+   * is nothing to undo in the DB — the caller reverts its in-memory snapshot.
+   */
+  abortWriteBatch(): void {
+    this.writeBatch = null
+  }
+
+  /** The unwrapped handle, opening the DB if needed. Bypasses write batching. */
+  private async getRawDb(): Promise<Database> {
+    if (!this.rawDb) await this.init()
+    return this.rawDb!
+  }
+
+  /**
+   * Run a write that must never be captured by an open turn batch (CR-1). For
+   * background writes (image/sprite/portrait saves) that can complete mid-turn:
+   * buffering them would sweep an unrelated write into the turn's transaction —
+   * committing it with the turn, or worse, letting its failure roll back an
+   * otherwise-valid turn. This executes immediately on the raw handle.
+   */
+  private async executeDirect(sql: string, params?: unknown[]) {
+    const db = await this.getRawDb()
+    return db.execute(sql, params)
+  }
+
+  /**
    * Close the database connection. After calling this, the next
    * getDb() / init() call will re-open the connection.
    */
@@ -145,6 +252,7 @@ class DatabaseService {
     if (this.db) {
       await this.db.close()
       this.db = null
+      this.rawDb = null
       this.dbPromise = null
     }
   }
@@ -983,6 +1091,16 @@ class DatabaseService {
   async deleteCharacter(id: string): Promise<void> {
     const db = await this.getDb()
     await db.execute('DELETE FROM characters WHERE id = ?', [id])
+  }
+
+  /**
+   * Save a generated portrait. This is a background image-gen write that can
+   * land mid-turn, so it uses `executeDirect` to bypass turn write-batching
+   * (CR-1) — the turn's own `updateCharacter` still buffers, but a portrait
+   * completing during a turn must not be swept into that transaction.
+   */
+  async updateCharacterPortrait(id: string, portrait: string): Promise<void> {
+    await this.executeDirect('UPDATE characters SET portrait = ? WHERE id = ?', [portrait, id])
   }
 
   // Location operations
@@ -2372,7 +2490,8 @@ class DatabaseService {
   }
 
   async createEmbeddedImage(image: Omit<EmbeddedImage, 'createdAt'>): Promise<EmbeddedImage> {
-    const db = await this.getDb()
+    // Raw handle: a background image save must never join a turn's write batch.
+    const db = await this.getRawDb()
     const now = Date.now()
     await db.execute(
       `INSERT INTO embedded_images (
@@ -2405,7 +2524,8 @@ class DatabaseService {
   }
 
   async updateEmbeddedImage(id: string, updates: Partial<EmbeddedImage>): Promise<void> {
-    const db = await this.getDb()
+    // Raw handle: a background image save must never join a turn's write batch.
+    const db = await this.getRawDb()
     const setClauses: string[] = []
     const values: any[] = []
 
@@ -2612,7 +2732,8 @@ class DatabaseService {
   }
 
   async upsertSprite(sprite: Omit<CharacterSprite, 'createdAt'>): Promise<void> {
-    const db = await this.getDb()
+    // Raw handle: a background sprite save must never join a turn's write batch.
+    const db = await this.getRawDb()
     await db.execute(
       `INSERT INTO character_sprites
          (id, story_id, character_id, appearance_hash, band_index, expression, engorged,
@@ -2640,7 +2761,8 @@ class DatabaseService {
   }
 
   async updateSprite(id: string, updates: Partial<CharacterSprite>): Promise<void> {
-    const db = await this.getDb()
+    // Raw handle: a background sprite save must never join a turn's write batch.
+    const db = await this.getRawDb()
     const setClauses: string[] = []
     const values: any[] = []
     if (updates.imageData !== undefined) {
