@@ -14,7 +14,12 @@ import type {
   ImageModelInfo,
 } from './types'
 import { imageFetch, imageGetFetch } from './fetchAdapter'
-import { detectPromptDialect, sizeNegativeForPrompt, BOORU_DEFAULT_NEGATIVE } from '../dialect'
+import {
+  detectPromptDialect,
+  sizeNegativeForPrompt,
+  mergeNegativePrompt,
+  BOORU_DEFAULT_NEGATIVE,
+} from '../dialect'
 
 const DEFAULT_BASE_URL = 'https://nano-gpt.com/api/v1'
 const MODELS_ENDPOINT = 'https://nano-gpt.com/api/models'
@@ -40,13 +45,16 @@ export function createNanoGPTProvider(config: ImageProviderConfig): ImageProvide
         height: height || 1024,
       }
 
-      // Booru/SD-family models take a negative prompt; profile config wins,
-      // with a sensible anti-artifact default for booru models. The size-aware
-      // negative (suppress smaller band words) stacks on either.
+      // Booru/SD-family models take a negative prompt; profile config merges
+      // with the standard anti-artifact default for booru models (deduped)
+      // rather than replacing it, so anatomy/hand negatives always apply.
+      // The size-aware negative (suppress smaller band words) stacks on top.
       const configuredNegative = (config.providerOptions?.negativePrompt as string) || ''
       const isBooru = detectPromptDialect(model) === 'booru'
       const negativePrompt = [
-        configuredNegative || (isBooru ? BOORU_DEFAULT_NEGATIVE : ''),
+        isBooru
+          ? mergeNegativePrompt(configuredNegative, BOORU_DEFAULT_NEGATIVE)
+          : configuredNegative,
         isBooru ? sizeNegativeForPrompt(prompt) : '',
       ]
         .filter(Boolean)

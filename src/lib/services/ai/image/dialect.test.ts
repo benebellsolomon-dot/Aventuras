@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectPromptDialect, sizeNegativeForPrompt } from './dialect'
+import { detectPromptDialect, sizeNegativeForPrompt, mergeNegativePrompt } from './dialect'
 
 describe('detectPromptDialect', () => {
   it('routes anime tag families to booru, everything else to prose', () => {
@@ -32,5 +32,37 @@ describe('sizeNegativeForPrompt', () => {
   it('empty for small sizes or band-less prompts', () => {
     expect(sizeNegativeForPrompt('1girl, small breasts')).toBe('')
     expect(sizeNegativeForPrompt('a castle at sunset')).toBe('')
+  })
+})
+
+describe('mergeNegativePrompt', () => {
+  it('puts configured tokens first, then base tokens not already present', () => {
+    expect(mergeNegativePrompt('blurry, watermark', 'bad hands, blurry, extra fingers')).toBe(
+      'blurry, watermark, bad hands, extra fingers',
+    )
+  })
+
+  it('dedupes case-insensitively without dropping distinct base tokens', () => {
+    expect(mergeNegativePrompt('Blurry', 'blurry, bad hands')).toBe('Blurry, bad hands')
+  })
+
+  it('matches whole tokens, not substrings (configured "hands" does not swallow base "bad hands")', () => {
+    expect(mergeNegativePrompt('hands', 'bad hands, extra fingers')).toBe(
+      'hands, bad hands, extra fingers',
+    )
+  })
+
+  it('falls back to base alone when nothing is configured', () => {
+    expect(mergeNegativePrompt('', 'bad hands, extra fingers')).toBe('bad hands, extra fingers')
+  })
+
+  it('falls back to configured alone when base is empty', () => {
+    expect(mergeNegativePrompt('watermark, blurry', '')).toBe('watermark, blurry')
+  })
+
+  it('ignores stray commas and whitespace from either input', () => {
+    expect(mergeNegativePrompt(' blurry ,, watermark ', 'blurry,   bad hands')).toBe(
+      'blurry, watermark, bad hands',
+    )
   })
 })

@@ -52,3 +52,33 @@ export function sizeNegativeForPrompt(prompt: string): string {
     .filter((_, i) => !present[i])
     .join(', ')
 }
+
+/**
+ * Merges a user-configured negative prompt with a base (e.g. booru anatomy)
+ * negative prompt, de-duplicating tokens case-insensitively so the base's
+ * standard anatomy/hand/finger negatives survive even when a profile already
+ * configures its own. Order is stable: configured tokens first, then any
+ * base tokens not already present (by exact token match, not substring —
+ * "hands" in a configured negative does not swallow "bad hands" from the
+ * base). Either side may be empty.
+ */
+export function mergeNegativePrompt(configured: string, base: string): string {
+  const configuredTokens = configured
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+  const baseTokens = base
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+
+  const seen = new Set(configuredTokens.map((t) => t.toLowerCase()))
+  const merged = [...configuredTokens]
+  for (const token of baseTokens) {
+    const key = token.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(token)
+  }
+  return merged.join(', ')
+}

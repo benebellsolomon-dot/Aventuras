@@ -20,7 +20,12 @@ import LoraTxt2ImgWorkflow from './comfyWorkflows/lora-txt2img-workflow.json'
 import UnetTxt2ImgWorkflow from './comfyWorkflows/unet-txt2img-workflow.json'
 import IpAdapterTxt2ImgWorkflow from './comfyWorkflows/ipadapter-txt2img-workflow.json'
 import { parseImageSize } from '$lib/utils/image'
-import { detectPromptDialect, sizeNegativeForPrompt, BOORU_DEFAULT_NEGATIVE } from '../dialect'
+import {
+  detectPromptDialect,
+  sizeNegativeForPrompt,
+  mergeNegativePrompt,
+  BOORU_DEFAULT_NEGATIVE,
+} from '../dialect'
 
 const DEFAULT_BASE_URL = 'http://localhost:8188'
 
@@ -401,12 +406,12 @@ export function createComfyProvider(config: ImageProviderConfig): ImageProvider 
       const positiveTags = (providerOptions?.positivePrompt as string) || ''
       const negativeTags = (providerOptions?.negativePrompt as string) || ''
       const finalPositivePrompt = positiveTags ? `${prompt}, ${positiveTags}` : prompt
-      // Profile negative wins; booru models get the standard anti-artifact
-      // default when nothing is configured (matches the NanoGPT provider),
-      // plus the size-aware negative that stops downsizing drift.
+      // Profile negative merges with the standard anti-artifact default for
+      // booru models (deduped, matches the NanoGPT provider) rather than
+      // replacing it, plus the size-aware negative that stops downsizing drift.
       const isBooruModel = detectPromptDialect(model) === 'booru'
       const finalNegativePrompt = [
-        negativeTags || (isBooruModel ? BOORU_DEFAULT_NEGATIVE : ''),
+        isBooruModel ? mergeNegativePrompt(negativeTags, BOORU_DEFAULT_NEGATIVE) : negativeTags,
         isBooruModel ? sizeNegativeForPrompt(prompt) : '',
       ]
         .filter(Boolean)
