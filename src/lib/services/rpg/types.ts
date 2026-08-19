@@ -84,8 +84,13 @@ export interface CheckRecord {
   essenceSpent: number
   insufficientEssence?: boolean
   drift?: RpgDriftFinding[]
-  /** Resolved target character NAME when the check targeted a girl (Phase 2). */
+  /** Resolved target character NAME when the check targeted a girl (Phase 2).
+   * Display + legacy-record fallback; prefer targetId for identity (Phase 5 D2). */
   target?: string
+  /** Resolved target character ID (Phase 5 D2) — disambiguates two same-named
+   * girls where matching by `target` name would collide. Optional so legacy
+   * records (name-only) still resolve via the name fallback. */
+  targetId?: string
   /** Spell lorebook Entry id when this check was a cast (Phase 4). Drives effect
    * application in the store and marks the turn log / drift as a cast. */
   spellId?: string

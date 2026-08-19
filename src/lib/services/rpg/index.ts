@@ -33,6 +33,7 @@ export {
   attributeMod,
   BAND_LABELS,
   checkBonus,
+  checkRecordTargets,
   defaultRpgSheet,
   formatCheckMath,
   formatCheckMathCompact,

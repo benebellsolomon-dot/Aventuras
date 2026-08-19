@@ -131,7 +131,7 @@ export class CheckPhase {
         modifiers,
         ...(spellId ? { spellId } : {}),
       }),
-      ...(target ? { target: target.name } : {}),
+      ...(target ? { target: target.name, targetId: target.id } : {}),
       ...(spellId ? { spellId } : {}),
     }
     log('check resolved', { skill, dc, nat: record.nat, total: record.total, band: record.band })

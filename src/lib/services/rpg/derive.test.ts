@@ -163,6 +163,28 @@ describe('formatCheckMathCompact (Phase 5 W3)', () => {
   })
 })
 
+describe('checkRecordTargets (Phase 5 D2)', () => {
+  it('prefers targetId — disambiguates two same-named girls', async () => {
+    const { checkRecordTargets } = await import('./derive')
+    const rec = { target: 'Amelia', targetId: 'char-2' }
+    expect(checkRecordTargets(rec, 'char-2', 'Amelia')).toBe(true)
+    // Same NAME, different id → not a match (the collision D2 fixes).
+    expect(checkRecordTargets(rec, 'char-1', 'Amelia')).toBe(false)
+  })
+
+  it('falls back to name for legacy records without targetId', async () => {
+    const { checkRecordTargets } = await import('./derive')
+    const rec = { target: 'Amelia' }
+    expect(checkRecordTargets(rec, 'char-1', 'amelia')).toBe(true) // case-insensitive
+    expect(checkRecordTargets(rec, 'char-1', 'Beth')).toBe(false)
+  })
+
+  it('returns false when the record has no target at all', async () => {
+    const { checkRecordTargets } = await import('./derive')
+    expect(checkRecordTargets({}, 'char-1', 'Amelia')).toBe(false)
+  })
+})
+
 describe('defaultRpgSheet', () => {
   it('level 1, all attributes 10, no ranks, essence full', () => {
     const sheet = defaultRpgSheet()

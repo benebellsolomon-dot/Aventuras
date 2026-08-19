@@ -86,6 +86,22 @@ export function formatCheckMathCompact(record: CheckRecord): string {
   return `${label} ${record.total} vs DC ${record.dc}`
 }
 
+/**
+ * Does this check's target resolve to the given character (Phase 5 D2)? Prefers
+ * the resolved `targetId` so two same-named girls never collide; falls back to
+ * the `target` name for legacy records that predate targetId. False when the
+ * record carries no target at all.
+ */
+export function checkRecordTargets(
+  record: Pick<CheckRecord, 'target' | 'targetId'>,
+  characterId: string,
+  characterName: string,
+): boolean {
+  if (record.targetId) return record.targetId === characterId
+  if (record.target) return record.target.toLowerCase() === characterName.toLowerCase()
+  return false
+}
+
 export function defaultRpgSheet(): RpgSheet {
   const attributes = {} as Record<AttributeId, number>
   for (const id of ATTRIBUTE_IDS) attributes[id] = 10

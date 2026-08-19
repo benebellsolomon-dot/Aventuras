@@ -65,6 +65,7 @@ import {
   ALCHEMY_MILK_BONUS_INTENSITY,
   ESSENCE_REGEN_PER_PERIOD,
   applyLevelGrants,
+  checkRecordTargets,
   crossingKey,
   defaultRpgSheet,
   detectRpgDrift,
@@ -2933,11 +2934,17 @@ class StoryStore {
     )
     if (!entry || entry.state.type !== 'spell') return null
     // v1: effects act on a girl (research/50 R10). No target → narrative-only cast.
-    const targetName = checkRecord.target
-    if (!targetName) return null
-    const target = this.characters.find(
-      (c) => c.relationship !== 'self' && c.name.toLowerCase() === targetName.toLowerCase(),
-    )
+    // Prefer the resolved targetId (Phase 5 D2) so two same-named girls don't
+    // collide; fall back to the name for legacy records that predate targetId.
+    const target = checkRecord.targetId
+      ? this.characters.find((c) => c.relationship !== 'self' && c.id === checkRecord.targetId)
+      : checkRecord.target
+        ? this.characters.find(
+            (c) =>
+              c.relationship !== 'self' &&
+              c.name.toLowerCase() === checkRecord.target!.toLowerCase(),
+          )
+        : undefined
     if (!target) return null
     // Alchemy-milk empowerment (research/50 R11, non-consuming v1): an alchemy-
     // school cast lands +1 intensity while a prime/rich milk unit sits in the
@@ -3372,8 +3379,10 @@ class StoryStore {
     if (
       checkRecord?.insufficientEssence === true &&
       checkRecord.skill === 'milking' &&
-      (checkRecord.target === undefined ||
-        checkRecord.target.toLowerCase() === character.name.toLowerCase())
+      // No target named → suppresses for everyone; otherwise only the resolved
+      // target (by id, name fallback — Phase 5 D2) is suppressed.
+      ((!checkRecord.target && !checkRecord.targetId) ||
+        checkRecordTargets(checkRecord, character.id, character.name))
     ) {
       beLog.push({
         character: character.name,
@@ -3392,7 +3401,7 @@ class StoryStore {
       checkRecord &&
       checkRecord.skill === 'milking' &&
       !checkRecord.insufficientEssence &&
-      (checkRecord.target ?? '').toLowerCase() === character.name.toLowerCase()
+      checkRecordTargets(checkRecord, character.id, character.name)
         ? checkRecord.band
         : null
     const quality: MilkQuality | null = qualityFromBand(graded)
