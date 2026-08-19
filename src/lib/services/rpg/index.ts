@@ -35,6 +35,7 @@ export {
   checkBonus,
   defaultRpgSheet,
   formatCheckMath,
+  formatCheckMathCompact,
   essenceMax,
   oddsBand,
   periodIndex,

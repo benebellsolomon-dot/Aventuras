@@ -1,7 +1,13 @@
 <script lang="ts">
   import { Dices } from 'lucide-svelte'
-  import { BAND_LABELS, formatCheckMath, type CheckRecord } from '$lib/services/rpg'
+  import {
+    BAND_LABELS,
+    formatCheckMath,
+    formatCheckMathCompact,
+    type CheckRecord,
+  } from '$lib/services/rpg'
   import type { BeLogRecord } from '$lib/services/be'
+  import { story } from '$lib/stores/story.svelte'
 
   interface Props {
     record: CheckRecord
@@ -10,6 +16,14 @@
   }
 
   let { record, beLog = [] }: Props = $props()
+
+  // Display-only verbosity (Phase 5 W3) — compact hides the d20/bonus breakdown.
+  // Never affects the prompt.
+  const mathLine = $derived(
+    story.currentStory?.settings?.rpgRollCardVerbosity === 'compact'
+      ? formatCheckMathCompact(record)
+      : formatCheckMath(record),
+  )
 
   const bandClasses: Record<CheckRecord['band'], string> = {
     crit: 'border-l-emerald-400 text-emerald-300',
@@ -30,7 +44,7 @@
 >
   <div class="flex items-center gap-2">
     <Dices class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
-    <span class="text-foreground">{formatCheckMath(record)}</span>
+    <span class="text-foreground">{mathLine}</span>
     <span class="font-semibold {bandClasses[record.band].split(' ')[1]}"
       >{BAND_LABELS[record.band]}</span
     >

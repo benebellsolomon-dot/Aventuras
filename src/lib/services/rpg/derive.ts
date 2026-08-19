@@ -79,6 +79,13 @@ export function formatCheckMath(record: CheckRecord): string {
   return `${label} d20 ${record.nat} ${sign}${record.bonus} = ${record.total} vs DC ${record.dc}`
 }
 
+/** Compact roll-card line (Phase 5 W3): skill + result vs DC, no d20 breakdown. */
+export function formatCheckMathCompact(record: CheckRecord): string {
+  const label = SKILL_DEFS.get(record.skill)?.label ?? record.skill
+  if (record.insufficientEssence) return `${label} — not attempted`
+  return `${label} ${record.total} vs DC ${record.dc}`
+}
+
 export function defaultRpgSheet(): RpgSheet {
   const attributes = {} as Record<AttributeId, number>
   for (const id of ATTRIBUTE_IDS) attributes[id] = 10

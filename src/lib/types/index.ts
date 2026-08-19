@@ -158,6 +158,10 @@ export interface StorySettings {
   beGrowthEligibleKinds?: string[] // BE engine: which event kinds may land growth (subset of catalyst/contact/attempt); empty/unset = all
   contentRating?: ContentRating // Content guidance level injected into narrative prompts (default: standard)
   postHistoryInstructions?: string // Liquid-enabled directives injected after story history, just before generation
+  // RPG layer display settings (Phase 5 W3) — DISPLAY-only, never injected into
+  // the prompt (a prompt change would fragment the cache).
+  rpgRollCardVerbosity?: 'compact' | 'full' // Roll-card detail: full math vs band+total (default: full)
+  rpgTurnLogLength?: number // Max rows in the Harem-tab turn log (default: 30)
 }
 
 export interface StoryEntry {

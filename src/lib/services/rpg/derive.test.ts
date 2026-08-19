@@ -124,6 +124,45 @@ describe('formatCheckMath', () => {
   })
 })
 
+describe('formatCheckMathCompact (Phase 5 W3)', () => {
+  it('drops the d20/bonus breakdown, keeps result vs DC', async () => {
+    const { formatCheckMathCompact } = await import('./derive')
+    expect(
+      formatCheckMathCompact({
+        action: 'x',
+        skill: 'alchemy',
+        dc: 14,
+        nat: 15,
+        bonusBreakdown: { attribute: 3, ranks: 2, modifiers: [] },
+        bonus: 5,
+        total: 20,
+        margin: 6,
+        band: 'success',
+        essenceSpent: 0,
+      }),
+    ).toBe('Alchemy 20 vs DC 14')
+  })
+
+  it('renders a short insufficient-essence variant', async () => {
+    const { formatCheckMathCompact } = await import('./derive')
+    expect(
+      formatCheckMathCompact({
+        action: 'x',
+        skill: 'channeling',
+        dc: 10,
+        nat: 0,
+        bonusBreakdown: { attribute: 0, ranks: 0, modifiers: [] },
+        bonus: 0,
+        total: 0,
+        margin: -10,
+        band: 'fail',
+        essenceSpent: 0,
+        insufficientEssence: true,
+      }),
+    ).toBe('Channeling — not attempted')
+  })
+})
+
 describe('defaultRpgSheet', () => {
   it('level 1, all attributes 10, no ranks, essence full', () => {
     const sheet = defaultRpgSheet()

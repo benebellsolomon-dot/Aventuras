@@ -4,7 +4,9 @@
   import { BAND_LABELS, beLogStyle, buildTurnLog, formatCheckMath } from '$lib/services/rpg'
   import { story } from '$lib/stores/story.svelte'
 
-  const rows = $derived(buildTurnLog(story.entries, 30))
+  const rows = $derived(
+    buildTurnLog(story.entries, story.currentStory?.settings?.rpgTurnLogLength ?? 30),
+  )
 
   const checkTint: Record<string, string> = {
     crit: 'border-l-emerald-400',

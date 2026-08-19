@@ -218,6 +218,11 @@
     if (pendingAction && !ui.isGenerating) {
       inputValue = pendingAction
       isRawActionChoice = true
+      // A spell cast must resolve as a deed — CheckPhase only runs on do/free, so
+      // force Do when a cast is pending, or a cast fired while the composer sits
+      // in say/think/story mode is silently dropped (research/51 W5-D5). Read the
+      // tag BEFORE clearing the pending choice.
+      if (ui.pendingChoiceTag?.spellId) actionType = 'do'
       ui.clearPendingActionChoice()
     }
   })

@@ -271,6 +271,66 @@
     </RadioGroup.Root>
   </div>
 
+  <!-- ── RPG Display (Phase 5 W3) ─────────────────────────────────────────── -->
+  {#if storySettings.beMode}
+    <div class="border-t pt-4">
+      <Label class="text-sm font-medium">RPG Display</Label>
+      <p class="text-muted-foreground mt-1 mb-3 text-xs">
+        Display-only — how much detail the roll card and turn log show. Does not affect the story or
+        prompts.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <Label class="text-muted-foreground mb-2 block text-xs">Roll-card detail</Label>
+          <RadioGroup.Root
+            value={storySettings.rpgRollCardVerbosity ?? 'full'}
+            onValueChange={(v) =>
+              story.updateStorySettings({
+                rpgRollCardVerbosity: v === 'compact' ? 'compact' : undefined,
+              })}
+            class="grid grid-cols-2 gap-2"
+          >
+            {#each [{ value: 'full', label: 'Full', desc: 'd20 + bonus math' }, { value: 'compact', label: 'Compact', desc: 'result vs DC only' }] as opt (opt.value)}
+              <Label
+                for={`rpg-verbosity-${opt.value}`}
+                class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-start justify-center gap-1 rounded-md border-2 p-3"
+              >
+                <RadioGroup.Item
+                  value={opt.value}
+                  id={`rpg-verbosity-${opt.value}`}
+                  class="sr-only"
+                />
+                <span class="font-medium">{opt.label}</span>
+                <span class="text-muted-foreground text-xs font-normal">{opt.desc}</span>
+              </Label>
+            {/each}
+          </RadioGroup.Root>
+        </div>
+        <div>
+          <Label class="text-muted-foreground mb-2 block text-xs">Turn-log length</Label>
+          <RadioGroup.Root
+            value={String(storySettings.rpgTurnLogLength ?? 30)}
+            onValueChange={(v) =>
+              story.updateStorySettings({
+                rpgTurnLogLength: Number(v) === 30 ? undefined : Number(v),
+              })}
+            class="grid grid-cols-4 gap-2"
+          >
+            {#each ['20', '30', '50', '100'] as n (n)}
+              <Label
+                for={`rpg-loglen-${n}`}
+                class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer items-center justify-center rounded-md border-2 p-2 text-sm"
+              >
+                <RadioGroup.Item value={n} id={`rpg-loglen-${n}`} class="sr-only" />
+                {n}
+              </Label>
+            {/each}
+          </RadioGroup.Root>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- ── Post-History Instructions ────────────────────────────────────────── -->
   <div class="border-t pt-4">
     <Label class="text-sm font-medium">Post-History Instructions</Label>
