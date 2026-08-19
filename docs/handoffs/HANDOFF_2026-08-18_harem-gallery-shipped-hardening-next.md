@@ -61,6 +61,8 @@ as "card not rendering") and the prior one (Suggestions-model config failure mas
 
 ## NEXT SESSION = hardening pass across all the new features
 
+**A 3-lens adversarial review ran this session — findings are ranked in `research/54-hardening-findings.md` (fix nothing was applied; Ben chose document-only).** START THERE. Top items: **CR-2 (SELF-INFLICTED, LIVE)** — the `refreshServiceTemplatesAllPacks` added this session silently reverts user-customized service templates every startup; fix first via a versioned one-time sync. **CR-1** — the long-flagged no-transaction / half-applied-delta hazard (do LAST, build a store test harness first). **H-1** — rollback swallows failures then deletes entries anyway. Plus 7 medium + 10 low, and a solid "cleared as correct" list. Recommended fix order is at the bottom of research/54.
+
 Ben's directive: a hardening session over everything shipped (RPG 1–5, magic, lactation,
 harem gallery, image pipeline). Candidate scope (prioritize with Ben / by risk):
 - **Remaining Phase-5 hardening** (`research/51`): W1 cache-order audit · **W5-D1
