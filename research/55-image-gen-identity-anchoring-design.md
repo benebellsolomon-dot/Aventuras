@@ -154,3 +154,25 @@ hygiene, and backfill. Size is never extracted (the BE engine owns size).
 - **Baseline rewrites** touch narrative data — gated behind user review (D).
 - **Measurement-driven:** if the LLM still omits identity with a populated bank, revisit a
   narrow deterministic backstop.
+
+## Implementation status (2026-08-19) — Phase 1a + 1b SHIPPED (worktree branch, not landed)
+
+Nine commits on `aventuras-image-gen-quality-372ac2`, orchestrated across subagents; full
+suite green (750), svelte-check 0, eslint clean.
+- **F/G/E** (Phase 1a): negatives merge; `parsesPromptWeighting` emphasis gate; current
+  clothing + location reinforcement + precedence.
+- **A+B**: `extractIdentity` (the unified identity call — folded in the old dossier
+  `image-tag-bank-generation` tag rules; `ImageTagBankService.generateTagBank` now delegates
+  to it) + `computeIdentityUpdates` non-clobber bank guard.
+- **C**: creation-time hygiene, deferred/best-effort (`identityHygiene.ts`, `newlyCreatedCharacterIds`).
+- **D**: review-gated backfill — `identityBackfill.ts` + `IdentityBackfillModal.svelte`,
+  triggered from Settings → Experimental.
+- **Adversarial review** on the data-mutating pieces (C+D) found and FIXED two ship-blockers
+  (baseline wipe from thin extraction → `mergeIdentityBaseline` field-merge; D clobbering live
+  `currentVisualDescriptors` with stale extracted state → D writes baseline only) plus MEDIUM
+  fixes (C re-resolve-after-extraction; sprite-anchor + COW-branch warnings; backfill cancel).
+
+**Follow-ups (not done):** Phase 2 aspect-ratio-by-shot (NanoGPT supports `aspect_ratio`); the
+`image-tag-bank-generation` template is now orphaned (service delegates to extractIdentity's
+inline prompt) — repoint extraction at a template to keep it user-editable, or drop it from the
+Prompts UI. Manual verification (rebuild app, run backfill, generate solo + 2-char scene) pending.
