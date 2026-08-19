@@ -69,6 +69,15 @@ class PackService {
     // custom packs (which are never auto-updated).
     await this.refreshDefaultPackTemplates(existingByTemplateId)
 
+    // Service-category templates (classifier, suggestions, memory, etc.) are
+    // internal machinery, not the intended per-pack customization surface — yet
+    // they were frozen-copied into every custom pack at creation and never
+    // updated, so code improvements (e.g. the classifier's present-character
+    // guidance) never reached existing custom-pack stories. Refresh them across
+    // ALL packs so service-template fixes always propagate. Narrative/user-facing
+    // templates in custom packs stay frozen (still never auto-updated).
+    await this.refreshServiceTemplatesAllPacks()
+
     this.initialized = true
   }
 
@@ -272,6 +281,46 @@ class PackService {
               userContentId,
               template.userContent,
             )
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Refresh SERVICE-category templates across ALL packs (default + custom) whose
+   * code baseline has changed. Service templates are internal machinery (classifier,
+   * suggestions, memory, etc.), not the per-pack customization surface — keeping them
+   * in sync with code prevents stale copies in custom packs (the classifier
+   * present-character gap). Only updates a template when its stored hash differs
+   * from the current code hash, so it is idempotent and cheap on unchanged packs.
+   */
+  private async refreshServiceTemplatesAllPacks(): Promise<void> {
+    const serviceTemplates = PROMPT_TEMPLATES.filter((t) => t.category === 'service')
+    if (serviceTemplates.length === 0) return
+
+    const packs = await database.getAllPacks()
+    for (const pack of packs) {
+      const existing = await database.getPackTemplates(pack.id)
+      const byId = new Map(existing.map((t) => [t.templateId, t]))
+
+      for (const template of serviceTemplates) {
+        const cur = byId.get(template.id)
+        if (cur) {
+          const newHash = await hashContent(template.content)
+          if (cur.contentHash !== newHash) {
+            await database.setPackTemplateContent(pack.id, template.id, template.content)
+          }
+        }
+
+        if (template.userContent) {
+          const userContentId = `${template.id}-user`
+          const curUser = byId.get(userContentId)
+          if (curUser) {
+            const newUserHash = await hashContent(template.userContent)
+            if (curUser.contentHash !== newUserHash) {
+              await database.setPackTemplateContent(pack.id, userContentId, template.userContent)
+            }
           }
         }
       }

@@ -121,12 +121,21 @@ Determine how much narrative time elapsed during this passage. Consider what act
 
 **When uncertain:** Lean toward incrementing time rather than "none" - stories feel more dynamic when time progresses. If any notable activity occurred beyond immediate dialogue/reactions, choose at least "minutes".
 
+### Present Characters - ALWAYS populate presentCharacterNames:
+List the exact proper name of EVERY named character physically present in the CURRENT scene - everyone who is in the location with the protagonist right now, on-page in this passage, whether they speak, act, or are simply there in the background.
+- Draw names from the "Already Known Entities > Characters" list and any new named character you extracted this turn; use their EXACT names.
+- Include a character even if they are silent, asleep, or only described as being there this beat.
+- EXCLUDE characters who have left, are away/elsewhere, are only remembered or mentioned in passing, or are dead.
+- If the protagonist is genuinely alone this beat, return an empty list.
+- Example: a scene where the narrative shows the protagonist talking with Amelia while Elara watches from the doorway => ["Amelia", "Elara"].
+
 ## Critical Rules
 1. When in doubt, DO NOT extract - false positives pollute the world state
 2. Only extract what ACTUALLY HAPPENED, not what might happen
 3. Use the exact names from the text, don't invent or embellish
 4. ALWAYS check if active story beats should be marked completed or failed
-5. ALWAYS assess timeProgression - prefer incrementing time over "none" when activities occur`,
+5. ALWAYS assess timeProgression - prefer incrementing time over "none" when activities occur
+6. ALWAYS populate presentCharacterNames with every named character physically in the current scene (exact names)`,
   userContent: `Analyze this narrative passage and extract world state changes.
 
 ## Context
