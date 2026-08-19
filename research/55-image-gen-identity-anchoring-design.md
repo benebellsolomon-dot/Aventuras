@@ -172,7 +172,12 @@ suite green (750), svelte-check 0, eslint clean.
   `currentVisualDescriptors` with stale extracted state → D writes baseline only) plus MEDIUM
   fixes (C re-resolve-after-extraction; sprite-anchor + COW-branch warnings; backfill cancel).
 
-**Follow-ups (not done):** Phase 2 aspect-ratio-by-shot (NanoGPT supports `aspect_ratio`); the
-`image-tag-bank-generation` template is now orphaned (service delegates to extractIdentity's
-inline prompt) — repoint extraction at a template to keep it user-editable, or drop it from the
-Prompts UI. Manual verification (rebuild app, run backfill, generate solo + 2-char scene) pending.
+**Phase 2 SHIPPED** (`aspectRatio.ts` `pickImageSize`): inline booru images now pick an SDXL
+bucket from shot-type tags + `<pic>` subject count — 2+ subjects / wide → `1216x832` landscape;
+full-body / close-up / portrait → `832x1216` tall; no cue → configured size. Wired into
+`InlineImageTracker` + `InlineImageService`; prose models keep the fallback.
+
+**Follow-ups (not done):** the `image-tag-bank-generation` template is now orphaned (service
+delegates to extractIdentity's inline prompt) — repoint extraction at a template to keep it
+user-editable, or drop it from the Prompts UI. Manual verification (rebuild app, run backfill,
+generate solo + 2-char scene) pending.
