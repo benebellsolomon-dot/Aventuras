@@ -19,9 +19,23 @@ engine and BE measurement functions — no new engine work.
 2. **Cup size + measurements are the headline. Tier is demoted to faint background.** Ben's
    ruling: tier is bookkeeping; what matters at a glance is her cup letter and her
    bust/body measurements. Tier appears only as a small muted tag.
-3. **Present vs. absent.** Present girls get rows/cards under "Present · N". Absent girls
-   stay quiet one-line entries under "Elsewhere · N" — name + cup letter + bond stance, no
-   portrait, no expansion. (Unchanged intent from today's HaremPanel split.)
+3. **Every girl with body state renders as a visual row — always. Presence is a badge +
+   sort, not a gate.** *(Revised 2026-08-18 after diagnosing the V2d "card doesn't render"
+   bug — see below.)* All non-self characters with body state show as collapsed visual
+   roster rows (thumbnail + cup + measurements), sorted **present-first**, with an "in
+   scene" badge on those the classifier reports present. Any girl can expand. No girl is
+   demoted to a name-only row on account of scene absence.
+
+### Why (root cause of the shipped-but-invisible V2d card)
+
+The shipped V2d `HaremPanel` gated the *visual card* on scene-presence: present girls got
+`GirlStatusCard`, everyone else got a one-line "Elsewhere" text row. In the live story
+(`c5cee28d` "Amelia of Evermere", `beMode` on, Amelia + Elara both with body state) the
+latest entries carry `classificationResult.scene.presentCharacterNames = []` — the scene
+classifier under-populates present-names (same silent-classifier class as the Suggestions
+model saga; worth a Debug-Mode look, tracked separately). Result: both girls fell to the
+text rows and **no visual card ever rendered**. Making presence a badge instead of a gate
+removes this fragility entirely — the tab shows the roster regardless of classifier state.
 4. **Portraits reuse the V2d sprite pipeline** — `selectSprite(bodyState)` →
    `spriteAnchorService.ensureSprite` → fallback chain (current cell → `character.portrait`
    → placeholder), beMode-gated, `{#key}` crossfade. Collapsed thumbnail and expanded
@@ -61,7 +75,10 @@ overlaid bottom-left and the faint tier tag top-right); right column:
 - stat meters: bond, dependence, fullness (`% · firmness`), milk (`L / L`)
 - footer: quirk/condition chips + a `▲ grew this turn` flag
 
-**Absent row** — `name · cup` on the left, bond stance on the right. One line.
+**Presence** — present girls sort first and carry a small "in scene" badge (a heart/dot in
+the row). Absent girls render as the SAME visual collapsed row, just without the badge and
+sorted after. No separate name-only "Elsewhere" list. (A subtle divider or dimming between
+the present and absent groups is fine, but both are full visual rows.)
 
 Turn log (`TurnLogList`) stays below the roster, unchanged.
 
@@ -69,8 +86,9 @@ Turn log (`TurnLogList`) stays below the roster, unchanged.
 
 Keep files small and cohesive (each ≤ ~150 lines):
 
-- **`HaremPanel.svelte`** (exists) — owns the present/absent split and the expanded-id set
-  (`Set<string>` of open girls); renders rows/cards/absent-rows + `TurnLogList`.
+- **`HaremPanel.svelte`** (exists) — owns the present-first sort and the expanded-id set
+  (`Set<string>` of open girls); renders every body-state girl as a `HaremGirlRow`
+  (collapsed) or `GirlStatusCard` (expanded) + `TurnLogList`. No name-only rows.
 - **`HaremGirlRow.svelte`** (new) — the collapsed roster row; emits an expand toggle.
 - **`GirlStatusCard.svelte`** (evolve the shipped V2d card) — the expanded card: portrait +
   size block + meters + footer.

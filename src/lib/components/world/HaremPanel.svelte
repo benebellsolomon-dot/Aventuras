@@ -1,9 +1,14 @@
 <script lang="ts">
-  // Harem sidebar tab (research/48 Step 9): present girls expanded, absent
-  // girls as name rows, interleaved turn log below.
-  import { readBodyState, bondOf, bondStance } from '$lib/services/be'
+  // Harem sidebar tab (research/48 Step 9; research/53 gallery). EVERY girl with
+  // body state renders as a visual row — present or not. Presence is a badge +
+  // present-first sort, NOT a gate (the V2d card was invisible because it gated
+  // the visual card on scene-presence, and the classifier returns empty present
+  // names). Rows expand in place into the full portrait card.
+  import { SvelteSet } from 'svelte/reactivity'
+  import { readBodyState } from '$lib/services/be'
   import { story } from '$lib/stores/story.svelte'
   import GirlStatusCard from './GirlStatusCard.svelte'
+  import HaremGirlRow from './HaremGirlRow.svelte'
   import TurnLogList from './TurnLogList.svelte'
 
   const presentNames = $derived.by(() => {
@@ -22,11 +27,17 @@
     story.characters
       .filter((c) => c.relationship !== 'self')
       .map((c) => ({ character: c, state: readBodyState(c.metadata) }))
-      .filter((g) => g.state !== null),
+      .filter((g) => g.state !== null)
+      .map((g) => ({ ...g, present: presentNames.has(g.character.name.toLowerCase()) }))
+      // Present girls first; original order preserved within each group (stable sort).
+      .sort((a, b) => Number(b.present) - Number(a.present)),
   )
 
-  const present = $derived(girls.filter((g) => presentNames.has(g.character.name.toLowerCase())))
-  const absent = $derived(girls.filter((g) => !presentNames.has(g.character.name.toLowerCase())))
+  const expanded = new SvelteSet<string>()
+  function toggle(id: string) {
+    if (expanded.has(id)) expanded.delete(id)
+    else expanded.add(id)
+  }
 </script>
 
 <div class="space-y-3">
@@ -35,20 +46,26 @@
       No tracked girls yet — body state seeds on a character's first transformation event.
     </p>
   {:else}
-    {#each present as girl (girl.character.id)}
-      <GirlStatusCard character={girl.character} state={girl.state!} />
-    {/each}
-    {#if absent.length > 0}
-      <div>
-        <div class="text-muted-foreground mb-1 text-xs tracking-wide uppercase">Elsewhere</div>
-        {#each absent as girl (girl.character.id)}
-          <div class="text-muted-foreground flex justify-between px-1 py-0.5 text-xs">
-            <span>{girl.character.name}</span>
-            <span>tier {girl.state!.tier} · {bondStance(bondOf(girl.state!))}</span>
-          </div>
-        {/each}
-      </div>
-    {/if}
+    <div class="space-y-2">
+      {#each girls as girl (girl.character.id)}
+        {#if expanded.has(girl.character.id)}
+          <GirlStatusCard
+            character={girl.character}
+            state={girl.state!}
+            present={girl.present}
+            onCollapse={() => toggle(girl.character.id)}
+          />
+        {:else}
+          <HaremGirlRow
+            character={girl.character}
+            state={girl.state!}
+            present={girl.present}
+            expanded={false}
+            onToggle={() => toggle(girl.character.id)}
+          />
+        {/if}
+      {/each}
+    </div>
   {/if}
 
   <TurnLogList />
