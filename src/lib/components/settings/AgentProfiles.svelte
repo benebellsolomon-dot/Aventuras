@@ -99,6 +99,12 @@
       description: 'Generates RPG choices',
     },
     {
+      id: 'spellResearch',
+      label: 'Spell Research',
+      icon: Sparkles,
+      description: 'Generates spells for the RPG spellbook',
+    },
+    {
       id: 'styleReviewer',
       label: 'Style Reviewer',
       icon: Sparkles,
