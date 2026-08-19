@@ -916,6 +916,22 @@ class StoryStore {
 
       log('Rollback summary:', rollbackSummary)
 
+      // H-1: if any world-state undo failed, the rollback is PARTIAL — some entities
+      // are still in their post-turn state. Deleting the entries now would destroy the
+      // deltas needed to retry, stranding those mutations permanently. Abort instead and
+      // surface the failure; the deltas survive, and the idempotent rollback can be
+      // re-run (a fresh delete attempt) once the underlying cause clears.
+      if (rollbackSummary.failures.length > 0) {
+        const failedNames = rollbackSummary.failures
+          .map((f) => `${f.operation} ${f.entityType}${f.id ? ` ${f.id}` : ''}`)
+          .join(', ')
+        console.error('[StoryStore] Partial rollback — aborting delete:', rollbackSummary.failures)
+        throw new Error(
+          `Couldn't fully undo world-state changes for this entry (${rollbackSummary.failures.length} step(s) failed: ${failedNames}). ` +
+            `The entry was kept so nothing is left in a half-undone state — try deleting again.`,
+        )
+      }
+
       // Now cascade-delete entries from this position onward (skip rollback — already done)
       await this.deleteEntriesFromPosition(existingEntry.position, { skipRollback: true })
 
