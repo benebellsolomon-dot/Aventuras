@@ -113,7 +113,28 @@ describe('assembleInlineImage', () => {
     expect(result.fullPrompt.startsWith('__betier_24__ ')).toBe(true)
   })
 
-  it('applies within-band emphasis on the band word for booru models', () => {
+  it('applies within-band emphasis on the band word for booru models on a weighting-capable provider', () => {
+    const lucy = {
+      name: 'Lucy',
+      loraConfig: null,
+      metadata: writeBodyState(null, defaultBodyState(28)),
+      visualDescriptors: {},
+    } as unknown as Character
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: '',
+      providerType: 'comfyui' as const,
+      model: 'wai-illustrious-sdxl',
+      presentCharacters: [lucy],
+      tagPrompt: '1girl, huge breasts, garden',
+      tagCharacters: ['Lucy'],
+    })
+    // Tier 28 sits 6/8 through the huge band (22–29) → weight 1.15.
+    expect(result.fullPrompt).toContain('(huge breasts:1.15)')
+  })
+
+  it('leaves the plain band word for a provider that does not parse A1111 weighting', () => {
     const lucy = {
       name: 'Lucy',
       loraConfig: null,
@@ -130,8 +151,9 @@ describe('assembleInlineImage', () => {
       tagPrompt: '1girl, huge breasts, garden',
       tagCharacters: ['Lucy'],
     })
-    // Tier 28 sits 6/8 through the huge band (22–29) → weight 1.15.
-    expect(result.fullPrompt).toContain('(huge breasts:1.15)')
+    expect(result.fullPrompt).toContain('huge breasts')
+    expect(result.fullPrompt).not.toContain('(huge breasts:1.15)')
+    expect(result.fullPrompt).not.toMatch(/\(huge breasts:[\d.]+\)/)
   })
 
   it('emits the size-band marker only for providers that parse it', () => {

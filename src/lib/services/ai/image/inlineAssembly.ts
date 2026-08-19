@@ -22,6 +22,7 @@ import {
 } from '$lib/services/be'
 import { sizeBandMarker, tierMarker } from './sizeBandMarker'
 import { detectPromptDialect, BOORU_QUALITY_PREFIX } from './dialect'
+import { parsesPromptWeighting } from './providerCapabilities'
 import { maybeBuildBridgeSpec } from './bridgeSpec'
 import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
@@ -144,7 +145,10 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   // position inside its band pushes the render toward the right end of it.
   // Reads renderTier, not beTier: the word actually sitting in the grounded
   // prompt is the apparent one, so the real-tier word would match nothing.
-  if (dialect === 'booru' && renderTier !== null) {
+  // Gated on provider capability: endpoint providers (nanogpt, cloud APIs)
+  // don't parse A1111 `(tag:weight)` syntax and would receive it as literal
+  // garbage tokens — they keep the plain band word instead.
+  if (dialect === 'booru' && renderTier !== null && parsesPromptWeighting(input.providerType)) {
     const word = bandWord(renderTier)
     const weight = 1 + 0.2 * bandPosition(renderTier)
     if (weight > 1.01) {
