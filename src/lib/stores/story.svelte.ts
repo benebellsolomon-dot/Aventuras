@@ -93,6 +93,7 @@ import {
   type CheckpointCreatedEvent,
   type StoryCreatedEvent,
 } from '$lib/services/events'
+import { applyIdentityHygiene } from '$lib/services/ai/image/identityHygiene'
 import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 import { aiService } from '$lib/services/ai'
 import { createLogger } from '$lib/log'
@@ -2058,6 +2059,11 @@ class StoryStore {
     const createdLocationIds: string[] = []
     const createdItemIds: string[] = []
     const createdStoryBeatIds: string[] = []
+    // IDs of characters BRAND-NEW this turn (not COW clones). Drives deferred
+    // creation-time identity hygiene (research/55 C); createdCharacterIds also
+    // collects COW clones of existing characters, whose baseline must NOT be
+    // rewritten, so the two lists are kept separate.
+    const newlyCreatedCharacterIds: string[] = []
     let currentLocationIdBefore: string | null = null
     let timeTrackerBefore: TimeTracker | null = null
 
@@ -2194,6 +2200,7 @@ class StoryStore {
           await database.addCharacter(character)
           this.characters = [...this.characters, character]
           if (trackingEnabled) createdCharacterIds.push(character.id)
+          newlyCreatedCharacterIds.push(character.id)
           existing = character
         }
 
@@ -2563,6 +2570,7 @@ class StoryStore {
           await database.addCharacter(character)
           this.characters = [...this.characters, character]
           if (trackingEnabled) createdCharacterIds.push(character.id)
+          newlyCreatedCharacterIds.push(character.id)
         }
       })
     }
@@ -2903,6 +2911,29 @@ class StoryStore {
           result.entryUpdates.newStoryBeats.length + result.entryUpdates.storyBeatUpdates.length,
       })
     }
+
+    // Creation-time identity hygiene (research/55 C). Deferred + best-effort:
+    // fired AFTER the turn's writes settle and NOT awaited, so the extra LLM
+    // extraction never adds latency to the turn or narration. Runs only for
+    // brand-new characters (never updates); each call swallows its own errors.
+    for (const characterId of newlyCreatedCharacterIds) {
+      void this.runIdentityHygiene(characterId)
+    }
+  }
+
+  /**
+   * Deferred, best-effort creation-time identity hygiene for one freshly-created
+   * character (research/55 C). Re-resolves the character from the live store (it
+   * may have been updated — or COW-remapped — later in the same turn), then runs
+   * the extraction + hygiene split, persisting through the COW-safe update path.
+   * Fire-and-forget: never awaited in the turn, never throws.
+   */
+  private async runIdentityHygiene(characterId: string): Promise<void> {
+    const character =
+      this.characters.find((c) => c.id === characterId) ??
+      this.characters.find((c) => c.overridesId === characterId)
+    if (!character) return
+    await applyIdentityHygiene(character, (id, updates) => this.updateCharacter(id, updates))
   }
 
   /**
