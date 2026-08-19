@@ -31,6 +31,8 @@ import { z } from 'zod'
 import { settings } from '$lib/stores/settings.svelte'
 import { createLogger } from '$lib/log'
 import { BAND_WORD_THRESHOLDS } from '$lib/services/be'
+import { hashContent } from '$lib/services/packs/hash'
+import type { Character } from '$lib/types'
 import { generateStructured } from '../sdk/generate'
 import { visualDescriptorsSchema, type VisualDescriptors } from '../sdk/schemas/classifier'
 
@@ -72,9 +74,12 @@ const identityExtractionSchema = z.object({
   identityTags: z
     .array(z.string())
     .describe(
-      'PLAIN danbooru tags for STABLE identity only: species/race (e.g. "cow girl", ' +
-        '"cow ears", "cow horns", "cow tail"), hair (length+style+color), eyes, skin ' +
-        'tone, permanent distinguishing marks. NO size/breast tags, NO clothing, NO ' +
+      '12-20 PLAIN, atomic danbooru tags for STABLE physical identity, in EXACT dossier ' +
+        'order: anchor (1girl/1boy/1other) → hair (length, style, color) → eyes (color, ' +
+        'shape) → skin tone → body (height, build; NO size/breast tags) → age appearance ' +
+        '(mature female, young adult…) → distinguishing marks (scars, freckles, moles, ' +
+        'tattoos, heterochromia, AND animal ears/horns/tail for monster girls). Atomic: ' +
+        '"long hair, wavy hair, red hair" NOT "long wavy red hair". NO clothing, NO ' +
         'transient state (expression, sweat, arousal, pose, fluids). No (tag:weight) emphasis.',
     ),
   cleanBaseline: visualDescriptorsSchema.describe(
@@ -98,12 +103,15 @@ You are given a character's free-text visual descriptors. This prose is often PO
 
 Return three things:
 
-1. identityTags — PLAIN danbooru tags (lowercase, comma-atomic, NO "(tag:1.2)" weighting) covering STABLE identity ONLY:
-   - species / race markers (for monster girls these are IDENTITY and MUST survive: e.g. a holstaur → "cow girl", "cow ears", "cow horns", "cow tail"; an elf → "elf", "pointy ears")
-   - hair: length + style + color (e.g. "long hair", "wavy hair", "blonde hair")
-   - eyes: color + notable shape (e.g. "blue eyes")
-   - skin tone (e.g. "dark skin", "pale skin")
-   - permanent distinguishing marks (scars, tattoos, birthmarks, freckles)
+1. identityTags — a locked booru identity bank: 12-20 PLAIN, atomic danbooru tags (lowercase, comma-atomic, NO "(tag:1.2)" weighting) covering STABLE physical identity ONLY, in this EXACT dossier order:
+   - anchor: 1girl / 1boy / 1other (exactly one, first)
+   - hair: length, then style, then color as SEPARATE atomic tags (e.g. "long hair", "wavy hair", "blonde hair" — NOT "long wavy blonde hair")
+   - eyes: color, then notable shape (e.g. "blue eyes", "tsurime")
+   - skin tone (e.g. "dark skin", "pale skin", "fair skin")
+   - body: height + build as a frame only (e.g. "tall", "athletic") — NEVER a size/breast tag
+   - age appearance: the character MUST read as an adult (e.g. "mature female", "young adult")
+   - distinguishing marks LAST: scars, freckles, moles, tattoos, birthmarks, heterochromia — AND for monster girls the species markers, which are IDENTITY and MUST survive here (a holstaur → "cow ears", "cow horns", "cow tail"; an elf → "pointy ears")
+   Use real Danbooru vocabulary; only include tags the source supports — never invent marks or features.
    EXCLUDE: any size/breast tag (the engine owns size — never emit "large breasts", "huge breasts", "cleavage", etc.), any clothing, and any transient state (expression, blush, sweat, arousal, pose, fluids).
 
 2. cleanBaseline — the stable identity expressed as descriptor fields:
@@ -125,10 +133,10 @@ Worked example (monster girl — a holstaur named Lucy):
   Input clothing: "torn milkmaid dress pulled down, apron"
   Input distinguishing: "cow ears, small curved horns, cow tail, cow-print pattern"
   →
-  identityTags: ["cow girl", "cow ears", "cow horns", "cow tail", "long hair", "wavy hair", "chestnut hair", "brown eyes"]
+  identityTags: ["1girl", "long hair", "wavy hair", "chestnut hair", "brown eyes", "fair skin", "tall", "wide hips", "mature female", "cow ears", "cow horns", "cow tail"]
   cleanBaseline: { face: "soft round face", hair: "long wavy chestnut hair", eyes: "gentle brown eyes", build: "tall, wide hips, curvy frame", distinguishing: "cow ears, small curved horns, cow tail, cow-print markings" }
   currentState: { face: "warm smile, flushed cheeks, semen on chin", clothing: "torn milkmaid dress pulled down, apron" }
-  (note: "huge breasts" was DROPPED from every field — the engine owns size; species markers survived as identity tags.)
+  (note: dossier order — 1girl anchor first, species markers LAST under distinguishing; "huge breasts" was DROPPED from every field — the engine owns size.)
 
 Respond ONLY with the structured object.`
 
@@ -314,5 +322,83 @@ export async function extractIdentity(
   } catch (error) {
     log('identity extraction failed — falling back', error)
     return null
+  }
+}
+
+// ============================================================================
+// Apply-to-character (research/55 component B) — pure computation, no persistence
+// ============================================================================
+
+/**
+ * Metadata key under which the content-hash of the last AUTO-derived tag bank is
+ * stored. The non-clobber guard compares the current bank's hash against this to
+ * tell an untouched auto-derivation from a user's manual edit.
+ */
+export const IMAGE_TAGS_AUTO_HASH_KEY = 'imageTagsAutoHash'
+
+/**
+ * Proposed Character field updates computed from an extraction. `imageTags` /
+ * `imageTagsAutoHash` are present ONLY when the tag bank should be (re)written;
+ * `cleanBaseline` / `currentState` are always returned for the caller to apply
+ * (creation applies the baseline rewrite; backfill proposes it).
+ */
+export interface IdentityUpdates {
+  /** New tag bank to persist — omitted when the guard preserves a user edit. */
+  imageTags?: string
+  /** Hash of the new auto bank to store under `metadata[IMAGE_TAGS_AUTO_HASH_KEY]`. */
+  imageTagsAutoHash?: string
+  /** Stable identity baseline from the extraction. */
+  cleanBaseline: VisualDescriptors
+  /** Transient current-state (expression/pose + current clothing) from the extraction. */
+  currentState: Partial<VisualDescriptors>
+  /** True iff the tag bank is being (re)written by this computation. */
+  bankChanged: boolean
+}
+
+/** Read the stored auto-hash out of a character's metadata (null-safe). */
+function readStoredAutoHash(metadata: Character['metadata']): string | undefined {
+  const value = metadata?.[IMAGE_TAGS_AUTO_HASH_KEY]
+  return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * Compute proposed Character updates from an extraction with a NON-CLOBBER guard
+ * on the tag bank: write `imageTags` only when the current bank is empty, OR when
+ * the current bank still equals the last auto-derivation (its hash matches the
+ * stored `imageTagsAutoHash`). A user-edited bank (hash mismatch) is PRESERVED.
+ *
+ * Pure: performs no persistence and triggers nothing — the caller decides what to
+ * write. Async only because the content hash is computed via SubtleCrypto.
+ */
+export async function computeIdentityUpdates(
+  character: Pick<Character, 'imageTags' | 'metadata'>,
+  extraction: IdentityExtraction,
+): Promise<IdentityUpdates> {
+  const { cleanBaseline, currentState } = extraction
+  const newBank = extraction.identityTags.join(', ')
+  const currentBank = (character.imageTags ?? '').trim()
+  const storedAutoHash = readStoredAutoHash(character.metadata)
+
+  // Nothing worth writing if the extraction produced no tags.
+  let shouldWrite = false
+  if (newBank) {
+    if (!currentBank) {
+      shouldWrite = true // bank empty → seed it
+    } else if (storedAutoHash && (await hashContent(currentBank)) === storedAutoHash) {
+      shouldWrite = true // still the untouched auto value → safe to re-derive
+    }
+    // else: user manually edited the bank (or no hash on record) → preserve it
+  }
+
+  if (!shouldWrite) {
+    return { cleanBaseline, currentState, bankChanged: false }
+  }
+
+  return {
+    imageTags: newBank,
+    imageTagsAutoHash: await hashContent(newBank),
+    cleanBaseline,
+    currentState,
+    bankChanged: true,
   }
 }

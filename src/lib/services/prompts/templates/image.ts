@@ -339,6 +339,10 @@ When generating a description, follow these standards:
 {{ currentResponse }}`,
 }
 
+// NOTE: No longer rendered by ImageTagBankService (which now delegates to the
+// unified `extractIdentity`, research/55). Retained as a user-editable vault
+// prompt — it is still referenced by templateGroups.ts and synced via the pack
+// template registry (templates/index.ts), so it is NOT dead code to remove here.
 const imageTagBankGenerationTemplate: PromptTemplate = {
   id: 'image-tag-bank-generation',
   name: 'Image Tag Bank Generation',

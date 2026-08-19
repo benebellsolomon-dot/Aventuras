@@ -21,7 +21,15 @@ vi.mock('$lib/stores/settings.svelte', () => ({
   },
 }))
 
-import { extractIdentity, normalizeExtraction, normalizeIdentityTags } from './identityExtraction'
+import {
+  computeIdentityUpdates,
+  extractIdentity,
+  IMAGE_TAGS_AUTO_HASH_KEY,
+  normalizeExtraction,
+  normalizeIdentityTags,
+  type IdentityExtraction,
+} from './identityExtraction'
+import { hashContent } from '$lib/services/packs/hash'
 
 // A holstaur (monster girl) fixture whose species markers MUST survive as tags
 // and whose size/transient/clothing pollution must be stripped or rerouted.
@@ -193,5 +201,95 @@ describe('extractIdentity', () => {
     const result = await extractIdentity({ visualDescriptors: { hair: 'red hair' } })
 
     expect(result).toBeNull()
+  })
+})
+
+describe('computeIdentityUpdates', () => {
+  const extractionWith = (tags: string[]): IdentityExtraction => ({
+    identityTags: tags,
+    cleanBaseline: { hair: 'red hair', eyes: 'green eyes' },
+    currentState: { clothing: 'sundress' },
+  })
+
+  it('writes the bank when the character has none, and stores its hash', async () => {
+    const updates = await computeIdentityUpdates(
+      { imageTags: null, metadata: null },
+      extractionWith(['1girl', 'red hair', 'green eyes']),
+    )
+
+    expect(updates.bankChanged).toBe(true)
+    expect(updates.imageTags).toBe('1girl, red hair, green eyes')
+    expect(updates.imageTagsAutoHash).toBe(await hashContent('1girl, red hair, green eyes'))
+    // baseline/current always surfaced for the caller
+    expect(updates.cleanBaseline).toEqual({ hair: 'red hair', eyes: 'green eyes' })
+    expect(updates.currentState).toEqual({ clothing: 'sundress' })
+  })
+
+  it('overwrites the bank when it still equals the last auto-derivation', async () => {
+    const oldBank = '1girl, blue eyes'
+    const updates = await computeIdentityUpdates(
+      { imageTags: oldBank, metadata: { [IMAGE_TAGS_AUTO_HASH_KEY]: await hashContent(oldBank) } },
+      extractionWith(['1girl', 'green eyes']),
+    )
+
+    expect(updates.bankChanged).toBe(true)
+    expect(updates.imageTags).toBe('1girl, green eyes')
+    expect(updates.imageTagsAutoHash).toBe(await hashContent('1girl, green eyes'))
+  })
+
+  it('preserves a user-edited bank (hash mismatch → no write)', async () => {
+    const userBank = '1girl, my custom curated tag'
+    const staleAutoHash = await hashContent('1girl, blue eyes') // hash of a DIFFERENT old auto value
+    const updates = await computeIdentityUpdates(
+      { imageTags: userBank, metadata: { [IMAGE_TAGS_AUTO_HASH_KEY]: staleAutoHash } },
+      extractionWith(['1girl', 'green eyes']),
+    )
+
+    expect(updates.bankChanged).toBe(false)
+    expect(updates.imageTags).toBeUndefined()
+    expect(updates.imageTagsAutoHash).toBeUndefined()
+    // baseline/current still returned so callers can propose baseline rewrites
+    expect(updates.cleanBaseline).toEqual({ hair: 'red hair', eyes: 'green eyes' })
+  })
+
+  it('preserves a non-empty bank that has no auto-hash on record', async () => {
+    const updates = await computeIdentityUpdates(
+      { imageTags: '1girl, some tag', metadata: null },
+      extractionWith(['1girl', 'green eyes']),
+    )
+
+    expect(updates.bankChanged).toBe(false)
+    expect(updates.imageTags).toBeUndefined()
+  })
+
+  it('does not write when the extraction produced no tags', async () => {
+    const updates = await computeIdentityUpdates(
+      { imageTags: null, metadata: null },
+      extractionWith([]),
+    )
+
+    expect(updates.bankChanged).toBe(false)
+    expect(updates.imageTags).toBeUndefined()
+  })
+
+  it('round-trips: the stored hash lets the next derivation re-recognize its own auto value', async () => {
+    // 1st pass seeds an empty character
+    const first = await computeIdentityUpdates(
+      { imageTags: '', metadata: null },
+      extractionWith(['1girl', 'red hair']),
+    )
+    expect(first.bankChanged).toBe(true)
+
+    // Persist exactly what the caller would write, then derive again
+    const persisted = {
+      imageTags: first.imageTags!,
+      metadata: { [IMAGE_TAGS_AUTO_HASH_KEY]: first.imageTagsAutoHash! },
+    }
+    const second = await computeIdentityUpdates(persisted, extractionWith(['1girl', 'long hair']))
+
+    // The guard recognizes the untouched auto bank and re-derives cleanly
+    expect(second.bankChanged).toBe(true)
+    expect(second.imageTags).toBe('1girl, long hair')
+    expect(second.imageTagsAutoHash).toBe(await hashContent('1girl, long hair'))
   })
 })

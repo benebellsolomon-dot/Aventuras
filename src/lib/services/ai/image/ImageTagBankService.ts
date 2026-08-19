@@ -1,60 +1,45 @@
 /**
  * Image Tag Bank Service
  *
- * Generates a locked booru identity-tag bank for a character from their
- * description and visual descriptors (Megumin dossier rule: 12-20 physical-only
- * tags in anchor → hair → eyes → skin → body → age → marks order). The result
- * seeds the Image Tag Bank draft in the character panel — the user reviews and
- * saves; nothing is written automatically.
+ * Generates a locked booru identity-tag bank for a character (Megumin dossier
+ * rule: 12-20 physical-only tags in anchor → hair → eyes → skin → body → age →
+ * marks order). The result seeds the Image Tag Bank draft in the character panel
+ * — the user reviews and saves; nothing is written automatically.
+ *
+ * The dossier tag rules now live in the unified identity-extraction utility
+ * (research/55 component A). This service DELEGATES to `extractIdentity` and
+ * returns just the joined identity tags, keeping the manual-button contract
+ * (`(character) => Promise<string>`) unchanged for CharacterPanel.svelte.
  */
 
-import { z } from 'zod'
-import { BaseAIService } from '../BaseAIService'
-import { ContextBuilder } from '$lib/services/context'
 import { createLogger } from '$lib/log'
 import type { Character } from '$lib/types'
+import { extractIdentity } from './identityExtraction'
 
 const log = createLogger('ImageTagBank')
 
-const tagBankSchema = z.object({
-  tags: z
-    .array(z.string().min(2))
-    .min(8)
-    .max(24)
-    .describe('Atomic booru identity tags in dossier order'),
-})
-
-/** Fields that describe the body itself — clothing/accessories are excluded on purpose. */
-const PHYSICAL_DESCRIPTOR_FIELDS = ['face', 'hair', 'eyes', 'build', 'distinguishing'] as const
-
-export class ImageTagBankService extends BaseAIService {
-  constructor() {
-    // Rides the image-generation preset — same LLM that writes scene prompts.
-    super('imageGeneration')
-  }
-
+export class ImageTagBankService {
   /**
-   * Generate a comma-separated identity tag bank for the character.
-   * Returns the joined tag string ready for the Image Tag Bank field.
+   * Generate a comma-separated identity tag bank for the character by delegating
+   * to the unified identity extraction. Returns the joined tag string ready for
+   * the Image Tag Bank field, or an empty string when extraction is unavailable
+   * (best-effort: no configured text model / failure).
    */
   async generateTagBank(character: Character): Promise<string> {
-    const vd = character.visualDescriptors
-    const descriptorLines = PHYSICAL_DESCRIPTOR_FIELDS.map((field) =>
-      vd?.[field] ? `${field}: ${vd[field]}` : null,
-    ).filter(Boolean)
-
-    const ctx = new ContextBuilder()
-    ctx.add({
-      characterName: character.name,
-      characterDescription: character.description || '(no description)',
-      visualDescriptorsBlock:
-        descriptorLines.length > 0 ? descriptorLines.join('\n') : '(no visual descriptors)',
+    const extraction = await extractIdentity({
+      visualDescriptors: character.visualDescriptors,
+      name: character.name,
+      description: character.description ?? undefined,
     })
-    const { system, user: prompt } = await ctx.render('image-tag-bank-generation')
-
-    const result = await this.generate(tagBankSchema, system, prompt, 'image-tag-bank-generation')
-    const bank = result.tags.map((t) => t.trim()).join(', ')
-    log('Generated tag bank', { character: character.name, tagCount: result.tags.length })
+    if (!extraction) {
+      log('No extraction (best-effort skip) — returning empty bank', { character: character.name })
+      return ''
+    }
+    const bank = extraction.identityTags.join(', ')
+    log('Generated tag bank', {
+      character: character.name,
+      tagCount: extraction.identityTags.length,
+    })
     return bank
   }
 }
