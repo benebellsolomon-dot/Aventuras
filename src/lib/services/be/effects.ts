@@ -19,6 +19,7 @@ import {
   CHECK_DEBUFF_DC_PENALTY,
   GROWTH_EVENT_KINDS,
   SPELL_BAND_INTENSITY_DELTA,
+  SPELL_CONDITION_DEFAULT_TTL,
   SUPPLY_SURGE_MAX_DELTA,
 } from './constants'
 import type { CheckBand } from './roll'
@@ -215,7 +216,9 @@ export function translateSpellEffects(
       case 'condition':
         out.softConditions.push({
           label: effect.label ?? 'enchanted',
-          ...(effect.ttl !== undefined ? { ttl: effect.ttl } : {}),
+          // L-1: a cast condition with no ttl must not be permanent — default it
+          // so it decays and can't crowd MAX_BE_CONDITIONS.
+          ttl: effect.ttl ?? SPELL_CONDITION_DEFAULT_TTL,
         })
         break
       case 'check_debuff':

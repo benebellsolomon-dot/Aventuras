@@ -8,7 +8,11 @@ import {
   translateSpellEffects,
   type EffectTag,
 } from './effects'
-import { CHECK_DEBUFF_CONDITION_PREFIX, SUPPLY_SURGE_MAX_DELTA } from './constants'
+import {
+  CHECK_DEBUFF_CONDITION_PREFIX,
+  SPELL_CONDITION_DEFAULT_TTL,
+  SUPPLY_SURGE_MAX_DELTA,
+} from './constants'
 import type { BeEvent } from './types'
 
 describe('EffectTag vocabulary (Phase 4 Step 1)', () => {
@@ -108,6 +112,14 @@ describe('translateSpellEffects — channel routing (Phase 4 Step 2)', () => {
       expect.objectContaining({ label: `${CHECK_DEBUFF_CONDITION_PREFIX}arcane snare`, ttl: 2 }),
     )
     expect(out.supplyDelta).toBe(2)
+  })
+
+  it('a condition effect with no ttl gets a default (never permanent) (L-1)', () => {
+    const out = translateSpellEffects([{ kind: 'condition', label: 'glamour' }], 'success', T)
+    const cond = out.softConditions.find((c) => c.label === 'glamour')
+    expect(cond).toBeDefined()
+    expect(cond!.ttl).toBe(SPELL_CONDITION_DEFAULT_TTL)
+    expect(cond!.ttl).toBeGreaterThan(0)
   })
 
   it('fail band applies NOTHING (essence still spent by the caller)', () => {
