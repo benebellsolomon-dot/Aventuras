@@ -88,7 +88,9 @@ describe('buildCheckResultBlock', () => {
     const cast = buildCheckResultBlock(record({ spellId: 'spell-1', target: 'Amelia' }))
     expect(cast).toContain('This was a spell cast; its effects are already applied')
     // A fizzled cast (fail band) applied nothing — no effect claim.
-    const fizzle = buildCheckResultBlock(record({ spellId: 'spell-1', band: 'fail', target: 'Amelia' }))
+    const fizzle = buildCheckResultBlock(
+      record({ spellId: 'spell-1', band: 'fail', target: 'Amelia' }),
+    )
     expect(fizzle).not.toContain('spell cast')
     // An untargeted "narrative-only" cast (R10) applied nothing either.
     const untargeted = buildCheckResultBlock(record({ spellId: 'spell-1' }))

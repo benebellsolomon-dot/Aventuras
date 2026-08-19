@@ -286,7 +286,15 @@ class LorebookVaultStore {
       metadata: {
         format: 'unknown',
         totalEntries: 0,
-        entryBreakdown: { character: 0, location: 0, item: 0, faction: 0, concept: 0, event: 0, spell: 0 },
+        entryBreakdown: {
+          character: 0,
+          location: 0,
+          item: 0,
+          faction: 0,
+          concept: 0,
+          event: 0,
+          spell: 0,
+        },
         importing: true,
         sourceUrl: card.imageUrl,
       },
@@ -387,7 +395,15 @@ class LorebookVaultStore {
       metadata: {
         format: 'unknown',
         totalEntries: 0,
-        entryBreakdown: { character: 0, location: 0, item: 0, faction: 0, concept: 0, event: 0, spell: 0 },
+        entryBreakdown: {
+          character: 0,
+          location: 0,
+          item: 0,
+          faction: 0,
+          concept: 0,
+          event: 0,
+          spell: 0,
+        },
         importing: true,
       },
     }

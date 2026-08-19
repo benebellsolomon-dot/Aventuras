@@ -27,7 +27,14 @@
       : ''
 
   // Type options
-  const entryTypes: VaultEntryType[] = ['character', 'location', 'item', 'faction', 'concept', 'event']
+  const entryTypes: VaultEntryType[] = [
+    'character',
+    'location',
+    'item',
+    'faction',
+    'concept',
+    'event',
+  ]
   const injectionModes: Array<{ value: EntryInjectionMode; label: string; description: string }> = [
     { value: 'always', label: 'Always Active', description: 'Always included in every response' },
     { value: 'keyword', label: 'Automatic', description: 'Matched by keywords or AI relevance' },
