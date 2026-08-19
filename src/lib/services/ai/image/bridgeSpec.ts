@@ -41,6 +41,11 @@ export interface BridgeSpecSubject {
     clothing?: string
     distinguishing?: string
   } | null
+  /** Story-tracked "current look" (research/55 component E) — takes precedence
+   * over the baseline `visualDescriptors` for transient fields like clothing. */
+  currentVisualDescriptors?: {
+    clothing?: string
+  } | null
   /** Curated image-tag bank; overrides derived identity tags when set (see resolveIdentityTags). */
   imageTags?: string | null
   /** Per-character LoRA binding (trigger words + tier-scaled weight); consumed by the portrait/inline paths. */
@@ -244,7 +249,10 @@ export function buildStructuredImageSpec(
     }
     // Canonical outfit rides the scene (identity_tags stay outfit-free — the
     // appearance hash excludes clothing so sets don't thrash per-scene).
-    const clothing = subject.visualDescriptors?.clothing?.trim()
+    // Current wins over baseline (research/55 component E precedence fix).
+    const clothing = (
+      subject.currentVisualDescriptors?.clothing ?? subject.visualDescriptors?.clothing
+    )?.trim()
     if (clothing) clothingTags.push(`${subject.name} wearing ${clothing}`)
   }
 

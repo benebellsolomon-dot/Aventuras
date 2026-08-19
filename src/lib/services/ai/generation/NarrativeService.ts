@@ -211,16 +211,60 @@ ${lines.join('\n')}
 }
 
 /**
+ * Current clothing per character — deterministic reinforcement so the LLM
+ * states each present character's actual outfit instead of re-inventing one.
+ * Current-state wins over baseline (research/55 component E precedence fix):
+ * `currentVisualDescriptors` reflects torn/removed/changed clothing from
+ * story events, while `visualDescriptors` is the stable baseline outfit.
+ */
+export function buildCurrentClothingReinforcementBlock(characters: Character[]): string {
+  const lines = characters
+    .map((c) => {
+      const clothing = c.currentVisualDescriptors?.clothing ?? c.visualDescriptors?.clothing
+      const trimmed = clothing?.trim()
+      if (!trimmed) return null
+      return `- ${c.name}: ${trimmed}`
+    })
+    .filter(Boolean)
+  if (lines.length === 0) return ''
+  return `
+**CURRENT CLOTHING (canonical — overrides story memory):**
+Depict each listed character wearing EXACTLY this outfit, in its current state (torn, open, removed, disheveled, etc. as described), in every <pic> prompt showing them. Match the fit to their current body size — at large sizes clothes strain, gape, or fail.
+${lines.join('\n')}
+`
+}
+
+/**
+ * Current location — name + description, so the LLM includes concrete
+ * setting tags/prose instead of guessing or omitting the scene entirely.
+ */
+export function buildCurrentLocationReinforcementBlock(
+  location: Location | null | undefined,
+): string {
+  if (!location) return ''
+  const description = location.description?.trim()
+  const line = description ? `${location.name} — ${description}` : location.name
+  if (!line.trim()) return ''
+  return `
+**CURRENT LOCATION (canonical — include in every <pic> prompt):**
+The scene is set here unless the narrative clearly moved elsewhere. Reflect this setting with concrete visual/scene tags.
+${line}
+`
+}
+
+/**
  * Select the dialect-appropriate inline-image instructions and append the
- * locked identity tags + current body state for the characters in the scene.
+ * locked identity tags + current body state + current clothing/location for
+ * the characters and location in the scene.
  */
 export function buildInlineImageInstructions(
   dialect: 'prose' | 'booru',
   characters: Character[],
+  location?: Location | null,
 ): string {
   const base =
     dialect === 'booru' ? INLINE_IMAGE_INSTRUCTIONS_BOORU : INLINE_IMAGE_INSTRUCTIONS_PROSE
-  const extras = `${buildCharacterIdentityTagBlock(characters)}${buildBodyStateReinforcementBlock(characters)}`
+  const extras = `${buildCharacterIdentityTagBlock(characters)}${buildBodyStateReinforcementBlock(characters)}${buildCurrentClothingReinforcementBlock(characters)}${buildCurrentLocationReinforcementBlock(location)}`
   if (!extras) return base
   return base.replace('</InlineImages>', `${extras}</InlineImages>`)
 }
@@ -624,6 +668,7 @@ export class NarrativeService {
         inlineImageInstructions: buildInlineImageInstructions(
           detectPromptDialect(imageModel),
           worldState.characters,
+          worldState.currentLocation,
         ),
       })
     }
