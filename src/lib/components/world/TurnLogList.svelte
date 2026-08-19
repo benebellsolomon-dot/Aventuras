@@ -1,11 +1,25 @@
 <script lang="ts">
   // Harem tab turn log (research/48 Step 9): interleaved checkLog + beLog rows,
   // ordering ruled in rpg/turnlog.ts. Markup only — logic stays testable.
-  import { BAND_LABELS, beLogStyle, buildTurnLog, formatCheckMath } from '$lib/services/rpg'
+  import {
+    BAND_LABELS,
+    beLogStyle,
+    buildTurnLog,
+    formatCheckMath,
+    formatCheckMathCompact,
+  } from '$lib/services/rpg'
   import { story } from '$lib/stores/story.svelte'
+  import type { CheckRecord } from '$lib/services/rpg'
 
   const rows = $derived(
     buildTurnLog(story.entries, story.currentStory?.settings?.rpgTurnLogLength ?? 30),
+  )
+
+  // Honor the roll-card verbosity here too, so the log matches (Phase 5 W3).
+  const mathOf = $derived((record: CheckRecord) =>
+    story.currentStory?.settings?.rpgRollCardVerbosity === 'compact'
+      ? formatCheckMathCompact(record)
+      : formatCheckMath(record),
   )
 
   const checkTint: Record<string, string> = {
@@ -29,7 +43,8 @@
               row.record.band
             ]}"
           >
-            🎲 {formatCheckMath(row.record)} → {BAND_LABELS[row.record.band]}
+            {row.record.spellId ? '✨' : '🎲'}
+            {mathOf(row.record)} → {BAND_LABELS[row.record.band]}
             {#if row.record.target}<span class="text-muted-foreground">· {row.record.target}</span
               >{/if}
           </div>
