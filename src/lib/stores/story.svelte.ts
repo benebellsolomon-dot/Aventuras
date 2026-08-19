@@ -2100,6 +2100,9 @@ class StoryStore {
             relationship: existing.relationship,
             traits: [...existing.traits],
             visualDescriptors: { ...existing.visualDescriptors },
+            currentVisualDescriptors: existing.currentVisualDescriptors
+              ? { ...existing.currentVisualDescriptors }
+              : null,
             metadata: existing.metadata ? { ...existing.metadata } : null,
           })
         }
@@ -3304,12 +3307,16 @@ class StoryStore {
 
       // Milestone crossings: carried mass passing an interaction threshold this
       // turn. Seeding is not a crossing — her starting size was not earned.
+      // M-4 (research/54): compute them here but do NOT commit to `crossings`
+      // until the body write actually lands — a swallowed write failure must not
+      // award a permanent protagonist milestone for mass that never persisted.
+      const turnCrossings: string[] = []
       if (!seeded) {
         const massBefore = measurements(state).nowTotalKg
         const massAfter = measurements(nextState).nowTotalKg
         for (const milestone of INTERACTION_MILESTONES) {
           if (massBefore < milestone.massKg && massAfter >= milestone.massKg) {
-            crossings.push(crossingKey(character.id, milestone.massKg))
+            turnCrossings.push(crossingKey(character.id, milestone.massKg))
           }
         }
       }
@@ -3349,8 +3356,12 @@ class StoryStore {
       // Milk becomes inventory (research/49 R7) — ONLY after her body state
       // actually landed. A swallowed body-write failure leaves her fill
       // un-drained in the database, so bottling anyway would duplicate the
-      // milk on every retry of the same turn.
-      if (bodyWriteLanded) await bottleMilkYield()
+      // milk on every retry of the same turn. Milestone crossings commit on the
+      // same gate (M-4): no persisted growth ⇒ no earned milestone.
+      if (bodyWriteLanded) {
+        crossings.push(...turnCrossings)
+        await bottleMilkYield()
+      }
     }
 
     return { beLog, crossings }
@@ -3544,6 +3555,9 @@ class StoryStore {
       relationship: character.relationship,
       traits: [...character.traits],
       visualDescriptors: { ...character.visualDescriptors },
+      currentVisualDescriptors: character.currentVisualDescriptors
+        ? { ...character.currentVisualDescriptors }
+        : null,
       metadata: character.metadata ? { ...character.metadata } : null,
     })
   }

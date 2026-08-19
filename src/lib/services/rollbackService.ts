@@ -247,6 +247,12 @@ class RollbackService {
           relationship: charBefore.relationship,
           traits: charBefore.traits,
           visualDescriptors: charBefore.visualDescriptors,
+          // M-3: restore the story-tracked current look too. Absent on pre-M-3
+          // deltas → leave it untouched (writing null would wrongly clear a
+          // legitimately-set value those older snapshots never recorded).
+          ...(charBefore.currentVisualDescriptors !== undefined
+            ? { currentVisualDescriptors: charBefore.currentVisualDescriptors }
+            : {}),
           ...(charBefore.metadata !== undefined ? { metadata: charBefore.metadata } : {}),
         })
         summary.restoredCharacters++

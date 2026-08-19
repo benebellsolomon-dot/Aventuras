@@ -1023,6 +1023,13 @@ export interface CharacterBeforeState {
   relationship: string | null
   traits: string[]
   visualDescriptors: VisualDescriptors
+  /**
+   * Story-tracked CURRENT look before the turn (M-3, research/54). Classifier
+   * visual updates land here, not on the canonical baseline, so rollback must
+   * restore it too. Snapshotted as null when unset; absent on pre-M-3 deltas
+   * (restore then leaves the field untouched for backward safety).
+   */
+  currentVisualDescriptors?: VisualDescriptors | null
   /** Metadata snapshot for rollback (includes runtimeVars from pack runtime variables) */
   metadata?: Record<string, unknown> | null
 }

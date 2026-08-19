@@ -123,6 +123,50 @@ describe('RollbackService — partial-failure surfacing (H-1)', () => {
     })
   })
 
+  it('restores currentVisualDescriptors from the before-state (M-3)', async () => {
+    const delta = emptyDelta()
+    delta.previousState.characters = [
+      {
+        id: 'char-1',
+        name: 'Aria',
+        status: 'active',
+        relationship: 'ally',
+        traits: [],
+        visualDescriptors: { build: 'lithe' } as never,
+        currentVisualDescriptors: { build: 'soaked hair' } as never,
+      },
+    ]
+
+    await rollbackService.rollbackFromPosition('s1', null, 5, [narrationEntry(5, delta)])
+
+    expect(db.updateCharacter).toHaveBeenCalledWith(
+      'char-1',
+      expect.objectContaining({ currentVisualDescriptors: { build: 'soaked hair' } }),
+    )
+  })
+
+  it('leaves currentVisualDescriptors untouched on pre-M-3 deltas (field absent)', async () => {
+    const delta = emptyDelta()
+    delta.previousState.characters = [
+      {
+        id: 'char-1',
+        name: 'Aria',
+        status: 'active',
+        relationship: 'ally',
+        traits: [],
+        visualDescriptors: {} as never,
+        // no currentVisualDescriptors key — an older snapshot
+      },
+    ]
+
+    await rollbackService.rollbackFromPosition('s1', null, 5, [narrationEntry(5, delta)])
+
+    const calls = db.updateCharacter.mock.calls as unknown as Array<[string, Record<string, unknown>]>
+    const call = calls.find((c) => c[0] === 'char-1')
+    expect(call).toBeDefined()
+    expect(call![1]).not.toHaveProperty('currentVisualDescriptors')
+  })
+
   it('continues rolling back other entities after one fails (partial rollback)', async () => {
     db.updateCharacter.mockRejectedValueOnce(new Error('fail A')).mockResolvedValueOnce(undefined)
     const delta = emptyDelta()
