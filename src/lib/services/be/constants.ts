@@ -21,6 +21,16 @@ export const GROWTH_DELTA_BY_OUTCOME: Readonly<Partial<Record<GrowthOutcome, num
 /** Beats between growth-eligible beats on the same character (31a §3.4, NAI default). */
 export const DEFAULT_GROWTH_COOLDOWN_BEATS = 2
 
+/**
+ * Max tiers a STAGED/pending growth may land in a single turn's step 3 (M-2,
+ * research/54). Normal growth already lands ≤1/turn (cooldown gates step-6 events;
+ * a crit anticipation-splits to +1 now). A slow_burn girl can bank a larger
+ * pendingGrowth across turns — this caps how much of it releases per turn so the
+ * bank meters out at the same +1/turn cadence instead of a single +4/+5 dump.
+ * The remainder re-stages for the following turn.
+ */
+export const MAX_GROWTH_LAND_PER_TURN = 1
+
 /** d20 outcome bands (Phase-A provisional; D5 re-derivation target). */
 export const ROLL_BANDS = {
   critical: 18,
