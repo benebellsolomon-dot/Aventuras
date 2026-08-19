@@ -27,6 +27,7 @@
     Smartphone,
     Bell,
     Eye,
+    Sparkles,
   } from 'lucide-svelte'
   import { Switch } from '$lib/components/ui/switch'
   import { Label } from '$lib/components/ui/label'
@@ -34,9 +35,12 @@
   import { Slider } from '$lib/components/ui/slider'
   import { Separator } from '$lib/components/ui/separator'
   import * as Dialog from '$lib/components/ui/dialog'
+  import IdentityBackfillModal from './IdentityBackfillModal.svelte'
   import { database } from '$lib/services/database'
   import { isAndroid } from '$lib/utils/platform'
   import { ask } from '@tauri-apps/plugin-dialog'
+
+  let showIdentityBackfill = $state(false)
 
   // Local mirror so we can revert the visual state if the confirm dialog is cancelled
   let stateTrackingChecked = $state(settings.experimentalFeatures.stateTracking)
@@ -316,6 +320,25 @@
         <p class="text-destructive text-xs">{restoreError}</p>
       </div>
     {/if}
+  </div>
+
+  <Separator />
+
+  <!-- Image Identity Maintenance -->
+  <div class="bg-muted/30 space-y-3 rounded-lg border p-4">
+    <div class="flex items-center gap-2">
+      <Sparkles class="text-primary h-4 w-4" />
+      <Label class="text-sm font-medium">Image Identity</Label>
+    </div>
+    <p class="text-muted-foreground text-xs">
+      One-time pass over this story's characters: derive locked identity tags from their appearance
+      descriptors (applied automatically) and propose cleaned-up appearance baselines for your
+      review. Improves character consistency in generated images.
+    </p>
+    <Button variant="outline" size="sm" onclick={() => (showIdentityBackfill = true)} class="gap-2">
+      <Sparkles class="h-4 w-4" />
+      Backfill Identity Tags
+    </Button>
   </div>
 
   <Separator />
@@ -733,3 +756,6 @@
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
+
+<!-- Identity Backfill Review Modal -->
+<IdentityBackfillModal bind:open={showIdentityBackfill} />
