@@ -22,6 +22,7 @@ import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/s
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { assembleInlineImage } from './inlineAssembly'
+import { pickImageSize } from './aspectRatio'
 import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
@@ -205,7 +206,19 @@ export class InlineImageGenerationService {
       })
     }
 
-    const { width, height } = parseImageSize(sizeToUse)
+    // Aspect ratio by shot type / subject count (research/55 Phase 2): a fixed
+    // square crops full-body shots and merges people in multi-subject scenes.
+    // Named characters on the tag are the subject count; booru-only (prose
+    // shot vocab is unreliable), falls back to whatever size this path already
+    // resolved (portrait-reference size included) otherwise.
+    const size = pickImageSize({
+      prompt: fullPrompt,
+      subjectCount: tag.characters.length,
+      model: modelToUse,
+      fallback: sizeToUse,
+    })
+
+    const { width, height } = parseImageSize(size)
 
     // Create pending record in database
     const embeddedImage: Omit<EmbeddedImage, 'createdAt'> = {
@@ -240,7 +253,7 @@ export class InlineImageGenerationService {
       fullPrompt,
       profileId,
       modelToUse,
-      sizeToUse,
+      size,
       context.entryId,
       referenceImageUrls,
       bridgeSpec,

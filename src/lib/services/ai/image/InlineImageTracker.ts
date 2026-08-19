@@ -24,6 +24,7 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { assembleInlineImage } from './inlineAssembly'
+import { pickImageSize } from './aspectRatio'
 import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
@@ -175,11 +176,23 @@ export class InlineImageTracker {
       })
     }
 
+    // Aspect ratio by shot type / subject count (research/55 Phase 2): a fixed
+    // square crops full-body shots and merges people in multi-subject scenes.
+    // Named characters on the tag are the subject count; booru-only (prose
+    // shot vocab is unreliable), falls back to the configured size otherwise.
+    const size = pickImageSize({
+      prompt: fullPrompt,
+      subjectCount: tag.characters.length,
+      model: modelToUse,
+      fallback: imageSettings.size,
+    })
+
     log('Starting async image generation', {
       imageId,
       prompt: tag.prompt.slice(0, 50) + '...',
       profileId,
       model: modelToUse,
+      size,
     })
 
     // Start generation - store promise for later resolution
@@ -187,7 +200,7 @@ export class InlineImageTracker {
       profileId,
       modelToUse,
       fullPrompt,
-      imageSettings.size,
+      size,
       referenceImageUrls,
       bridgeSpec,
       loraOverride,
@@ -200,7 +213,7 @@ export class InlineImageTracker {
       prompt: fullPrompt,
       profileId,
       model: modelToUse,
-      size: imageSettings.size,
+      size,
       referenceImageUrls,
       generationPromise,
     })
