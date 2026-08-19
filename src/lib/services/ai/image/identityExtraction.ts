@@ -22,15 +22,19 @@
  * throws, `extractIdentity` returns `null` so the caller can fall back to
  * today's behavior (empty bank, raw descriptors). It never throws.
  *
- * Pure/testable seam: the schema, the prompt, and the deterministic
- * normalization live here; B/C/D (bank, creation hygiene, backfill) consume the
- * exported `extractIdentity` + `IdentityExtraction` interface.
+ * Pure/testable seam: the schema and the deterministic normalization live
+ * here; B/C/D (bank, creation hygiene, backfill) consume the exported
+ * `extractIdentity` + `IdentityExtraction` interface. The prompt itself is the
+ * user-editable `image-tag-bank-generation` template, rendered via
+ * ContextBuilder — the schema below still enforces the output SHAPE, so a
+ * template edit can degrade quality but can never break the caller's contract.
  */
 
 import { z } from 'zod'
 import { settings } from '$lib/stores/settings.svelte'
 import { createLogger } from '$lib/log'
 import { BAND_WORD_THRESHOLDS } from '$lib/services/be'
+import { ContextBuilder } from '$lib/services/context'
 import { hashContent } from '$lib/services/packs/hash'
 import type { Character } from '$lib/types'
 import { generateStructured } from '../sdk/generate'
@@ -43,6 +47,9 @@ const log = createLogger('IdentityExtraction')
  * booru scene prompts and the identity tag bank (ImageTagBankService).
  */
 const SERVICE_ID = 'imageGeneration'
+
+/** User-editable vault prompt this call renders (id kept stable — pack references depend on it). */
+const TEMPLATE_ID = 'image-tag-bank-generation'
 
 // ============================================================================
 // Public interface (consumed by B/C/D)
@@ -94,77 +101,34 @@ const identityExtractionSchema = z.object({
 })
 
 // ============================================================================
-// Prompt
+// Prompt (rendered from the user-editable `image-tag-bank-generation` vault
+// template via ContextBuilder — see extractIdentity below. The system/user
+// text itself now lives in src/lib/services/prompts/templates/image.ts.)
 // ============================================================================
 
-const SYSTEM_PROMPT = `You are a booru tagging and identity-hygiene specialist for an image-generation pipeline.
+/** All descriptor fields, in prose order, for the rendered visual-descriptors block. */
+const DESCRIPTOR_FIELD_ORDER: ReadonlyArray<keyof VisualDescriptors> = [
+  'face',
+  'hair',
+  'eyes',
+  'build',
+  'clothing',
+  'accessories',
+  'distinguishing',
+]
 
-You are given a character's free-text visual descriptors. This prose is often POLLUTED with transient scene state (expression, sweat, arousal, pose, bodily fluids) and with the outfit the character happens to be wearing right now. Your job is to separate the character's PERMANENT identity from everything transient, and to emit plain danbooru identity tags.
-
-Return three things:
-
-1. identityTags — a locked booru identity bank: 12-20 PLAIN, atomic danbooru tags (lowercase, comma-atomic, NO "(tag:1.2)" weighting) covering STABLE physical identity ONLY, in this EXACT dossier order:
-   - anchor: 1girl / 1boy / 1other (exactly one, first)
-   - hair: length, then style, then color as SEPARATE atomic tags (e.g. "long hair", "wavy hair", "blonde hair" — NOT "long wavy blonde hair")
-   - eyes: color, then notable shape (e.g. "blue eyes", "tsurime")
-   - skin tone (e.g. "dark skin", "pale skin", "fair skin")
-   - body: height + build as a frame only (e.g. "tall", "athletic") — NEVER a size/breast tag
-   - age appearance: the character MUST read as an adult (e.g. "mature female", "young adult")
-   - distinguishing marks LAST: scars, freckles, moles, tattoos, birthmarks, heterochromia — AND for monster girls the species markers, which are IDENTITY and MUST survive here (a holstaur → "cow ears", "cow horns", "cow tail"; an elf → "pointy ears")
-   Use real Danbooru vocabulary; only include tags the source supports — never invent marks or features.
-   EXCLUDE: any size/breast tag (the engine owns size — never emit "large breasts", "huge breasts", "cleavage", etc.), any clothing, and any transient state (expression, blush, sweat, arousal, pose, fluids).
-
-2. cleanBaseline — the stable identity expressed as descriptor fields:
-   - face: permanent facial features, skin tone, age indicators ONLY. Strip expression and any "post-X" scene state.
-   - hair, eyes: as usual.
-   - build: the body FRAME only (height, posture, general frame). Do NOT include breast/bust/cup size — that is owned elsewhere.
-   - distinguishing: permanent marks only.
-   - clothing: leave EMPTY — clothing is never part of the stable baseline.
-
-3. currentState — everything transient you removed from the prose:
-   - face/build: the current expression, pose, arousal, condition, visible fluids, sweat, etc.
-   - clothing: the outfit the character is wearing right now (or its absence, e.g. "nude").
-   Leave a field empty if the prose says nothing transient about it.
-
-Worked example (monster girl — a holstaur named Lucy):
-  Input face: "soft round face, warm smile, flushed cheeks, semen on chin, gentle brown eyes"
-  Input hair: "long wavy chestnut hair"
-  Input build: "tall, huge breasts, wide hips, curvy"
-  Input clothing: "torn milkmaid dress pulled down, apron"
-  Input distinguishing: "cow ears, small curved horns, cow tail, cow-print pattern"
-  →
-  identityTags: ["1girl", "long hair", "wavy hair", "chestnut hair", "brown eyes", "fair skin", "tall", "wide hips", "mature female", "cow ears", "cow horns", "cow tail"]
-  cleanBaseline: { face: "soft round face", hair: "long wavy chestnut hair", eyes: "gentle brown eyes", build: "tall, wide hips, curvy frame", distinguishing: "cow ears, small curved horns, cow tail, cow-print markings" }
-  currentState: { face: "warm smile, flushed cheeks, semen on chin", clothing: "torn milkmaid dress pulled down, apron" }
-  (note: dossier order — 1girl anchor first, species markers LAST under distinguishing; "huge breasts" was DROPPED from every field — the engine owns size.)
-
-Respond ONLY with the structured object.`
-
-function buildUserPrompt(input: IdentityExtractionInput): string {
-  const vd = input.visualDescriptors ?? {}
+/**
+ * Render the character's visual descriptors as the `visualDescriptorsBlock`
+ * template variable: one "- field: value" line per populated field, or a
+ * placeholder when nothing was provided.
+ */
+function buildVisualDescriptorsBlock(vd: VisualDescriptors | undefined): string {
   const lines: string[] = []
-  if (input.name) lines.push(`Character name: ${input.name}`)
-  if (input.description) lines.push(`Description: ${input.description}`)
-  lines.push('Visual descriptors:')
-  const fields: ReadonlyArray<keyof VisualDescriptors> = [
-    'face',
-    'hair',
-    'eyes',
-    'build',
-    'clothing',
-    'accessories',
-    'distinguishing',
-  ]
-  let any = false
-  for (const field of fields) {
-    const value = vd[field]
-    if (value && value.trim()) {
-      lines.push(`- ${field}: ${value.trim()}`)
-      any = true
-    }
+  for (const field of DESCRIPTOR_FIELD_ORDER) {
+    const value = vd?.[field]
+    if (value && value.trim()) lines.push(`- ${field}: ${value.trim()}`)
   }
-  if (!any) lines.push('(none provided)')
-  return lines.join('\n')
+  return lines.length > 0 ? lines.join('\n') : '(none provided)'
 }
 
 // ============================================================================
@@ -330,12 +294,20 @@ export async function extractIdentity(
   }
 
   try {
+    const ctx = new ContextBuilder()
+    ctx.add({
+      characterName: input.name ?? '',
+      characterDescription: input.description ?? '',
+      visualDescriptorsBlock: buildVisualDescriptorsBlock(input.visualDescriptors),
+    })
+    const { system, user: prompt } = await ctx.render(TEMPLATE_ID)
+
     const raw = await generateStructured(
       {
         presetId,
         schema: identityExtractionSchema,
-        system: SYSTEM_PROMPT,
-        prompt: buildUserPrompt(input),
+        system,
+        prompt,
       },
       SERVICE_ID,
     )

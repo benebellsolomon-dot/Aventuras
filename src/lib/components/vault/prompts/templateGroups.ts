@@ -49,6 +49,8 @@ const TEMPLATE_GROUP_MAP: Record<string, string> = {
   'image-prompt-analysis-reference': 'Image',
   'image-portrait-generation': 'Image',
   'background-image-prompt-analysis': 'Image',
+  // Identity extraction (stable tag bank + baseline vs. transient current
+  // state) — rendered by extractIdentity via ContextBuilder (research/55 A).
   'image-tag-bank-generation': 'Image',
 
   // Translation

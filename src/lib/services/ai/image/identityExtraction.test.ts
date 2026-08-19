@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   generateStructured: vi.fn(),
   getServicePresetId: vi.fn(),
+  ctxAdd: vi.fn(),
+  ctxRender: vi.fn(),
 }))
 
 vi.mock('../sdk/generate', () => ({
@@ -19,6 +21,22 @@ vi.mock('$lib/stores/settings.svelte', () => ({
   settings: {
     getServicePresetId: mocks.getServicePresetId,
   },
+}))
+
+// The prompt itself is now the user-editable `image-tag-bank-generation`
+// vault template, rendered via ContextBuilder (research/55 A). Mock the
+// render path so tests exercise the call contract / normalization without
+// hitting the real template registry or database.
+const MOCK_SYSTEM = 'MOCK SYSTEM PROMPT for holstaur-style identity extraction'
+const MOCK_USER = 'MOCK USER PROMPT'
+
+vi.mock('$lib/services/context', () => ({
+  ContextBuilder: vi.fn().mockImplementation(function () {
+    return {
+      add: mocks.ctxAdd,
+      render: mocks.ctxRender,
+    }
+  }),
 }))
 
 import {
@@ -200,13 +218,17 @@ describe('extractIdentity', () => {
     mocks.generateStructured.mockReset()
     mocks.getServicePresetId.mockReset()
     mocks.getServicePresetId.mockReturnValue('imageGeneration')
+    mocks.ctxAdd.mockReset()
+    mocks.ctxRender.mockReset()
+    mocks.ctxRender.mockResolvedValue({ system: MOCK_SYSTEM, user: MOCK_USER })
   })
 
-  it('calls the AI layer with the schema and returns the parsed split', async () => {
+  it('renders the image-tag-bank-generation template and calls the AI layer with its output', async () => {
     mocks.generateStructured.mockResolvedValue(holstaurRaw)
 
     const result = await extractIdentity({
       name: 'Lucy',
+      description: 'A holstaur milkmaid',
       visualDescriptors: {
         face: 'soft round face, flushed, semen on chin',
         hair: 'long wavy chestnut hair',
@@ -216,15 +238,27 @@ describe('extractIdentity', () => {
       },
     })
 
+    // Template variables carry the character's name/description/descriptors
+    // through to the render (matching what ImageTagBankService supplied before
+    // the refactor: characterName, characterDescription, visualDescriptorsBlock).
+    expect(mocks.ctxAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterName: 'Lucy',
+        characterDescription: 'A holstaur milkmaid',
+        visualDescriptorsBlock: expect.stringContaining('cow ears, horns, cow tail'),
+      }),
+    )
+    expect(mocks.ctxRender).toHaveBeenCalledWith('image-tag-bank-generation')
+
+    // The rendered system/user text flows straight into the AI call.
     expect(mocks.generateStructured).toHaveBeenCalledTimes(1)
     const [callArgs, serviceId] = mocks.generateStructured.mock.calls[0]
     expect(callArgs.presetId).toBe('imageGeneration')
     expect(callArgs.schema).toBeDefined()
     // schema is a zod object that parses the split shape
     expect(callArgs.schema.safeParse(holstaurRaw).success).toBe(true)
-    expect(typeof callArgs.system).toBe('string')
-    expect(callArgs.system).toContain('holstaur')
-    expect(callArgs.prompt).toContain('Lucy')
+    expect(callArgs.system).toBe(MOCK_SYSTEM)
+    expect(callArgs.prompt).toBe(MOCK_USER)
     expect(serviceId).toBe('imageGeneration')
 
     expect(result).not.toBeNull()
@@ -241,6 +275,7 @@ describe('extractIdentity', () => {
 
     expect(result).toBeNull()
     expect(mocks.generateStructured).not.toHaveBeenCalled()
+    expect(mocks.ctxRender).not.toHaveBeenCalled()
   })
 
   it('returns null when the AI call throws (best-effort, never throws)', async () => {
@@ -249,6 +284,15 @@ describe('extractIdentity', () => {
     const result = await extractIdentity({ visualDescriptors: { hair: 'red hair' } })
 
     expect(result).toBeNull()
+  })
+
+  it('returns null when the template render throws (best-effort, never throws)', async () => {
+    mocks.ctxRender.mockRejectedValue(new Error('template registry unavailable'))
+
+    const result = await extractIdentity({ visualDescriptors: { hair: 'red hair' } })
+
+    expect(result).toBeNull()
+    expect(mocks.generateStructured).not.toHaveBeenCalled()
   })
 })
 
