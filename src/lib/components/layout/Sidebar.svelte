@@ -117,7 +117,7 @@
         {#each tabs as tab (tab.id)}
           <Tabs.Trigger
             value={tab.id}
-            class="data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-muted/30 hover:bg-muted/20 text-muted-foreground flex-1 rounded-none border-b-2 border-transparent bg-transparent py-3 transition-colors"
+            class="data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-muted/30 hover:bg-muted/20 text-muted-foreground min-w-0 flex-1 rounded-none border-b-2 border-transparent bg-transparent px-0 py-3 transition-colors"
             title={tab.label}
           >
             <span class="relative inline-flex">
