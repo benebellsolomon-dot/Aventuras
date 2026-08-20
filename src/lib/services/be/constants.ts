@@ -210,6 +210,15 @@ export const SPELL_BAND_INTENSITY_DELTA: Readonly<Record<CheckBand, number | nul
   partial: -1,
   fail: null,
 }
+/**
+ * Base intensity for a check-backed growth ACTION that no classifier event
+ * mirrored (`promoteGrowthIntent` synthesis). Deliberately mid-ladder so the
+ * band still means something through SPELL_BAND_INTENSITY_DELTA: partial → 1,
+ * success → 2, crit → 3. At base 1 every band would collapse to the same
+ * landed +1 and the roll would stop mattering.
+ */
+export const GROWTH_INTENT_BASE_INTENSITY = 2
+
 /** Max supplyTier bump a single supply_surge effect may apply. */
 export const SUPPLY_SURGE_MAX_DELTA = 2
 /** DC penalty a check_debuff condition imposes on checks targeting the afflicted girl. */

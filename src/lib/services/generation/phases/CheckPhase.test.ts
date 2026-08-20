@@ -5,13 +5,21 @@ import { defaultRpgSheet, writeRpgSheet, type CheckRecord } from '$lib/services/
 import { CheckPhase } from './CheckPhase'
 import type { GenerationContext } from '../types'
 
+type ContextCharacter = GenerationContext['worldState']['characters'][number]
+
 function makeContext(overrides: {
   beMode?: boolean
   hasProtagonist?: boolean
   content?: string
   rawInput?: string
+  /** Extra non-protagonist rows, so target resolution has something to find. */
+  girls?: string[]
 }): GenerationContext {
   const { beMode = true, hasProtagonist = true, content = 'Sneak past the guards' } = overrides
+  const girls = (overrides.girls ?? []).map(
+    (name) =>
+      ({ id: `char-${name.toLowerCase()}`, name, relationship: 'ally' }) as ContextCharacter,
+  )
   return {
     story: { id: 'story-1', settings: { beMode } } as unknown as GenerationContext['story'],
     visibleEntries: [],
@@ -23,9 +31,10 @@ function makeContext(overrides: {
               name: 'Ben',
               relationship: 'self',
               metadata: writeRpgSheet(null, defaultRpgSheet()),
-            } as unknown as GenerationContext['worldState']['characters'][number],
+            } as unknown as ContextCharacter,
+            ...girls,
           ]
-        : [],
+        : [...girls],
       locations: [],
       items: [],
       storyBeats: [],
@@ -129,5 +138,99 @@ describe('CheckPhase (research/47 Step 6)', () => {
     })
     expect(record).toBeNull()
     expect(events).toEqual(['phase_start', 'phase_complete'])
+  })
+})
+
+describe('CheckPhase — growthIntent threading (check-backed growth)', () => {
+  const CONTENT = 'Channel more essence to push her size even further'
+
+  it('a tagged growth choice carries growthIntent + the resolved target onto the record', async () => {
+    const assessRisk = vi.fn()
+    const phase = new CheckPhase({ assessRisk })
+    const { record } = await run(phase, {
+      context: makeContext({ content: CONTENT, girls: ['Amelia'] }),
+      actionType: 'do',
+      choiceTag: {
+        text: CONTENT,
+        type: 'action',
+        skill: 'channeling',
+        dc: 14,
+        essenceCost: 2,
+        targetCharacter: 'Amelia',
+        growthIntent: true,
+      },
+    })
+    expect(assessRisk).not.toHaveBeenCalled()
+    expect(record?.growthIntent).toBe(true)
+    expect(record?.target).toBe('Amelia')
+    expect(record?.targetId).toBe('char-amelia')
+  })
+
+  it('the free-text verdict path threads it the same way', async () => {
+    const assessRisk = vi.fn().mockResolvedValue({
+      risky: true,
+      skill: 'channeling',
+      dc: 14,
+      essenceCost: 2,
+      targetCharacter: 'Amelia',
+      growthIntent: true,
+    })
+    const phase = new CheckPhase({ assessRisk })
+    const { record } = await run(phase, {
+      context: makeContext({ content: CONTENT, girls: ['Amelia'] }),
+      actionType: 'do',
+      choiceTag: null,
+    })
+    expect(record?.growthIntent).toBe(true)
+    expect(record?.targetId).toBe('char-amelia')
+  })
+
+  it('drops the flag when no target girl resolves — growth with no subject is not a claim', async () => {
+    const assessRisk = vi.fn()
+    const phase = new CheckPhase({ assessRisk })
+    const { record } = await run(phase, {
+      context: makeContext({ content: CONTENT, girls: ['Amelia'] }),
+      actionType: 'do',
+      choiceTag: {
+        text: CONTENT,
+        type: 'action',
+        skill: 'channeling',
+        dc: 14,
+        targetCharacter: 'Someone Who Left',
+        growthIntent: true,
+      },
+    })
+    expect(record).not.toBeNull()
+    expect(record?.growthIntent).toBeUndefined()
+  })
+
+  it('an untagged / non-growth check leaves the flag off entirely', async () => {
+    const assessRisk = vi.fn()
+    const phase = new CheckPhase({ assessRisk })
+    const { record } = await run(phase, {
+      context: makeContext({ content: 'Sneak past the guards', girls: ['Amelia'] }),
+      actionType: 'do',
+      choiceTag: { text: 'Sneak past the guards', type: 'action', skill: 'stealth', dc: 14 },
+    })
+    expect(record?.growthIntent).toBeUndefined()
+  })
+
+  it('an edited action drops the stale growth tag along with the rest of it', async () => {
+    const assessRisk = vi.fn().mockResolvedValue({ risky: false })
+    const phase = new CheckPhase({ assessRisk })
+    const { record } = await run(phase, {
+      context: makeContext({ content: 'Actually, just hold her hand', girls: ['Amelia'] }),
+      actionType: 'do',
+      choiceTag: {
+        text: CONTENT,
+        type: 'action',
+        skill: 'channeling',
+        dc: 14,
+        targetCharacter: 'Amelia',
+        growthIntent: true,
+      },
+    })
+    expect(assessRisk).toHaveBeenCalledOnce()
+    expect(record).toBeNull()
   })
 })

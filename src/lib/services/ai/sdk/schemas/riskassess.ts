@@ -37,6 +37,17 @@ export const riskAssessResultSchema = z.object({
     .string()
     .optional()
     .describe('Lorebook entry id of the known spell this action casts, when it is a cast'),
+  /**
+   * The action's explicit purpose is to grow/transform the target's body. A
+   * successful check on such an action grows her deterministically (the check IS
+   * the dice); a failed one suppresses the classifier's mirrored growth.
+   */
+  growthIntent: z
+    .boolean()
+    .optional()
+    .describe(
+      "True only when the action's explicit purpose is to grow or transform the target's body (channeling essence into her, a transformation working, feeding her a growth potion). Requires targetCharacter.",
+    ),
   rationale: z.string().optional().describe('One short sentence of reasoning'),
 })
 

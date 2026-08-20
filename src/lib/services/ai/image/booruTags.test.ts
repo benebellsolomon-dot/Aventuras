@@ -4,7 +4,13 @@
  * the REAL module — the cue vocabulary this maps is the engine's own.
  */
 import { describe, expect, it } from 'vitest'
-import { compressStateCues, flattenTagGroups, toTags } from './booruTags'
+import {
+  compressStateCues,
+  flattenTagGroups,
+  isSizeVocabularyTag,
+  sanitizeSizeTags,
+  toTags,
+} from './booruTags'
 import { defaultBodyState, imageStateCues } from '$lib/services/be'
 
 describe('flattenTagGroups', () => {
@@ -93,5 +99,106 @@ describe('compressStateCues', () => {
 
   it('is empty for no cues', () => {
     expect(compressStateCues([])).toEqual([])
+  })
+})
+
+describe('sanitizeSizeTags', () => {
+  /** Tier 24 = the "huge breasts" band; body-relative anchors start at 30. */
+  const huge = { tier: 24, grewThisTurn: false }
+  const strip = (tags: string[], sanction = huge) => sanitizeSizeTags(tags, sanction).stripped
+
+  it('strips a band word above the subject band, keeps her own and lower ones', () => {
+    const result = sanitizeSizeTags(
+      ['gigantic breasts', 'hyper breasts', 'huge breasts', 'large breasts'],
+      huge,
+    )
+    expect(result.kept).toEqual(['huge breasts', 'large breasts'])
+    expect(result.stripped).toEqual(['gigantic breasts', 'hyper breasts'])
+  })
+
+  it('strips an anchor phrase the tier has not earned, keeps the one it has', () => {
+    const atForty = { tier: 40, grewThisTurn: false }
+    const result = sanitizeSizeTags(
+      ['breasts wider than hips', 'breasts bigger than torso', 'breasts bigger than head'],
+      atForty,
+    )
+    expect(result.kept).toEqual(['breasts wider than hips', 'breasts bigger than head'])
+    expect(result.stripped).toEqual(['breasts bigger than torso'])
+  })
+
+  it('matches an anchor phrase whether or not the writer kept the possessive', () => {
+    expect(strip(['breasts bigger than her head'])).toEqual(['breasts bigger than her head'])
+    expect(
+      sanitizeSizeTags(['breasts bigger than her head'], { tier: 30, grewThisTurn: false }),
+    ).toEqual({ kept: ['breasts bigger than her head'], stripped: [] })
+  })
+
+  it('strips freeform magnitude the narration invented below the anchor floor', () => {
+    expect(
+      strip([
+        'breasts covering stomach',
+        'breasts reaching waist',
+        'breasts spilling over bed',
+        'breasts larger than her head',
+        'breasts as big as beach balls',
+        'room-filling breasts',
+      ]),
+    ).toEqual([
+      'breasts covering stomach',
+      'breasts reaching waist',
+      'breasts spilling over bed',
+      'breasts larger than her head',
+      'breasts as big as beach balls',
+      'room-filling breasts',
+    ])
+  })
+
+  it('keeps freeform magnitude a hyper-band subject has actually earned', () => {
+    const hyper = { tier: 45, grewThisTurn: false }
+    expect(
+      sanitizeSizeTags(['breasts covering stomach', 'breasts reaching waist'], hyper).stripped,
+    ).toEqual([])
+  })
+
+  it('strips immobility phrasing only next to breast tags', () => {
+    expect(strip(['huge breasts', 'lying on back', 'unable to move'])).toEqual(['unable to move'])
+    expect(strip(['bound wrists', 'rope', 'unable to move'])).toEqual([])
+  })
+
+  it('keeps act tags that merely mention breasts', () => {
+    expect(
+      strip([
+        'paizuri',
+        'breast squeezing',
+        'breast grab',
+        'breasts squeezed together',
+        'cleavage',
+      ]),
+    ).toEqual([])
+  })
+
+  it('gates the growth-event tags on the engine having grown her this turn', () => {
+    const growth = ['breast expansion', 'breasts rapidly expanding', 'skin stretching taut']
+    expect(strip(growth)).toEqual(growth)
+    expect(strip(growth, { tier: 24, grewThisTurn: true })).toEqual([])
+  })
+
+  it('filters nothing when the engine holds no state for the subject', () => {
+    const tags = ['hyper breasts', 'breasts covering stomach', 'breast expansion']
+    expect(sanitizeSizeTags(tags, null)).toEqual({ kept: tags, stripped: [] })
+    expect(sanitizeSizeTags(tags, undefined).kept).toEqual(tags)
+  })
+})
+
+describe('isSizeVocabularyTag', () => {
+  it('recognizes band words and anchor phrases, with or without the possessive', () => {
+    expect(isSizeVocabularyTag('huge breasts')).toBe(true)
+    expect(isSizeVocabularyTag('Breasts Bigger Than Her Head')).toBe(true)
+    expect(isSizeVocabularyTag('breasts wider than hips')).toBe(true)
+  })
+
+  it('does not claim act tags or invented magnitude phrasing', () => {
+    expect(isSizeVocabularyTag('paizuri')).toBe(false)
+    expect(isSizeVocabularyTag('breasts covering stomach')).toBe(false)
   })
 })

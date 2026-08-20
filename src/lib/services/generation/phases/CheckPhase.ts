@@ -83,6 +83,10 @@ export class CheckPhase {
     // v1 casts are UI-initiated with authoritative skill/dc/essenceCost already
     // filled from the spell entry, so CheckPhase needs no DB resolution here.
     let spellId = tagApplies ? choiceTag!.spellId : undefined
+    // Growth-intent marker: the action's stated purpose is to grow/transform the
+    // target. Threaded exactly like spellId (tag or verdict, dropped on an edited
+    // input) — the store turns it into deterministic growth on a landed band.
+    let growthIntent = tagApplies ? choiceTag!.growthIntent === true : false
 
     if (!tagApplies) {
       if (context.abortSignal?.aborted) {
@@ -96,6 +100,7 @@ export class CheckPhase {
         essenceCost = verdict.essenceCost ?? 0
         targetName = verdict.targetCharacter
         spellId = verdict.spellId
+        growthIntent = verdict.growthIntent === true
       }
     }
 
@@ -133,6 +138,10 @@ export class CheckPhase {
       }),
       ...(target ? { target: target.name, targetId: target.id } : {}),
       ...(spellId ? { spellId } : {}),
+      // Gated on a RESOLVED target: growth acts on a girl, so a flag with no
+      // subject would be a claim the engine could never honor. Untargeted
+      // "grow the room" nonsense therefore never reaches the store.
+      ...(growthIntent && target ? { growthIntent: true } : {}),
     }
     log('check resolved', { skill, dc, nat: record.nat, total: record.total, band: record.band })
 

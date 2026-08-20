@@ -476,3 +476,290 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(aria?.traits ?? []).not.toContain('brave')
   })
 })
+
+/**
+ * Check-backed growth (the SECOND "successful roll, no stats" live failure).
+ *
+ * The player typed "Channel more essence to push her size even further". It got
+ * check-tagged (channeling, target Amelia, DC 14 → SUCCESS, 2 essence spent) but
+ * mapped to no known spell, so computeSpellCast produced nothing and the turn's
+ * only growth was the classifier's mirrored `attempt` event — which this story
+ * discards, being catalyst-only. Essence paid, check succeeded, narration
+ * described her growing, engine did nothing.
+ */
+describe('store harness — check-backed growth (growthIntent)', () => {
+  /** The live story's cosmology: catalyst is the ONLY growth-eligible kind. */
+  const CATALYST_ONLY = { beMode: true, beGrowthEligibleKinds: ['catalyst'] }
+
+  /** The live failure's numbers, minus the spell that never existed. */
+  const channelRecord = (overrides: Record<string, unknown> = {}) => ({
+    action: 'Channel more essence to push her size even further',
+    skill: 'channeling',
+    dc: 14,
+    nat: 11,
+    bonusBreakdown: { attribute: 0, ranks: 0, modifiers: [] },
+    bonus: 5,
+    total: 16,
+    margin: 2,
+    band: 'success',
+    essenceSpent: 2,
+    target: 'Amelia',
+    targetId: 'char-amelia',
+    ...overrides,
+  })
+
+  const tierOf = (name: string): number | undefined =>
+    readBodyState(
+      story.characters.find((c) => c.name === name)?.metadata as Record<string, unknown>,
+    )?.tier
+
+  const growthRows = (): Array<Record<string, unknown>> => {
+    const call = db.calls.find((c) => c.method === 'updateStoryEntry')
+    const delta = (
+      call?.args[1] as { worldStateDelta?: { beLog?: Array<Record<string, unknown>> } }
+    )?.worldStateDelta
+    return (delta?.beLog ?? []).filter((row) => row.kind === 'catalyst' || row.kind === 'attempt')
+  }
+
+  beforeEach(() => reset(db))
+
+  it('the live failure, fixed: a successful growth action grows her even though the classifier only offered a non-eligible `attempt`', async () => {
+    // ENTRY_ID is load-bearing twice over: `s1:entry-4:char-amelia:0` is the seed
+    // that rolls a 1, so nothing can land here by luck.
+    const ENTRY_ID = 'entry-4'
+    settingsMock.experimentalFeatures.stateTracking = false
+    story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+
+    const scene = () =>
+      makeClassificationResult({
+        beEvents: [{ character: 'Amelia', kind: 'attempt', intensity: 2 }],
+        scene: { presentCharacterNames: ['Amelia'] },
+      })
+
+    // CONTROL — the exact live turn: same successful check, same classifier
+    // output, no growthIntent. The `attempt` is not growth-eligible, so it never
+    // even rolls, and the player watches a successful, paid-for roll do nothing.
+    const control = makeGirlWithBodyState('Amelia')
+    story.characters = [makeProtagonist('Rowan'), control] as never
+    const tierBefore = readBodyState(control.metadata as Record<string, unknown>)?.tier ?? 0
+    await story.applyClassificationResult(scene() as never, ENTRY_ID, channelRecord() as never)
+    expect(tierOf('Amelia')).toBe(tierBefore)
+
+    // THE FIX — one flag different. The check already WAS the dice, so the
+    // mirrored event is promoted to a guaranteed catalyst and lands.
+    const target = makeGirlWithBodyState('Amelia')
+    story.characters = [makeProtagonist('Rowan'), target] as never
+    const applied = await story.applyClassificationResult(
+      scene() as never,
+      ENTRY_ID,
+      channelRecord({ growthIntent: true }) as never,
+    )
+
+    expect(applied).toEqual({ applied: true })
+    expect(tierOf('Amelia')).toBe(tierBefore + 1)
+  })
+
+  it('synthesizes growth when the classifier proposed none at all for her', async () => {
+    // Under-reporting is the other half of the live failure: a classifier that
+    // emits nothing must not nullify a successful, paid-for growth action.
+    settingsMock.experimentalFeatures.stateTracking = false
+    story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+    const girl = makeGirlWithBodyState('Amelia')
+    story.characters = [makeProtagonist('Rowan'), girl] as never
+    const tierBefore = readBodyState(girl.metadata as Record<string, unknown>)?.tier ?? 0
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+      'entry-4',
+      channelRecord({ growthIntent: true }) as never,
+    )
+
+    expect(tierOf('Amelia')).toBe(tierBefore + 1)
+  })
+
+  it('a never-seeded target is seeded by the synthesized event, then grown', async () => {
+    // A girl introduced this same turn carries no bodyState. The synthesized
+    // event is a real event, so she takes the normal auto-seed path first and
+    // the growth lands on top of it — nothing is silently dropped.
+    settingsMock.experimentalFeatures.stateTracking = false
+    story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+    story.characters = [makeProtagonist('Rowan'), makeCharacter('Amelia')] as never
+    expect(readBodyState(story.characters[1].metadata as Record<string, unknown>)).toBeNull()
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+      'entry-4',
+      channelRecord({ growthIntent: true }) as never,
+    )
+
+    const after = readBodyState(
+      story.characters.find((c) => c.name === 'Amelia')?.metadata as Record<string, unknown>,
+    )
+    expect(after).not.toBeNull()
+    expect(after?.lastGrowth?.delta).toBe(1)
+  })
+
+  it('a FAILED growth action suppresses the classifier growth that would otherwise have landed', async () => {
+    // `s1:entry-0:char-amelia:0` rolls 13 — an ambient catalyst at intensity 2
+    // lands here, which is what makes this a real suppression test.
+    const ENTRY_ID = 'entry-0'
+    settingsMock.experimentalFeatures.stateTracking = false
+    story.currentStory = makeStory({ settings: { beMode: true } }) as never
+    const scene = () =>
+      makeClassificationResult({
+        beEvents: [{ character: 'Amelia', kind: 'catalyst', intensity: 2 }],
+        scene: { presentCharacterNames: ['Amelia'] },
+      })
+    const failed = channelRecord({ band: 'fail', total: 9, margin: -5 })
+
+    // CONTROL: the same failed check with no growth intent — the classifier's
+    // catalyst is an independent cause and still rolls, and still lands.
+    const control = makeGirlWithBodyState('Amelia')
+    story.characters = [makeProtagonist('Rowan'), control] as never
+    const tierBefore = readBodyState(control.metadata as Record<string, unknown>)?.tier ?? 0
+    await story.applyClassificationResult(scene() as never, ENTRY_ID, failed as never)
+    expect(tierOf('Amelia')).toBe(tierBefore + 1)
+
+    // With growth intent, that same event is the FAILED attempt's own mirror —
+    // narration says she did not grow, so the engine must not grow her either.
+    const suppressed = makeGirlWithBodyState('Amelia')
+    story.characters = [makeProtagonist('Rowan'), suppressed] as never
+    await story.applyClassificationResult(scene() as never, ENTRY_ID, {
+      ...failed,
+      growthIntent: true,
+    } as never)
+    expect(tierOf('Amelia')).toBe(tierBefore)
+  })
+
+  it('a successful check WITHOUT growthIntent leaves ambient growth rolling exactly as before', async () => {
+    const ENTRY_ID = 'entry-0'
+    settingsMock.experimentalFeatures.stateTracking = false
+    story.currentStory = makeStory({ settings: { beMode: true } }) as never
+    const girl = makeGirlWithBodyState('Amelia')
+    story.characters = [makeProtagonist('Rowan'), girl] as never
+    const tierBefore = readBodyState(girl.metadata as Record<string, unknown>)?.tier ?? 0
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        beEvents: [{ character: 'Amelia', kind: 'catalyst', intensity: 2 }],
+        scene: { presentCharacterNames: ['Amelia'] },
+      }) as never,
+      ENTRY_ID,
+      channelRecord() as never,
+    )
+
+    // Same +1 the seeded roll always produced: an unflagged check changes nothing.
+    expect(tierOf('Amelia')).toBe(tierBefore + 1)
+  })
+
+  it('a cast turn is untouched: growthIntent never double-promotes on top of the spell', async () => {
+    // A CRIT cast of an intensity-1 growth spell, chosen because it makes the
+    // double-application VISIBLE: the cast scales 1 → 2, and a promotion running
+    // on top would re-scale that 2 → 3 (a different roll band, a different beLog
+    // note, and a staged anticipation split). Deep-equal on the growth rows is
+    // therefore a real assertion, not a tautology.
+    const ENTRY_ID = 'entry-4'
+    const weakSpell = () => {
+      const entry = growthSpellEntry()
+      return { ...entry, state: { ...entry.state, effects: [{ kind: 'growth', intensity: 1 }] } }
+    }
+    const critCast = (targetId: string) => ({
+      ...castCheckRecord(targetId),
+      band: 'crit',
+      total: 22,
+      margin: 10,
+    })
+    const protagonist = () =>
+      makeProtagonist('Rowan', {
+        metadata: { rpgSheet: { ...defaultRpgSheet(), knownSpells: [SPELL_ID] } },
+      })
+
+    // CAST ONLY (the HEAD~1 behavior this must preserve byte-for-byte).
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+    const castOnly = makeGirlWithBodyState('Amelia')
+    story.characters = [protagonist(), castOnly] as never
+    story.lorebookEntries = [weakSpell()] as never
+    const tierBefore = readBodyState(castOnly.metadata as Record<string, unknown>)?.tier ?? 0
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+      ENTRY_ID,
+      critCast(castOnly.id as string) as never,
+    )
+    const castOnlyTier = tierOf('Amelia')
+    const castOnlyRows = growthRows()
+    const castOnlyPending = readBodyState(
+      story.characters.find((c) => c.name === 'Amelia')?.metadata as Record<string, unknown>,
+    )?.pendingGrowth
+    expect(castOnlyTier).toBe(tierBefore + 1)
+    expect(castOnlyRows).toHaveLength(1)
+    expect(castOnlyRows[0].note).toContain('@i2')
+
+    // CAST + growthIntent: the store's guard hands the turn to the cast path
+    // alone, so the girl gets ONE guaranteed growth event at the cast's own
+    // intensity — not a second one, and not a re-scaled one.
+    reset(db)
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+    const both = makeGirlWithBodyState('Amelia')
+    story.characters = [protagonist(), both] as never
+    story.lorebookEntries = [weakSpell()] as never
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+      ENTRY_ID,
+      { ...critCast(both.id as string), growthIntent: true } as never,
+    )
+
+    expect(tierOf('Amelia')).toBe(castOnlyTier)
+    expect(growthRows()).toEqual(castOnlyRows)
+    expect(
+      readBodyState(
+        story.characters.find((c) => c.name === 'Amelia')?.metadata as Record<string, unknown>,
+      )?.pendingGrowth,
+    ).toEqual(castOnlyPending)
+  })
+
+  it('multi-girl scene: promotion touches the target only — the other girl keeps her own ambient roll', async () => {
+    // `s1:entry-0:char-brielle:0` rolls 11, so Brielle's ambient catalyst lands
+    // on its own merits. Amelia's growth can only come from the promotion (her
+    // `attempt` is not eligible in this story).
+    const ENTRY_ID = 'entry-0'
+    settingsMock.experimentalFeatures.stateTracking = false
+    const scene = () =>
+      makeClassificationResult({
+        beEvents: [
+          { character: 'Amelia', kind: 'attempt', intensity: 2 },
+          { character: 'Brielle', kind: 'catalyst', intensity: 2 },
+        ],
+        scene: { presentCharacterNames: ['Amelia', 'Brielle'] },
+      })
+
+    // CONTROL: no growth intent — Brielle grows, Amelia does not.
+    story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+    const cAmelia = makeGirlWithBodyState('Amelia')
+    const cBrielle = makeGirlWithBodyState('Brielle')
+    story.characters = [makeProtagonist('Rowan'), cAmelia, cBrielle] as never
+    const ameliaBefore = readBodyState(cAmelia.metadata as Record<string, unknown>)?.tier ?? 0
+    const brielleBefore = readBodyState(cBrielle.metadata as Record<string, unknown>)?.tier ?? 0
+    await story.applyClassificationResult(scene() as never, ENTRY_ID, channelRecord() as never)
+    expect(tierOf('Amelia')).toBe(ameliaBefore)
+    const brielleControlTier = tierOf('Brielle')
+    expect(brielleControlTier).toBe(brielleBefore + 1)
+
+    // With growth intent aimed at Amelia: she now grows, and Brielle's outcome is
+    // identical to the control — her events and her roll were never touched.
+    story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+    story.characters = [
+      makeProtagonist('Rowan'),
+      makeGirlWithBodyState('Amelia'),
+      makeGirlWithBodyState('Brielle'),
+    ] as never
+    await story.applyClassificationResult(
+      scene() as never,
+      ENTRY_ID,
+      channelRecord({ growthIntent: true }) as never,
+    )
+    expect(tierOf('Amelia')).toBe(ameliaBefore + 1)
+    expect(tierOf('Brielle')).toBe(brielleControlTier)
+  })
+})

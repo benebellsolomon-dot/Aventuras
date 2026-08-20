@@ -44,8 +44,6 @@ import { createLogger } from '$lib/log'
 import { ContextBuilder } from '$lib/services/context'
 import { database } from '$lib/services/database'
 import {
-  BAND_WORD_THRESHOLDS,
-  IMAGE_SIZE_ANCHOR_PHRASES,
   apparentTier,
   bandWord,
   imageSizeAnchor,
@@ -54,7 +52,14 @@ import {
 } from '$lib/services/be'
 import { generateStructured } from '../sdk/generate'
 import { detectPromptDialect } from './dialect'
-import { compressStateCues, joinTags, toTags } from './booruTags'
+import {
+  compressStateCues,
+  isSizeVocabularyTag,
+  joinTags,
+  sanitizeSizeTags,
+  toTags,
+  type SizeSanction,
+} from './booruTags'
 import { engineExpressionTags, isExpressionTag } from './expressionTags'
 import type { Character, Location, VisualDescriptors } from '$lib/types'
 
@@ -134,12 +139,7 @@ const booruScenePromptSchema = z.object({
 export type BooruSceneSections = z.infer<typeof booruScenePromptSchema>
 
 /** Band words + relative-size anchors, the vocabulary hoisted out of a run. */
-const SIZE_TAG_VOCABULARY: ReadonlySet<string> = new Set([
-  ...BAND_WORD_THRESHOLDS.map((row) => row.word.toLowerCase()),
-  ...IMAGE_SIZE_ANCHOR_PHRASES.map((phrase) => phrase.toLowerCase()),
-])
-
-const isSizeTag = (tag: string): boolean => SIZE_TAG_VOCABULARY.has(tag.trim().toLowerCase())
+const isSizeTag = isSizeVocabularyTag
 
 // ============================================================================
 // Engine-derived expression cues
@@ -178,35 +178,39 @@ function dedupeTags(tags: ReadonlyArray<string>): string[] {
   return out
 }
 
+/** Anything attributable to one subject carries her identity bank as the key. */
+interface SubjectKeyed {
+  /** Her locked identity bank, split into tags — the run-matching key. */
+  identityTags: ReadonlyArray<string>
+}
+
 /**
- * Attach each engine cue to the writer run that depicts that girl.
+ * Attach each per-subject item to the writer run that depicts that girl.
  *
  * The writer returns FLAT runs with no owner label, so the join is made on the
  * locked identity bank the template tells it to copy verbatim: the run sharing
  * the most bank tags (at least `MIN_IDENTITY_MATCH`, so a lone shared "1girl"
- * cannot claim a run) wins her cue. A subject with no bank yet has her prose
- * converted to tags and shares nothing verbatim, so unmatched cues fall back to
+ * cannot claim a run) wins her item. A subject with no bank yet has her prose
+ * converted to tags and shares nothing verbatim, so unmatched items fall back to
  * filling the remaining described runs in order — skipping the faceless POV run.
  *
- * Best-effort by design: a cue that finds no run simply contributes nothing, and
- * the writer's own beat-driven expressions still stand.
+ * Best-effort by design: an item that finds no run simply contributes nothing.
  */
-export function assignEngineExpressions(
+function matchRunsToSubjects<T extends SubjectKeyed>(
   runs: ReadonlyArray<ReadonlyArray<string>>,
-  cues: ReadonlyArray<CharacterExpressionCue>,
-): string[][] {
-  const assigned: string[][] = runs.map(() => [])
+  items: ReadonlyArray<T>,
+): Array<T | undefined> {
+  const byRun: Array<T | undefined> = runs.map(() => undefined)
   const runSets = runs.map((run) => new Set(run.map((tag) => tag.toLowerCase())))
   const claimed = new Set<number>()
-  const unmatched: CharacterExpressionCue[] = []
+  const unmatched: T[] = []
 
-  for (const cue of cues) {
-    if (cue.expressionTags.length === 0) continue
+  for (const item of items) {
     let best = -1
     let bestScore = 0
     for (let i = 0; i < runs.length; i++) {
       if (claimed.has(i)) continue
-      const score = cue.identityTags.filter((tag) => runSets[i].has(tag.toLowerCase())).length
+      const score = item.identityTags.filter((tag) => runSets[i].has(tag.toLowerCase())).length
       if (score > bestScore) {
         bestScore = score
         best = i
@@ -214,22 +218,62 @@ export function assignEngineExpressions(
     }
     if (best >= 0 && bestScore >= MIN_IDENTITY_MATCH) {
       claimed.add(best)
-      assigned[best] = [...cue.expressionTags]
+      byRun[best] = item
     } else {
-      unmatched.push(cue)
+      unmatched.push(item)
     }
   }
 
   const open = runs
     .map((_, index) => index)
     .filter((index) => !claimed.has(index) && !isProtagonistRun(runs[index]))
-  unmatched.forEach((cue, slot) => {
+  unmatched.forEach((item, slot) => {
     const index = open[slot]
     if (index === undefined) return
-    assigned[index] = [...cue.expressionTags]
+    byRun[index] = item
   })
 
-  return assigned
+  return byRun
+}
+
+/**
+ * Engine expression tags per writer run — the run-matching above, with cues that
+ * carry no tags dropped first so they cannot claim a run and blank a face.
+ */
+export function assignEngineExpressions(
+  runs: ReadonlyArray<ReadonlyArray<string>>,
+  cues: ReadonlyArray<CharacterExpressionCue>,
+): string[][] {
+  const matched = matchRunsToSubjects(
+    runs,
+    cues.filter((cue) => cue.expressionTags.length > 0),
+  )
+  return matched.map((cue) => (cue ? [...cue.expressionTags] : []))
+}
+
+// ============================================================================
+// Engine-owned size sanction
+// ============================================================================
+
+/** One subject's engine size truth, plus the key that finds her writer run. */
+export interface SubjectSizeSanction extends SizeSanction, SubjectKeyed {
+  identityTags: string[]
+}
+
+/**
+ * The sanction for tags that belong to the SCENE rather than to one run: action
+ * and setting tags, and any character run that could not be attributed. Keyed on
+ * the LARGEST subject present, because a scene tag may legitimately describe the
+ * biggest girl in frame; growth is sanctioned if the engine grew anyone.
+ */
+function sceneWideSanction(
+  sanctions: ReadonlyArray<SubjectSizeSanction>,
+): SizeSanction | undefined {
+  if (sanctions.length === 0) return undefined
+  return {
+    tier: Math.max(...sanctions.map((s) => s.tier)),
+    grewThisTurn: sanctions.some((s) => s.grewThisTurn),
+  }
 }
 
 /** One character's run, split so expressions can be placed and budgeted apart. */
@@ -294,11 +338,28 @@ function trimExpressionRuns(runs: ReadonlyArray<PreparedRun>, count: number): Pr
  * The total is capped at `BOORU_MAX_TAGS`. Drop order is setting → expression →
  * interaction; identity, size, rating, camera and count are never trimmed, and
  * each floor (3 setting, 1 expression per character, 2 interaction) holds.
+ *
+ * SIZE SANCTION runs before any of that: every block is filtered against the
+ * engine's tier for the subject it describes (`sanitizeSizeTags`), so a writer
+ * following a narration that over-claims growth cannot out-vote the engine's
+ * body state — the failure this pass exists to stop. Filtering precedes the
+ * hoist, so an unsanctioned band word never reaches the front of the prompt.
  */
 export function composeBooruScenePrompt(
   sections: Partial<BooruSceneSections>,
   engineExpressions: ReadonlyArray<CharacterExpressionCue> = [],
+  sizeSanctions: ReadonlyArray<SubjectSizeSanction> = [],
 ): string {
+  const stripped: string[] = []
+  const sanitize = (tags: ReadonlyArray<string>, sanction: SizeSanction | undefined): string[] => {
+    const result = sanitizeSizeTags(tags, sanction)
+    stripped.push(...result.stripped)
+    return result.kept
+  }
+  const sceneSanction = sceneWideSanction(sizeSanctions)
+  const writtenRuns = (sections.characters ?? []).map((run) => toTags(run))
+  const sanctionByRun = matchRunsToSubjects(writtenRuns, sizeSanctions)
+
   const seen = new Set<string>()
   const dedupe = (tags: ReadonlyArray<string>): string[] => {
     const out: string[] = []
@@ -314,10 +375,13 @@ export function composeBooruScenePrompt(
   const rating = dedupe(toTags(sections.rating))
   const camera = dedupe(toTags(sections.camera))
   const count = dedupe(toTags(sections.countTags))
-  const action = dedupe(toTags(sections.action))
+  const action = dedupe(sanitize(toTags(sections.action), sceneSanction))
   // Size first, so the global dedupe keeps the hoisted copy and the in-run
-  // duplicate falls away.
-  const characterRuns = (sections.characters ?? []).map((run) => toTags(run))
+  // duplicate falls away. Each run is sanctioned by ITS OWN subject where she
+  // could be identified, and by the largest subject present otherwise.
+  const characterRuns = writtenRuns.map((run, index) =>
+    sanitize(run, sanctionByRun[index] ?? sceneSanction),
+  )
   const size = dedupe(characterRuns.flatMap((run) => run.filter(isSizeTag)))
   const engineByRun = assignEngineExpressions(characterRuns, engineExpressions)
   const runs: PreparedRun[] = characterRuns.map((run, index) => ({
@@ -328,7 +392,16 @@ export function composeBooruScenePrompt(
       ...run.filter(isExpressionTag),
     ]),
   }))
-  const scene = dedupe(toTags(sections.scene))
+  const scene = dedupe(sanitize(toTags(sections.scene), sceneSanction))
+
+  if (stripped.length > 0) {
+    // Prompt archaeology: a later "why is she rendering small" investigation
+    // should see that the writer over-claimed and that this pass acted.
+    log('stripped size tags the engine does not sanction', {
+      stripped,
+      sanctioned: sizeSanctions.map((s) => ({ tier: s.tier, grewThisTurn: s.grewThisTurn })),
+    })
+  }
 
   const baseTotal = runs.reduce((total, run) => total + run.base.length, 0)
   const expressionTotal = (prepared: ReadonlyArray<PreparedRun>): number =>
@@ -570,6 +643,37 @@ export function buildExpressionCues(
   return cues
 }
 
+/**
+ * The engine's size truth for the tagged subjects, in tag order — handed to
+ * `composeBooruScenePrompt` so the writer's size vocabulary is filtered against
+ * the tier the engine actually holds, not the one the narration described.
+ *
+ * Uses the APPARENT tier for the same reason `bodyStatePhrase` does: it is what
+ * the dossier tells the writer and what the downstream grounding pass uses, so
+ * all three agree on which band words are legitimate.
+ *
+ * BE-mode gated: outside a BE story the engine owns no body state, so there is
+ * nothing to enforce and the writer's tags stand.
+ */
+export function buildSizeSanctions(
+  presentCharacters: Character[],
+  tagCharacterNames: string[],
+  beMode: boolean,
+): SubjectSizeSanction[] {
+  if (!beMode) return []
+  const sanctions: SubjectSizeSanction[] = []
+  for (const character of resolveSubjects(presentCharacters, tagCharacterNames)) {
+    const state = readBodyState(character.metadata)
+    if (!state) continue
+    sanctions.push({
+      identityTags: toTags(normalizeBank(character.imageTags)),
+      tier: apparentTier(state),
+      grewThisTurn: (state.lastGrowth?.delta ?? 0) > 0,
+    })
+  }
+  return sanctions
+}
+
 /** Current-location scene block (name + description), or empty when unknown. */
 export function buildLocationBlock(location: Location | null | undefined): string {
   if (!location) return ''
@@ -649,10 +753,12 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
     // Order is imposed here, not asked of the model: the sections come back
     // labelled, so the attention-critical action-before-identity ordering and
     // the tag budget are deterministic. The engine's expression cues merge into
-    // the matching character run at the same time.
+    // the matching character run at the same time, and the engine's size truth
+    // filters out any size claim the writer took from the narration instead.
     const rawWritten = composeBooruScenePrompt(
       raw,
       buildExpressionCues(input.presentCharacters, input.tagCharacterNames, input.beMode),
+      buildSizeSanctions(input.presentCharacters, input.tagCharacterNames, input.beMode),
     )
     if (!rawWritten) {
       log('booru prompt writer returned empty — falling back')

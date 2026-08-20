@@ -5,11 +5,13 @@ import {
   effectTagSchema,
   coerceEffectTags,
   dedupeForCast,
+  promoteGrowthIntent,
   translateSpellEffects,
   type EffectTag,
 } from './effects'
 import {
   CHECK_DEBUFF_CONDITION_PREFIX,
+  GROWTH_INTENT_BASE_INTENSITY,
   SPELL_CONDITION_DEFAULT_TTL,
   SUPPLY_SURGE_MAX_DELTA,
 } from './constants'
@@ -250,5 +252,62 @@ describe('dedupeForCast — R9 anti-double-application (Phase 4 Step 4)', () => 
   it('no spell events → classifier passes through unchanged', () => {
     const classifier = [ev('catalyst'), ev('induction')]
     expect(dedupeForCast(classifier, [])).toEqual(classifier)
+  })
+})
+
+describe('promoteGrowthIntent — check-backed growth without a spell', () => {
+  const T = 'Amelia'
+  const ev = (kind: BeEvent['kind'], intensity = 1): BeEvent => ({ character: T, kind, intensity })
+
+  it('promotes the mirrored growth event in place, guaranteed and catalyst-kinded', () => {
+    // The live failure: a catalyst-only story discards `attempt`, so the paid,
+    // successful channel produced nothing at all.
+    const out = promoteGrowthIntent([ev('attempt', 2)], 'success', T)
+    expect(out).toEqual([{ character: T, kind: 'catalyst', intensity: 2, guaranteed: true }])
+  })
+
+  it('synthesizes one catalyst when the classifier proposed no growth at all', () => {
+    const out = promoteGrowthIntent([], 'success', T)
+    expect(out).toEqual([
+      { character: T, kind: 'catalyst', intensity: GROWTH_INTENT_BASE_INTENSITY, guaranteed: true },
+    ])
+  })
+
+  it('synthesis appends after unrelated classifier events, leaving their indices intact', () => {
+    const out = promoteGrowthIntent([ev('milking'), ev('stabilize')], 'success', T)
+    expect(out.slice(0, 2)).toEqual([ev('milking'), ev('stabilize')])
+    expect(out[2]).toMatchObject({ kind: 'catalyst', guaranteed: true })
+  })
+
+  it('rides the cast band ladder exactly: crit +1, success +0, partial −1 (partial still lands)', () => {
+    const at = (band: 'crit' | 'success' | 'partial'): number =>
+      promoteGrowthIntent([ev('contact', 2)], band, T)[0].intensity
+    expect(at('crit')).toBe(3)
+    expect(at('success')).toBe(2)
+    expect(at('partial')).toBe(1)
+    // Partial is a REDUCED landing, not a suppression — same as a partial cast.
+    expect(promoteGrowthIntent([ev('contact', 2)], 'partial', T)[0].guaranteed).toBe(true)
+  })
+
+  it('fail suppresses the mirrored growth event so a failed attempt cannot grow her', () => {
+    expect(promoteGrowthIntent([ev('attempt', 2)], 'fail', T)).toEqual([])
+    expect(promoteGrowthIntent([], 'fail', T)).toEqual([])
+  })
+
+  it('one-per-source in BOTH directions: a second growth cause keeps rolling on its own', () => {
+    const two = [ev('attempt', 2), ev('contact', 1)]
+    // success: the first is promoted, the second stays an independent ambient roll
+    expect(promoteGrowthIntent(two, 'success', T)).toEqual([
+      { character: T, kind: 'catalyst', intensity: 2, guaranteed: true },
+      ev('contact', 1),
+    ])
+    // fail: only the mirror is suppressed
+    expect(promoteGrowthIntent(two, 'fail', T)).toEqual([ev('contact', 1)])
+  })
+
+  it('never touches non-growth events in either band', () => {
+    const others = [ev('milking'), ev('stabilize'), ev('induction')]
+    expect(promoteGrowthIntent(others, 'fail', T)).toEqual(others)
+    expect(promoteGrowthIntent(others, 'success', T).slice(0, 3)).toEqual(others)
   })
 })

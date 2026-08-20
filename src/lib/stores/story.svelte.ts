@@ -46,6 +46,7 @@ import {
   milkItemName,
   qualityFromBand,
   parseGrowthEligibleKinds,
+  promoteGrowthIntent,
   readBodyState,
   reduceCharacterBody,
   seedBaselineFromText,
@@ -76,6 +77,7 @@ import {
   sheetOrDefault,
   withStartingGrant,
   writeRpgSheet,
+  type CheckBand,
   type CheckRecord,
 } from '$lib/services/rpg'
 import { buildSpellEntryData, type SpellGeneration } from '$lib/services/ai/sdk/schemas/spell'
@@ -3213,6 +3215,44 @@ class StoryStore {
   }
 
   /**
+   * The girl a check targeted, or undefined. Prefer the resolved `targetId`
+   * (Phase 5 D2) so two same-named girls don't collide; fall back to the name for
+   * legacy records that predate targetId. Never the protagonist — she is the
+   * catalyst, not a subject.
+   */
+  private resolveCheckTarget(checkRecord: CheckRecord): Character | undefined {
+    // Routed through checkRecordTargets so the id-then-name rule lives in exactly
+    // one place (it is also the milk-yield suppression's matcher below).
+    return this.characters.find(
+      (c) => c.relationship !== 'self' && checkRecordTargets(checkRecord, c.id, c.name),
+    )
+  }
+
+  /**
+   * Check-backed growth intent → the target this turn's growth promotion applies
+   * to (see be/effects.ts `promoteGrowthIntent` for what promotion does).
+   *
+   * Returns null on a CAST turn even when the flag is set: `computeSpellCast`
+   * already owns that turn's growth through the same guaranteed channel plus its
+   * own dedupe budget, so running both would grow her twice. This is the explicit
+   * interaction guard — a cast turn's behavior is unchanged by this feature, in
+   * every band (a fizzled cast keeps its existing "applies nothing, suppresses
+   * nothing" semantics rather than gaining suppression through the back door).
+   *
+   * An unknown/unlearned spell never reaches here as a landed band either:
+   * resolveCheck refuses it with band 'fail' before rolling.
+   */
+  private computeGrowthIntent(
+    checkRecord: CheckRecord | null,
+  ): { targetId: string; targetName: string; band: CheckBand } | null {
+    if (checkRecord?.growthIntent !== true) return null
+    if (checkRecord.spellId) return null
+    const target = this.resolveCheckTarget(checkRecord)
+    if (!target) return null
+    return { targetId: target.id, targetName: target.name, band: checkRecord.band }
+  }
+
+  /**
    * Spell cast → engine effects (Phase 4, research/50 R4/R5). When this turn's
    * check was a cast (spellId set) and the band landed (non-fail), resolve the
    * spell entry and translate its EffectTag[] into reducer inputs for the target
@@ -3241,17 +3281,7 @@ class StoryStore {
     )
     if (!entry || entry.state.type !== 'spell') return null
     // v1: effects act on a girl (research/50 R10). No target → narrative-only cast.
-    // Prefer the resolved targetId (Phase 5 D2) so two same-named girls don't
-    // collide; fall back to the name for legacy records that predate targetId.
-    const target = checkRecord.targetId
-      ? this.characters.find((c) => c.relationship !== 'self' && c.id === checkRecord.targetId)
-      : checkRecord.target
-        ? this.characters.find(
-            (c) =>
-              c.relationship !== 'self' &&
-              c.name.toLowerCase() === checkRecord.target!.toLowerCase(),
-          )
-        : undefined
+    const target = this.resolveCheckTarget(checkRecord)
     if (!target) return null
     // Alchemy-milk empowerment (research/50 R11, non-consuming v1): an alchemy-
     // school cast lands +1 intensity while a prime/rich milk unit sits in the
@@ -3426,6 +3456,25 @@ class StoryStore {
       // Fill-set softState: the spell's absolute write wins.
       if (spellCast.softState) softStateByCharacterId.set(id, spellCast.softState)
       if (spellCast.supplyDelta > 0) supplyDeltaByCharacterId.set(id, spellCast.supplyDelta)
+    }
+
+    // Check-backed growth WITHOUT a spell: an action whose stated purpose was to
+    // grow the target, tagged and paid for, must land through the same guaranteed
+    // channel a cast uses — and must suppress the classifier's mirror when it
+    // failed. Mutually exclusive with the cast block above (computeGrowthIntent
+    // returns null whenever spellId is set), so growth is never promoted twice.
+    // Touches ONE character's bucket: a second girl growing ambiently on the same
+    // turn keeps her own events and her own rolls.
+    const growthIntent = this.computeGrowthIntent(checkRecord)
+    if (growthIntent) {
+      eventsByCharacterId.set(
+        growthIntent.targetId,
+        promoteGrowthIntent(
+          eventsByCharacterId.get(growthIntent.targetId) ?? [],
+          growthIntent.band,
+          growthIntent.targetName,
+        ),
+      )
     }
 
     // Present-only tick gating (Spec 1 Task 9 ruling): the passive fill/pressure

@@ -100,4 +100,15 @@ export interface CheckRecord {
   /** Spell lorebook Entry id when this check was a cast (Phase 4). Drives effect
    * application in the store and marks the turn log / drift as a cast. */
   spellId?: string
+  /**
+   * The action deliberately tried to grow/transform the target's body without
+   * being a formal spell cast (free-text essence channeling, a growth potion).
+   *
+   * Set by CheckPhase only when a target girl actually resolved, so the flag can
+   * never claim an effect that had no subject. On a non-fail band the store
+   * promotes the target's growth to the same guaranteed channel a cast uses; on
+   * a fail band it suppresses the classifier's mirrored growth for her, so
+   * narration and engine cannot diverge in either direction.
+   */
+  growthIntent?: boolean
 }

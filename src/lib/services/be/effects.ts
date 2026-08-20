@@ -18,6 +18,7 @@ import {
   CHECK_DEBUFF_CONDITION_PREFIX,
   CHECK_DEBUFF_DC_PENALTY,
   GROWTH_EVENT_KINDS,
+  GROWTH_INTENT_BASE_INTENSITY,
   SPELL_BAND_INTENSITY_DELTA,
   SPELL_CONDITION_DEFAULT_TTL,
   SUPPLY_SURGE_MAX_DELTA,
@@ -260,4 +261,69 @@ export function translateSpellEffects(
   }
 
   return out
+}
+
+/**
+ * Check-backed growth WITHOUT a spell (the second "successful roll, no stats"
+ * failure from live play). A free-text action whose stated purpose was to grow
+ * the target got check-tagged and spent essence, but mapped to no spell — so
+ * `computeSpellCast` produced nothing and the only growth left was the
+ * classifier's mirrored `attempt` event, which a catalyst-only story discards
+ * as not growth-eligible. Essence paid, check succeeded, narration described
+ * growth, engine did nothing.
+ *
+ * Same ruling as the cast fix: the RPG check IS the dice, so the outcome the
+ * narrator was shown must be the outcome the engine applies, in BOTH directions.
+ * Takes the target's classifier events for the turn and returns her replacement
+ * list:
+ *
+ * - Landed band (crit/success/partial): the FIRST growth-family event is
+ *   PROMOTED in place to the cast-equivalent form — kind coerced to `catalyst`
+ *   (the one kind a growth-restricted story is most likely to allow, and the
+ *   kind a deliberate essence channel actually is), `guaranteed` set, intensity
+ *   run through the cast's own band ladder. If the classifier proposed no growth
+ *   for her at all, ONE such event is synthesized instead: a classifier that
+ *   under-reports must not nullify a successful, paid-for growth action.
+ * - Fail band: the first growth-family event is DROPPED, so a failed attempt
+ *   cannot grow her through the classifier side door.
+ *
+ * One-per-source in both directions, mirroring `dedupeForCast`'s budget: the
+ * action is a single cause, so it promotes/suppresses a single mirror and any
+ * further growth event stays an independent cause that rolls on its own.
+ * Promotion is IN PLACE (not drop-then-append like the cast path) so every other
+ * event keeps its array index — the reducer seeds growth rolls as
+ * `${seed}:${index}`, and leaving those indices alone keeps co-occurring ambient
+ * outcomes byte-identical to a no-intent turn.
+ *
+ * Nothing here bypasses a reducer safety: eligibility, the size lock, cooldown,
+ * the per-turn land cap, size caps, velocity and slow-burn banking all bind
+ * exactly as they do for a cast. A story whose config excludes even `catalyst`
+ * still grows nobody, and that is correct.
+ */
+export function promoteGrowthIntent(
+  classifierEvents: ReadonlyArray<BeEvent>,
+  band: CheckBand,
+  targetCharacter: string,
+): BeEvent[] {
+  const mirrorIndex = classifierEvents.findIndex((e) => GROWTH_KIND_SET.has(e.kind))
+
+  // Fail: the same gate the cast path uses for a fizzle (delta null = no effects).
+  if (SPELL_BAND_INTENSITY_DELTA[band] === null) {
+    if (mirrorIndex === -1) return [...classifierEvents]
+    return classifierEvents.filter((_, index) => index !== mirrorIndex)
+  }
+
+  // Intensity comes from translateSpellEffects, not a reimplementation: same
+  // band ladder (crit +1 / success +0 / partial −1), same clamp, same
+  // `guaranteed` marker, so casts and check-backed growth can never drift apart.
+  const base =
+    mirrorIndex === -1 ? GROWTH_INTENT_BASE_INTENSITY : classifierEvents[mirrorIndex].intensity
+  const [promoted] = translateSpellEffects(
+    [{ kind: 'growth', intensity: base }],
+    band,
+    targetCharacter,
+  ).events
+
+  if (mirrorIndex === -1) return [...classifierEvents, promoted]
+  return classifierEvents.map((event, index) => (index === mirrorIndex ? promoted : event))
 }

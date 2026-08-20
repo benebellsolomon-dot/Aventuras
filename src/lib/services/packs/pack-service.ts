@@ -30,7 +30,10 @@ import type { PresetPack, FullPack } from './types'
 //     sex act must be tagged with its full Danbooru family BEFORE any
 //     event-of-the-moment tags (live failure: a paizuri beat with breast growth
 //     came back as growth tags only, dropping the act).
-const SERVICE_TEMPLATE_SYNC_VERSION = 6
+// 7 — 2026-08-20: risk-assess template teaches the new `growthIntent` flag, so a
+//     free-text "channel more essence into her" action can grow her through the
+//     check instead of dying as a non-eligible classifier `attempt`.
+const SERVICE_TEMPLATE_SYNC_VERSION = 7
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

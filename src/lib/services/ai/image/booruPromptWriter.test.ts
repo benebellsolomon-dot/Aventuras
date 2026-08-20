@@ -43,6 +43,7 @@ import {
   BOORU_MAX_TAGS,
   buildExpressionCues,
   buildLocationBlock,
+  buildSizeSanctions,
   buildSubjectDossier,
   composeBooruScenePrompt,
   resolveBooruScenePrompt,
@@ -51,7 +52,13 @@ import {
   type BooruPromptWriterInput,
   type BooruSceneSections,
 } from './booruPromptWriter'
-import { apparentTier, bandWord, defaultBodyState, writeBodyState } from '$lib/services/be'
+import {
+  apparentTier,
+  bandWord,
+  defaultBodyState,
+  readBodyState,
+  writeBodyState,
+} from '$lib/services/be'
 import { imageTemplates } from '$lib/services/prompts/templates/image'
 import type { Character, Location } from '$lib/types'
 
@@ -577,12 +584,184 @@ describe('composeBooruScenePrompt — expression layer', () => {
   })
 })
 
+describe('composeBooruScenePrompt — engine size sanction', () => {
+  const blondeBank = ['1girl', 'blonde hair', 'golden eyes', 'fair skin']
+  const ravenBank = ['1girl', 'black hair', 'red eyes', 'pale skin']
+  const blondeAt = (tier: number, grewThisTurn = false) => [
+    { identityTags: blondeBank, tier, grewThisTurn },
+  ]
+
+  /**
+   * The live failure: the narration falsely described massive growth (an engine
+   * bug), and the writer tagged the NARRATIVE for a subject the engine holds at
+   * tier 24 — the "huge breasts" band, where no body-relative anchor is earned.
+   */
+  const overClaimed: Partial<BooruSceneSections> = {
+    countTags: '1girl, solo',
+    action:
+      'breast expansion, breasts covering stomach, breasts reaching waist, breasts spilling over bed, unable to move, lying on back',
+    characters: ['1girl, blonde hair, golden eyes, fair skin, nude, huge breasts, lactation'],
+    expressions: ['open mouth'],
+    scene: 'bed, night',
+  }
+
+  it('strips the narrative size claims the engine tier does not sanction', () => {
+    const prompt = composeBooruScenePrompt(overClaimed, [], blondeAt(24))
+    expect(prompt).toBe(
+      '1girl, solo, lying on back, huge breasts, ' +
+        'blonde hair, golden eyes, fair skin, nude, lactation, open mouth, bed, night',
+    )
+    for (const invented of [
+      'breast expansion',
+      'breasts covering stomach',
+      'breasts reaching waist',
+      'breasts spilling over bed',
+      'unable to move',
+    ]) {
+      expect(prompt).not.toContain(invented)
+    }
+  })
+
+  it('keeps the growth tag when the engine actually grew her this turn', () => {
+    const prompt = composeBooruScenePrompt(overClaimed, [], blondeAt(24, true))
+    expect(prompt).toContain('breast expansion')
+    expect(prompt).not.toContain('breasts covering stomach')
+  })
+
+  it('keeps the anchor a tier-40 subject earned and drops the one above it', () => {
+    const prompt = composeBooruScenePrompt(
+      {
+        countTags: '1girl, solo',
+        characters: [
+          '1girl, blonde hair, golden eyes, fair skin, hyper breasts, breasts wider than hips, breasts bigger than torso',
+        ],
+        scene: 'bedroom',
+      },
+      [],
+      blondeAt(40),
+    )
+    expect(prompt).toContain('hyper breasts, breasts wider than hips')
+    expect(prompt).not.toContain('breasts bigger than torso')
+  })
+
+  it('sanctions each run by its own subject and scene tags by the largest', () => {
+    const prompt = composeBooruScenePrompt(
+      {
+        countTags: '2girls',
+        action: 'yuri, hugging, breasts covering stomach',
+        characters: [
+          'blonde hair, golden eyes, fair skin, gigantic breasts',
+          'black hair, red eyes, pale skin, gigantic breasts',
+        ],
+        scene: 'bedroom',
+      },
+      [],
+      [
+        { identityTags: blondeBank, tier: 24, grewThisTurn: false },
+        { identityTags: ravenBank, tier: 45, grewThisTurn: false },
+      ],
+    )
+    // One "gigantic breasts" survives — the raven's; the blonde's is unearned.
+    expect(prompt.match(/gigantic breasts/g)).toHaveLength(1)
+    expect(prompt).toBe(
+      '2girls, yuri, hugging, breasts covering stomach, gigantic breasts, ' +
+        'blonde hair, golden eyes, fair skin, black hair, red eyes, pale skin, bedroom',
+    )
+  })
+
+  it('falls back to the largest subject for a run no sanction claims', () => {
+    // Two runs, one tagged subject: the blonde claims hers by bank, and the
+    // unnamed background girl is sanctioned scene-wide rather than filtered
+    // against a body state that is not hers.
+    const withBystander: Partial<BooruSceneSections> = {
+      countTags: '2girls',
+      characters: [
+        '1girl, blonde hair, golden eyes, fair skin, gigantic breasts',
+        'red hair, green eyes, gigantic breasts',
+      ],
+      scene: 'bedroom',
+    }
+    expect(composeBooruScenePrompt(withBystander, [], blondeAt(45))).toContain('gigantic breasts')
+    expect(composeBooruScenePrompt(withBystander, [], blondeAt(24))).not.toContain(
+      'gigantic breasts',
+    )
+  })
+
+  it('filters nothing when the engine holds no state (non-BE story)', () => {
+    expect(composeBooruScenePrompt(overClaimed)).toContain('breasts covering stomach')
+  })
+})
+
+describe('buildSizeSanctions', () => {
+  const cora = makeChar({
+    name: 'Cora',
+    imageTags: '1girl, black hair, red eyes',
+    metadata: writeBodyState(null, { ...defaultBodyState(24), lastGrowth: undefined }),
+  })
+  const grown = makeChar({
+    name: 'Dana',
+    imageTags: '1girl, red hair',
+    metadata: writeBodyState(null, {
+      ...defaultBodyState(31),
+      lastGrowth: { delta: 2, tierBefore: 29 },
+    }),
+  })
+
+  it('reads the apparent tier and growth flag of each tagged subject, in tag order', () => {
+    expect(buildSizeSanctions([cora, grown], ['Dana', 'Cora'], true)).toEqual([
+      { identityTags: ['1girl', 'red hair'], tier: 31, grewThisTurn: true },
+      { identityTags: ['1girl', 'black hair', 'red eyes'], tier: 24, grewThisTurn: false },
+    ])
+  })
+
+  it('follows the apparent tier so the band word and the filter agree', () => {
+    const engorged = makeChar({
+      name: 'Eve',
+      imageTags: '1girl, brown hair',
+      metadata: writeBodyState(null, {
+        ...defaultBodyState(24),
+        fluids: { fillPercent: 95, fluidType: 'milk' },
+      }),
+    })
+    const [sanction] = buildSizeSanctions([engorged], ['Eve'], true)
+    expect(sanction.tier).toBe(apparentTier(readBodyState(engorged.metadata)!))
+    expect(sanction.tier).toBeGreaterThan(24)
+  })
+
+  it('is empty outside BE mode and skips a subject with no body state', () => {
+    expect(buildSizeSanctions([cora], ['Cora'], false)).toEqual([])
+    expect(buildSizeSanctions([amelia], ['Amelia'], true)).toEqual([])
+  })
+})
+
 describe('writeBooruScenePrompt', () => {
   it('returns null (best-effort) when no preset is assigned', async () => {
     mocks.getServicePresetId.mockReturnValue('')
     const result = await writeBooruScenePrompt(baseInput())
     expect(result).toBeNull()
     expect(mocks.generateStructured).not.toHaveBeenCalled()
+  })
+
+  it('filters the writer’s size claims against the subject’s engine tier', async () => {
+    const cora = makeChar({
+      name: 'Cora',
+      imageTags: '1girl, black hair, red eyes',
+      metadata: writeBodyState(null, defaultBodyState(24)),
+    })
+    mocks.generateStructured.mockResolvedValue(
+      sections({
+        countTags: '1girl, solo',
+        action: 'breasts covering stomach, unable to move, lying on back',
+        characters: ['1girl, black hair, red eyes, gigantic breasts, huge breasts'],
+        expressions: [''],
+      }),
+    )
+    const result = await writeBooruScenePrompt(
+      baseInput({ presentCharacters: [cora], tagCharacterNames: ['Cora'], beMode: true }),
+    )
+    expect(result).toBe(
+      'general, 1girl, solo, lying on back, huge breasts, black hair, red eyes, bedroom',
+    )
   })
 
   it('renders the template and returns the trimmed prompt on success', async () => {
