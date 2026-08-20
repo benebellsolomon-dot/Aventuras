@@ -22,11 +22,22 @@ import {
 } from '$lib/services/be'
 import { sizeBandMarker, tierMarker } from './sizeBandMarker'
 import { detectPromptDialect, BOORU_QUALITY_PREFIX } from './dialect'
+import { compressStateCues, flattenTagGroups } from './booruTags'
 import { parsesPromptWeighting } from './providerCapabilities'
 import { maybeBuildBridgeSpec } from './bridgeSpec'
 import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
 import type { Character, ImageProviderType } from '$lib/types'
+
+/**
+ * Baseline A1111 emphasis on the engine's band word for booru models. Modest on
+ * purpose — 1.2 is enough to hold the size against the model's default pull,
+ * while higher weights start deforming anatomy.
+ */
+const BOORU_SIZE_WEIGHT_BASE = 1.2
+
+/** Extra emphasis added across a band, 0 at its floor and this at its top. */
+const BOORU_SIZE_WEIGHT_BAND_SPAN = 0.1
 
 export interface InlineAssemblyInput {
   /** All characters present in the scene (identity + bodyState + loraConfig source). */
@@ -61,7 +72,18 @@ export interface InlineAssemblyResult {
  * bridge helpers it calls.
  */
 export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyResult {
-  const { presentCharacters, tagPrompt, tagCharacters, beMode, stylePrompt, narrativeText } = input
+  const { presentCharacters, tagCharacters, beMode, stylePrompt, narrativeText } = input
+
+  // Booru-trained models (Illustrious/Pony/...) get a tag quality prefix and NO
+  // prose style block — a flowing style paragraph degrades tag adherence.
+  const dialect = detectPromptDialect(input.model)
+
+  // Pseudo-regional clauses — "(on the left, 1girl, blonde hair, …)" — are a
+  // prose-model habit that booru models cannot use (no regional prompter): the
+  // parens only put 1.1x emphasis on a comma glob. Flattened for the booru
+  // dialect so the tags read as one run, whether they came from the dedicated
+  // writer or from a story model's own <pic> prompt.
+  const tagPrompt = dialect === 'booru' ? flattenTagGroups(input.tagPrompt) : input.tagPrompt
 
   const taggedChars = presentCharacters.filter((c) =>
     tagCharacters.some((n) => n.toLowerCase() === c.name.toLowerCase()),
@@ -103,9 +125,14 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   // State cues (engorgement/arousal) apply only for a single unambiguous
   // subject. The prompt writer now sees the same cues in its body-state block,
   // so skip any it already copied in — this append is the enforcement backstop.
+  // Booru dialect renders them as the tags the model actually knows
+  // (`lactation`, `breast expansion`, `blush`) — the engine's prose wording
+  // costs ~10 tokens of CLIP attention for vocabulary the model has never seen.
   if (beMode) {
     const solo = soloBodyState(presentCharacters, tagCharacters)
-    const cues = (solo ? imageStateCues(solo) : []).filter(
+    const engineCues = solo ? imageStateCues(solo) : []
+    const dialectCues = dialect === 'booru' ? compressStateCues(engineCues) : engineCues
+    const cues = dialectCues.filter(
       (cue) => !groundedPrompt.toLowerCase().includes(cue.slice(0, 24).toLowerCase()),
     )
     if (cues.length > 0) groundedPrompt = `${groundedPrompt}, ${cues.join(', ')}`
@@ -136,13 +163,12 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
     ? tierMarker(renderTier) || sizeBandMarker(groundedPrompt)
     : ''
 
-  // Booru-trained models (Illustrious/Pony/...) get a tag quality prefix and NO
-  // prose style block — a flowing style paragraph degrades tag adherence.
-  const dialect = detectPromptDialect(input.model)
-
-  // Within-band tier reinforcement (booru only): the band word alone flattens
-  // an 8-tier range into one string; A1111 emphasis scaled by the tier's
-  // position inside its band pushes the render toward the right end of it.
+  // Size emphasis (booru only): SD models pull every size back toward their
+  // training default, so the plain band word loses — the engine's size only
+  // lands with explicit emphasis on it. A constant base weight carries the band
+  // itself; the within-band term adds the tier's position inside its band, since
+  // the word alone flattens an 8-tier range into one string ("huge breasts" at
+  // tier 29 must render larger than at 22).
   // Reads renderTier, not beTier: the word actually sitting in the grounded
   // prompt is the apparent one, so the real-tier word would match nothing.
   // Gated on provider capability: endpoint providers (nanogpt, cloud APIs)
@@ -150,13 +176,13 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   // garbage tokens — they keep the plain band word instead.
   if (dialect === 'booru' && renderTier !== null && parsesPromptWeighting(input.providerType)) {
     const word = bandWord(renderTier)
-    const weight = 1 + 0.2 * bandPosition(renderTier)
-    if (weight > 1.01) {
-      groundedPrompt = groundedPrompt.replace(
-        new RegExp(word, 'i'),
-        `(${word}:${weight.toFixed(2)})`,
-      )
-    }
+    // Computed in hundredths so the emitted weight is an exact 2-decimal grid
+    // value rather than a float artifact (1.275 → "1.27").
+    const weight =
+      Math.round(
+        BOORU_SIZE_WEIGHT_BASE * 100 + BOORU_SIZE_WEIGHT_BAND_SPAN * 100 * bandPosition(renderTier),
+      ) / 100
+    groundedPrompt = groundedPrompt.replace(new RegExp(word, 'i'), `(${word}:${weight.toFixed(2)})`)
   }
 
   const fullPrompt =

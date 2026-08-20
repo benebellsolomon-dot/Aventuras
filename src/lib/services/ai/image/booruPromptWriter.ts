@@ -15,6 +15,13 @@
  * on current-location scene tags. The booru image model then receives tags it
  * can actually follow.
  *
+ * ORDER (research/56): the call returns SECTIONS, and `composeBooruScenePrompt`
+ * joins them — rating, camera, count, ACTION, characters, scene. Asking the LLM
+ * for one finished string put the two per-character identity clauses ahead of
+ * the pose and setting tags, which then sat past CLIP's ~75-token attention
+ * window; the model rendered the identities and invented its own scene (a bed
+ * scene came back as a standing hallway shot). Order is deterministic here.
+ *
  * Best-effort by contract, exactly like `extractIdentity`: if the setting is
  * off, the model is not a booru model, no preset is assigned, or the AI call
  * throws, the caller keeps the original story-written prompt. It never throws.
@@ -34,13 +41,13 @@ import { database } from '$lib/services/database'
 import {
   apparentTier,
   bandWord,
-  cupLetter,
   imageSizeAnchor,
   imageStateCues,
   readBodyState,
 } from '$lib/services/be'
 import { generateStructured } from '../sdk/generate'
 import { detectPromptDialect } from './dialect'
+import { compressStateCues, joinTags, toTags } from './booruTags'
 import type { Character, Location, VisualDescriptors } from '$lib/types'
 
 const log = createLogger('BooruPromptWriter')
@@ -54,17 +61,111 @@ const TEMPLATE_ID = 'image-booru-scene-prompt'
 /** Cap the narrative-beat context so it stays a hint, not the bulk of the prompt. */
 const NARRATIVE_CONTEXT_CHARS = 1200
 
+/**
+ * Soft tag budget for the composed prompt (research/56): CLIP attends to roughly
+ * the first 75 tokens, and a booru tag averages ~1.5 of them. ~60 tags plus the
+ * quality prefix keeps the whole scene inside the window that actually renders.
+ */
+export const BOORU_MAX_TAGS = 60
+
+/** Floors for the two trimmable blocks — a scene still needs a place and a beat. */
+const MIN_SCENE_TAGS = 3
+const MIN_ACTION_TAGS = 2
+
+/**
+ * The writer emits SECTIONS, not one pre-ordered string: the final tag order is
+ * the thing that was broken (identity clauses displaced the action and setting
+ * past CLIP's attention window), and order enforced by `composeBooruScenePrompt`
+ * is deterministic where order requested of an LLM is not.
+ */
 const booruScenePromptSchema = z.object({
-  prompt: z
+  rating: z
     .string()
     .describe(
-      'The complete booru image prompt: comma-separated Danbooru tags (plus a short ' +
-        'spatial-anchored sentence per subject in multi-subject scenes), in section order ' +
-        'rating → camera → count tag → characters (locked identity tags copied VERBATIM, then ' +
-        'clothing/size/expression/pose) → scene tags. English only. No prose paragraphs, no ' +
-        'art-style or quality tags (masterpiece, best quality, anime style — added automatically).',
+      'Content rating tags only: "general", "sensitive", or "explicit, uncensored, detailed anatomy".',
+    ),
+  camera: z
+    .string()
+    .describe(
+      'Shot-type tag plus an optional angle tag (e.g. "cowboy shot, from above"). Wide enough to show everyone and the setting.',
+    ),
+  countTags: z
+    .string()
+    .describe(
+      'Booru count tags for EVERY person in frame, including unnamed ones (e.g. "1boy, 1girl", "2girls"). Never omitted.',
+    ),
+  action: z
+    .string()
+    .describe(
+      'What the people are DOING: interaction/sex-act/pose tags (e.g. "hetero, paizuri, breast squeezing, lying on back"). The scene beat, not the people.',
+    ),
+  characters: z
+    .array(z.string())
+    .describe(
+      'One FLAT comma-separated tag run per person, in the same order as the count tags: locked identity tags copied verbatim, then clothing, breast-size band, expression. No parentheses.',
+    ),
+  scene: z
+    .string()
+    .describe(
+      'Setting, furniture, time of day, light source and atmosphere tags. Lowest priority — trimmed first when the prompt runs long.',
     ),
 })
+
+export type BooruSceneSections = z.infer<typeof booruScenePromptSchema>
+
+/**
+ * Compose the writer's sections into the final booru tag order.
+ *
+ * Order is the fix (research/56): rating → camera → count → ACTION → characters
+ * → scene. The action block moved AHEAD of the per-character identity runs
+ * because with two characters the identity blocks are ~20 tags and pushed the
+ * sex-act/pose and setting tags past CLIP's ~75-token attention window — the
+ * model then rendered identity only and invented its own scene.
+ *
+ * Tags are de-duplicated globally (the count tag routinely reappears inside a
+ * character's own run) and the total is capped at `BOORU_MAX_TAGS`, trimming
+ * setting detail first and interaction second — identity is never trimmed.
+ */
+export function composeBooruScenePrompt(sections: Partial<BooruSceneSections>): string {
+  const seen = new Set<string>()
+  const dedupe = (tags: ReadonlyArray<string>): string[] => {
+    const out: string[] = []
+    for (const tag of tags) {
+      const key = tag.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(tag)
+    }
+    return out
+  }
+
+  const rating = dedupe(toTags(sections.rating))
+  const camera = dedupe(toTags(sections.camera))
+  const count = dedupe(toTags(sections.countTags))
+  const action = dedupe(toTags(sections.action))
+  const characters = (sections.characters ?? []).flatMap((run) => dedupe(toTags(run)))
+  const scene = dedupe(toTags(sections.scene))
+
+  const fixed = rating.length + camera.length + count.length + characters.length
+  const overBy = (sceneLength: number, actionLength: number): number =>
+    fixed + sceneLength + actionLength - BOORU_MAX_TAGS
+
+  const sceneOver = overBy(scene.length, action.length)
+  const trimmedScene =
+    sceneOver > 0 ? scene.slice(0, Math.max(MIN_SCENE_TAGS, scene.length - sceneOver)) : scene
+  const actionOver = overBy(trimmedScene.length, action.length)
+  const trimmedAction =
+    actionOver > 0 ? action.slice(0, Math.max(MIN_ACTION_TAGS, action.length - actionOver)) : action
+
+  return joinTags([
+    ...rating,
+    ...camera,
+    ...count,
+    ...trimmedAction,
+    ...characters,
+    ...trimmedScene,
+  ])
+}
 
 // ============================================================================
 // Inputs
@@ -149,20 +250,25 @@ function appearanceReference(vd: VisualDescriptors | null | undefined): string {
 }
 
 /**
- * Image-facing body-size phrase for a subject — band word + cup letter, a
- * relative-size anchor at large tiers, and any engorgement/arousal cues. Uses
+ * Image-facing body-size phrase for a subject — the band word, a relative-size
+ * anchor at large tiers, and any engorgement/arousal cues, all already in booru
+ * tag form so the writer can copy them straight into the character's run. Uses
  * the APPARENT tier (research/49 R6) to match what `assembleInlineImage` grounds
  * on downstream, so the writer's band word and the grounding pass agree.
+ *
+ * The cup letter and the engine's prose cue wording are deliberately absent:
+ * booru models know neither, and the dossier is copied nearly verbatim, so any
+ * non-tag text here becomes wasted tokens inside CLIP's attention window.
  */
 function bodyStatePhrase(metadata: Character['metadata']): string | null {
   const state = readBodyState(metadata)
   if (!state) return null
   const tier = apparentTier(state)
-  const parts = [`${bandWord(tier)} (${cupLetter(tier)}-cup)`]
+  const parts = [bandWord(tier)]
   const anchor = imageSizeAnchor(tier)
   if (anchor) parts.push(anchor)
-  parts.push(...imageStateCues(state))
-  return parts.join('; ')
+  parts.push(...compressStateCues(imageStateCues(state)))
+  return joinTags(parts)
 }
 
 /** Resolve the tagged subjects in tag order (skips names with no present match). */
@@ -303,7 +409,10 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
       SERVICE_ID,
     )
 
-    const rawWritten = raw.prompt?.trim()
+    // Order is imposed here, not asked of the model: the sections come back
+    // labelled, so the attention-critical action-before-identity ordering and
+    // the tag budget are deterministic.
+    const rawWritten = composeBooruScenePrompt(raw)
     if (!rawWritten) {
       log('booru prompt writer returned empty — falling back')
       return null

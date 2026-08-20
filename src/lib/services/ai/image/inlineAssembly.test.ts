@@ -113,7 +113,7 @@ describe('assembleInlineImage', () => {
     expect(result.fullPrompt.startsWith('__betier_24__ ')).toBe(true)
   })
 
-  it('applies within-band emphasis on the band word for booru models on a weighting-capable provider', () => {
+  it('weights the band word for booru models on a weighting-capable provider', () => {
     const lucy = {
       name: 'Lucy',
       loraConfig: null,
@@ -130,8 +130,31 @@ describe('assembleInlineImage', () => {
       tagPrompt: '1girl, huge breasts, garden',
       tagCharacters: ['Lucy'],
     })
-    // Tier 28 sits 6/8 through the huge band (22–29) → weight 1.15.
-    expect(result.fullPrompt).toContain('(huge breasts:1.15)')
+    // Base 1.20 holds the band against SD's pull toward its default size; tier
+    // 28 sits 6/8 through the huge band (22–29), adding 0.08 of the 0.10 span.
+    expect(result.fullPrompt).toContain('(huge breasts:1.28)')
+  })
+
+  it('weights the band word at the base weight even at a band floor', () => {
+    const lucy = {
+      name: 'Lucy',
+      loraConfig: null,
+      metadata: writeBodyState(null, defaultBodyState(22)),
+      visualDescriptors: {},
+    } as unknown as Character
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: '',
+      providerType: 'comfyui' as const,
+      model: 'wai-illustrious-sdxl',
+      presentCharacters: [lucy],
+      tagPrompt: '1girl, huge breasts, garden',
+      tagCharacters: ['Lucy'],
+    })
+    // The old formula emitted a bare "huge breasts" here (weight 1.00) and the
+    // size never landed — the whole point of a constant base.
+    expect(result.fullPrompt).toContain('(huge breasts:1.20)')
   })
 
   it('leaves the plain band word for a provider that does not parse A1111 weighting', () => {
@@ -215,6 +238,109 @@ describe('assembleInlineImage', () => {
     })
     expect(result.fullPrompt).toContain('large breasts')
     expect(result.fullPrompt).not.toContain('huge breasts')
+  })
+
+  // research/56: the live failure was a two-character bed paizuri scene that
+  // rendered as a standing hallway shirt-lift — the action and setting tags sat
+  // behind two long parenthesized identity clauses, past CLIP's ~75-token
+  // attention window. This is the same scene assembled under the new contract.
+  describe('two-character booru scene (research/56 reference)', () => {
+    /** What `composeBooruScenePrompt` hands assembly for the reference scene. */
+    const COMPOSED =
+      'explicit, uncensored, detailed anatomy, cowboy shot, 1boy, 1girl, ' +
+      'hetero, paizuri, breast squeezing, penis between breasts, lying on back, ' +
+      'on the right, muscular, completely nude, ' +
+      'on the left, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, huge breasts, open mouth, ' +
+      'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field'
+
+    const amelia = {
+      name: 'Amelia',
+      loraConfig: null,
+      metadata: writeBodyState(null, {
+        ...defaultBodyState(24),
+        fluids: { fillPercent: 50, fluidType: 'Milk' },
+        arousal: 80,
+      }),
+      visualDescriptors: {},
+    } as unknown as Character
+    const rowan = {
+      name: 'Rowan',
+      loraConfig: null,
+      metadata: null,
+      visualDescriptors: {},
+    } as unknown as Character
+
+    const result = assembleInlineImage({
+      beMode: true,
+      stylePrompt: 'STYLE',
+      narrativeText: 'She pulled him down onto the bed.',
+      providerType: 'comfyui' as const,
+      model: 'wai-illustrious-sdxl',
+      presentCharacters: [amelia, rowan],
+      tagPrompt: COMPOSED,
+      tagCharacters: ['Amelia', 'Rowan'],
+    })
+
+    it('assembles the full prompt with the scene inside the attention window', () => {
+      expect(result.fullPrompt).toBe(
+        'masterpiece, best quality, highly detailed, ' +
+          'explicit, uncensored, detailed anatomy, cowboy shot, 1boy, 1girl, ' +
+          'hetero, paizuri, breast squeezing, penis between breasts, lying on back, ' +
+          'on the right, muscular, completely nude, ' +
+          'on the left, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, ' +
+          '(huge breasts:1.23), open mouth, ' +
+          'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field, ' +
+          'lactation, blush, heavy breathing',
+      )
+    })
+
+    it('keeps the action tags ahead of both identity runs', () => {
+      const prompt = result.fullPrompt
+      expect(prompt.indexOf('paizuri')).toBeLessThan(prompt.indexOf('muscular'))
+      expect(prompt.indexOf('lying on back')).toBeLessThan(prompt.indexOf('blonde hair'))
+    })
+
+    it('renders the character runs in count-tag order', () => {
+      const prompt = result.fullPrompt
+      expect(prompt.indexOf('1boy')).toBeLessThan(prompt.indexOf('1girl'))
+      expect(prompt.indexOf('muscular')).toBeLessThan(prompt.indexOf('blonde hair'))
+    })
+
+    it('carries no parentheses other than the size weighting', () => {
+      expect(result.fullPrompt.match(/\(/g)).toHaveLength(1)
+      expect(result.fullPrompt).toContain('(huge breasts:1.23)')
+    })
+
+    it('compresses the engine state cues to booru tags', () => {
+      expect(result.fullPrompt).toContain('lactation, blush, heavy breathing')
+      expect(result.fullPrompt).not.toMatch(/swollen with/i)
+      expect(result.fullPrompt).not.toContain('Milk')
+    })
+  })
+
+  it('flattens a pseudo-regional clause written by the story model itself', () => {
+    const result = assembleInlineImage({
+      ...BASE,
+      presentCharacters: [],
+      tagCharacters: [],
+      model: 'wai-illustrious-sdxl',
+      tagPrompt: '1girl, 1boy, (on the left, 1girl, blonde hair), (on the right, 1boy), bedroom',
+    })
+    expect(result.fullPrompt).toBe(
+      'masterpiece, best quality, highly detailed, ' +
+        '1girl, 1boy, on the left, 1girl, blonde hair, on the right, 1boy, bedroom',
+    )
+  })
+
+  it('keeps a prose model’s parentheses untouched', () => {
+    const result = assembleInlineImage({
+      ...BASE,
+      presentCharacters: [],
+      tagCharacters: [],
+      model: 'z-image-turbo',
+      tagPrompt: 'a woman (on the left, smiling) in a kitchen',
+    })
+    expect(result.fullPrompt).toBe('a woman (on the left, smiling) in a kitchen. STYLE')
   })
 
   // The apparent bump keeps beTier's uniformity contract: one engorged girl

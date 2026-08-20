@@ -40,12 +40,15 @@ vi.mock('$lib/services/database', () => ({
 }))
 
 import {
+  BOORU_MAX_TAGS,
   buildLocationBlock,
   buildSubjectDossier,
+  composeBooruScenePrompt,
   resolveBooruScenePrompt,
   stripCharacterNames,
   writeBooruScenePrompt,
   type BooruPromptWriterInput,
+  type BooruSceneSections,
 } from './booruPromptWriter'
 import { apparentTier, bandWord, defaultBodyState, writeBodyState } from '$lib/services/be'
 import type { Character, Location } from '$lib/types'
@@ -95,12 +98,25 @@ function baseInput(overrides: Partial<BooruPromptWriterInput> = {}): BooruPrompt
   }
 }
 
+/** The writer returns SECTIONS; `composeBooruScenePrompt` imposes the order. */
+function sections(overrides: Partial<BooruSceneSections> = {}): BooruSceneSections {
+  return {
+    rating: 'general',
+    camera: '',
+    countTags: '1girl, solo',
+    action: '',
+    characters: [],
+    scene: 'bedroom',
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.getServicePresetId.mockReturnValue('preset-image')
   mocks.getLocations.mockResolvedValue([])
   mocks.ctxRender.mockResolvedValue({ system: 'SYS', user: 'USR' })
-  mocks.generateStructured.mockResolvedValue({ prompt: '  general, 1girl, solo, bedroom  ' })
+  mocks.generateStructured.mockResolvedValue(sections())
   mocks.imageGenSettings.dedicatedBooruPromptWriter = true
 })
 
@@ -142,6 +158,23 @@ describe('buildSubjectDossier', () => {
     const state = defaultBodyState(tier)
     expect(on).toContain('body:')
     expect(on).toContain(bandWord(apparentTier(state)))
+  })
+
+  it('renders the body line as booru tags — no cup letter, cues compressed', () => {
+    const state = defaultBodyState(20)
+    const lactating = makeChar({
+      name: 'Cora',
+      imageTags: '1girl, black hair',
+      metadata: writeBodyState(null, {
+        ...state,
+        fluids: { fillPercent: 50, fluidType: 'Milk' },
+        arousal: 80,
+      }),
+    })
+    const dossier = buildSubjectDossier([lactating], ['Cora'], true)
+    expect(dossier).toContain(`body: ${bandWord(20)}, lactation, blush, heavy breathing`)
+    expect(dossier).not.toContain('-cup')
+    expect(dossier).not.toMatch(/swollen with/i)
   })
 
   it('surfaces a breast-expansion cue in the body line on the turn growth landed', () => {
@@ -206,6 +239,98 @@ describe('buildLocationBlock', () => {
   })
 })
 
+describe('composeBooruScenePrompt', () => {
+  // The live failure (research/56): a two-character bed paizuri scene rendered
+  // as a standing hallway shirt-lift because the action + setting tags sat
+  // behind ~20 tags of parenthesized identity clauses, past CLIP's attention.
+  const bedScene: BooruSceneSections = {
+    rating: 'explicit, uncensored, detailed anatomy',
+    camera: 'cowboy shot',
+    countTags: '1boy, 1girl',
+    action: 'hetero, paizuri, breast squeezing, penis between breasts, lying on back',
+    characters: [
+      '(on the right, 1boy, muscular, completely nude)',
+      '(on the left, 1girl, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, completely nude, huge breasts, open mouth)',
+    ],
+    scene:
+      'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field',
+  }
+
+  it('orders action ahead of the per-character identity runs', () => {
+    const prompt = composeBooruScenePrompt(bedScene)
+    expect(prompt).toBe(
+      'explicit, uncensored, detailed anatomy, cowboy shot, 1boy, 1girl, ' +
+        'hetero, paizuri, breast squeezing, penis between breasts, lying on back, ' +
+        'on the right, muscular, completely nude, ' +
+        'on the left, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, huge breasts, open mouth, ' +
+        'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field',
+    )
+    expect(prompt.indexOf('paizuri')).toBeLessThan(prompt.indexOf('blonde hair'))
+    expect(prompt.indexOf('lying on back')).toBeLessThan(prompt.indexOf('muscular'))
+  })
+
+  it('flattens pseudo-regional parentheses — booru models have no regional prompter', () => {
+    expect(composeBooruScenePrompt(bedScene)).not.toContain('(')
+  })
+
+  it('keeps the character runs in count-tag order', () => {
+    const prompt = composeBooruScenePrompt(bedScene)
+    expect(prompt.indexOf('1boy')).toBeLessThan(prompt.indexOf('1girl'))
+    expect(prompt.indexOf('muscular')).toBeLessThan(prompt.indexOf('blonde hair'))
+  })
+
+  it('de-dupes tags that repeat across sections, keeping the first', () => {
+    const prompt = composeBooruScenePrompt(bedScene)
+    expect(prompt.match(/\b1girl\b/g)).toHaveLength(1)
+    expect(prompt.match(/completely nude/g)).toHaveLength(1)
+  })
+
+  it('drops a weight suffix left behind by an unwrapped glob', () => {
+    const prompt = composeBooruScenePrompt({
+      countTags: '1girl',
+      characters: ['(blonde hair, blue eyes:1.2)'],
+    })
+    expect(prompt).toBe('1girl, blonde hair, blue eyes')
+  })
+
+  it('trims setting detail first when the tag budget is exceeded', () => {
+    const identity = Array.from({ length: 40 }, (_, i) => `identity${i}`)
+    const scene = Array.from({ length: 20 }, (_, i) => `scenery${i}`)
+    const prompt = composeBooruScenePrompt({
+      countTags: '1girl, solo',
+      action: 'sitting, reading',
+      characters: [identity.join(', ')],
+      scene: scene.join(', '),
+    })
+    const tags = prompt.split(', ')
+    expect(tags).toHaveLength(BOORU_MAX_TAGS)
+    // Every identity + action tag survived; the setting lost its tail.
+    for (const tag of [...identity, 'sitting', 'reading']) expect(tags).toContain(tag)
+    expect(tags).toContain('scenery0')
+    expect(tags).not.toContain('scenery19')
+  })
+
+  it('trims interaction only after the setting has hit its floor, never identity', () => {
+    const identity = Array.from({ length: 55 }, (_, i) => `identity${i}`)
+    const action = Array.from({ length: 8 }, (_, i) => `action${i}`)
+    const scene = Array.from({ length: 8 }, (_, i) => `scenery${i}`)
+    const tags = composeBooruScenePrompt({
+      countTags: '1girl',
+      action: action.join(', '),
+      characters: [identity.join(', ')],
+      scene: scene.join(', '),
+    }).split(', ')
+    for (const tag of identity) expect(tags).toContain(tag)
+    // Scene floor (3) and action floor (2) both hold — identity is never cut.
+    expect(tags.filter((t) => t.startsWith('scenery'))).toHaveLength(3)
+    expect(tags.filter((t) => t.startsWith('action'))).toHaveLength(2)
+  })
+
+  it('is empty when every section is empty', () => {
+    expect(composeBooruScenePrompt({})).toBe('')
+  })
+})
+
 describe('writeBooruScenePrompt', () => {
   it('returns null (best-effort) when no preset is assigned', async () => {
     mocks.getServicePresetId.mockReturnValue('')
@@ -232,9 +357,9 @@ describe('writeBooruScenePrompt', () => {
   })
 
   it('strips leaked character names from the model output', async () => {
-    mocks.generateStructured.mockResolvedValue({
-      prompt: '1girl, solo, Amelia, blonde hair, bedroom',
-    })
+    mocks.generateStructured.mockResolvedValue(
+      sections({ rating: '', characters: ['Amelia, blonde hair'] }),
+    )
     const result = await writeBooruScenePrompt(baseInput())
     expect(result).toBe('1girl, solo, blonde hair, bedroom')
   })
@@ -272,8 +397,10 @@ describe('writeBooruScenePrompt', () => {
     expect(result).toBeNull()
   })
 
-  it('returns null when the model returns an empty prompt', async () => {
-    mocks.generateStructured.mockResolvedValue({ prompt: '   ' })
+  it('returns null when the model returns empty sections', async () => {
+    mocks.generateStructured.mockResolvedValue(
+      sections({ rating: '   ', countTags: '', scene: ' , ' }),
+    )
     const result = await writeBooruScenePrompt(baseInput())
     expect(result).toBeNull()
   })

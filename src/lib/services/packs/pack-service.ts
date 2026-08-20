@@ -14,7 +14,11 @@ import type { PresetPack, FullPack } from './types'
  */
 // 2 — 2026-08-19: risk-assess DC guidance biased to easy + booru scene-prompt
 //     writer template reach existing custom-pack stories (e.g. wizard-generated).
-const SERVICE_TEMPLATE_SYNC_VERSION = 2
+// 3 — 2026-08-20: booru writer emits ordered SECTIONS (action-first assembly,
+//     flat tag runs, ~60-tag budget) — fixes SDXL 77-token truncation dropping
+//     the whole scene block (live failure: bed paizuri rendered as hallway
+//     shirt-lift). Template must reach every pack.
+const SERVICE_TEMPLATE_SYNC_VERSION = 3
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**
