@@ -97,7 +97,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(methods).not.toContain('abortWriteBatch')
   })
 
-  it('CR-1 atomicity: a failed batch flush (commitWriteBatch) rolls the whole turn back and returns false', async () => {
+  it('CR-1 atomicity: a failed batch flush (commitWriteBatch) rolls the whole turn back and reports rolled_back', async () => {
     settingsMock.experimentalFeatures.stateTracking = true
     story.characters = [makeCharacter('Aria')] as never
     // The atomic flush throws (the Rust transaction failed / rolled back). Every
@@ -116,7 +116,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(methods).toContain('beginWriteBatch')
     expect(methods).toContain('commitWriteBatch')
     expect(methods).toContain('abortWriteBatch')
-    expect(applied).toBe(false)
+    expect(applied).toEqual({ applied: false, reason: 'rolled_back' })
     // Aria still exists (snapshot restore, not a wipe) and does NOT carry the
     // un-persisted trait.
     const aria = story.characters.find((c) => c.name === 'Aria')
@@ -143,7 +143,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(methods).toContain('abortWriteBatch')
     expect(methods).not.toContain('updateStoryEntry')
     expect(methods).not.toContain('commitWriteBatch')
-    expect(applied).toBe(false)
+    expect(applied).toEqual({ applied: false, reason: 'rolled_back' })
     const aria = story.characters.find((c) => c.name === 'Aria')
     expect(aria?.traits ?? []).not.toContain('brave')
   })
@@ -167,7 +167,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(methods).toContain('updateStoryEntry')
     expect(methods).toContain('abortWriteBatch')
     expect(methods).not.toContain('commitWriteBatch')
-    expect(applied).toBe(false)
+    expect(applied).toEqual({ applied: false, reason: 'rolled_back' })
     // Both the entity mutation and the in-memory delta are reverted.
     const aria = story.characters.find((c) => c.name === 'Aria')
     expect(aria?.traits ?? []).not.toContain('brave')
@@ -200,7 +200,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(methods).toContain('updateCharacter')
     expect(methods).toContain('commitWriteBatch')
     expect(methods).toContain('abortWriteBatch')
-    expect(applied).toBe(false)
+    expect(applied).toEqual({ applied: false, reason: 'rolled_back' })
     // Both engine mutations reverted to their pre-turn values.
     expect(story.characters.find((c) => c.name === 'Rowan')?.metadata).toEqual(
       protagonistMetadataBefore,
@@ -222,7 +222,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
 
     const applied = await story.applyClassificationResult(result as never, 'entry-1')
 
-    expect(applied).toBe(true)
+    expect(applied).toEqual({ applied: true })
     expect(db.methodsCalled()).toContain('commitWriteBatch')
     expect(db.methodsCalled()).not.toContain('abortWriteBatch')
     // The protagonist now carries a sheet (creation grant) and Mira's body state moved
@@ -252,7 +252,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(methods).not.toContain('commitWriteBatch')
     // No delta write: tracking is off, so there is nothing delta-side to persist.
     expect(methods).not.toContain('updateStoryEntry')
-    expect(applied).toBe(false)
+    expect(applied).toEqual({ applied: false, reason: 'rolled_back' })
     const aria = story.characters.find((c) => c.name === 'Aria')
     expect(aria?.traits ?? []).not.toContain('brave')
   })
@@ -281,7 +281,7 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(methods).toContain('updateCharacter')
     expect(methods).toContain('abortWriteBatch')
     expect(methods).not.toContain('updateStoryEntry')
-    expect(applied).toBe(false)
+    expect(applied).toEqual({ applied: false, reason: 'rolled_back' })
     expect(story.characters.find((c) => c.name === 'Rowan')?.metadata).toEqual(
       protagonistMetadataBefore,
     )
@@ -301,7 +301,9 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     const applied = await story.applyClassificationResult(result as never, 'entry-1')
 
     // Nothing was written and no stateful mutation ran — the guard returned early.
-    expect(applied).toBe(false)
+    // D-7: reported as 'replay', NOT 'rolled_back' — the caller skips the tail
+    // either way but only messages the user about a genuine rollback.
+    expect(applied).toEqual({ applied: false, reason: 'replay' })
     expect(db.methodsCalled()).not.toContain('updateCharacter')
     expect(db.methodsCalled()).not.toContain('beginWriteBatch')
     const aria = story.characters.find((c) => c.name === 'Aria')

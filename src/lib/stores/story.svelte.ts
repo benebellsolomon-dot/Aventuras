@@ -141,6 +141,20 @@ function mergeRuntimeVars(
   return { ...base, runtimeVars }
 }
 
+/**
+ * Outcome of `applyClassificationResult` (D-7).
+ *
+ * `applied: false` used to be a bare boolean, which collapsed three very
+ * different endings into one value: a genuine rollback (the turn's writes were
+ * discarded — the user should be told and offered Retry), a replay skip (the
+ * entry already committed once, so its tail work already ran), and "no story
+ * loaded". The caller gates the post-turn tail on `applied` and messages the
+ * user only on `rolled_back`.
+ */
+export type ClassificationApplyOutcome =
+  | { applied: true }
+  | { applied: false; reason: 'rolled_back' | 'replay' | 'no_story' }
+
 // Story Store using Svelte 5 runes
 class StoryStore {
   // Current active story
@@ -2136,18 +2150,21 @@ class StoryStore {
    * This is Phase 4 of the processing pipeline per design doc.
    *
    * Returns whether the turn's world-state changes were durably persisted:
-   * `true` on a committed (or tracking-off best-effort) turn, `false` when the
-   * turn rolled back (CR-1) or was skipped. The caller uses this to gate
-   * downstream work (image gen, translation) that assumes the world advanced.
+   * `{ applied: true }` on a committed turn (tracking on or off — both are
+   * transactional since D-4), and
+   * `{ applied: false, reason }` when the turn rolled back (CR-1) or was
+   * skipped. The caller uses this to gate downstream work (image gen,
+   * translation, and the whole post-turn tail) that assumes the world advanced,
+   * and to tell the user which of the three endings happened (D-7).
    */
   async applyClassificationResult(
     result: ClassificationResult,
     entryId?: string,
     checkRecord: CheckRecord | null = null,
-  ): Promise<boolean> {
+  ): Promise<ClassificationApplyOutcome> {
     if (!this.currentStory) {
       log('applyClassificationResult: No story loaded, skipping')
-      return false
+      return { applied: false, reason: 'no_story' }
     }
 
     // CR-1 replay guard: a delta already recorded for this entry means the turn
@@ -2162,7 +2179,7 @@ class StoryStore {
         log('applyClassificationResult: delta already exists for entry, skipping (replay guard)', {
           entryId,
         })
-        return false
+        return { applied: false, reason: 'replay' }
       }
     }
 
@@ -3033,7 +3050,7 @@ class StoryStore {
     // to write with tracking off), the replay guard above keys on entryId/delta,
     // and the auto-snapshot only makes sense for a tracked turn.
     const committed = await this.runTurnTransaction(runWrites)
-    if (!committed) return false
+    if (!committed) return { applied: false, reason: 'rolled_back' }
     if (trackingEnabled && entryId) {
       // Auto-snapshot only after the turn durably committed.
       await this.maybeCreateAutoSnapshot(entryId)
@@ -3091,7 +3108,7 @@ class StoryStore {
       this.runIdentityHygieneBatch(newlyCreatedCharacterIds)
     }
 
-    return true
+    return { applied: true }
   }
 
   /**

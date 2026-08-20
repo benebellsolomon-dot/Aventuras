@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { ui } from '$lib/stores/ui.svelte'
-  import { story } from '$lib/stores/story.svelte'
+  import { story, type ClassificationApplyOutcome } from '$lib/stores/story.svelte'
   import { settings } from '$lib/stores/settings.svelte'
   import { aiService } from '$lib/services/ai'
   import { database } from '$lib/services/database'
@@ -579,6 +579,11 @@
       let fullReasoning = ''
       let narrationEntry: Awaited<ReturnType<typeof story.addEntry>> | null = null
       let resolvedCheck: CheckRecord | null = null
+      // D-7: null while classification has not run (aborted, skipped, or failed
+      // before it landed) — the post-turn tail then behaves exactly as before.
+      // Once it HAS run, an `applied: false` outcome means the world never
+      // advanced, and the tail below is skipped along with it.
+      let turnOutcome: ClassificationApplyOutcome | null = null
 
       const eventState: PipelineEventState = {
         fullResponse: () => fullResponse,
@@ -685,22 +690,39 @@
             messageId: narrationEntry.id,
             result: event.result,
           })
-          // CR-1: false ⇒ the turn's world-state changes rolled back (or were
-          // skipped). That gates the manual-image context captured below (so a
-          // later regenerate cannot be built from reverted entities) and the
+          // CR-1: applied === false ⇒ the turn's world-state changes rolled back
+          // (or were skipped). That gates the manual-image context captured below
+          // (so a later regenerate cannot be built from reverted entities) and the
           // world-state translation (which would persist state the world never
           // committed). The turn's own image generation is NOT gated here — it
           // runs in the pipeline's ImagePhase against the pre-turn snapshot,
           // which stays consistent with a rolled-back turn.
-          const worldStateApplied = await story.applyClassificationResult(
+          turnOutcome = await story.applyClassificationResult(
             event.result,
             narrationEntry.id,
             resolvedCheck,
           )
-          // The persisted delta now carries the checkLog; the transient card
-          // handoff is done.
+          const worldStateApplied = turnOutcome.applied
+          // Discarded on EVERY ending, rollback included: the card is a transient
+          // handoff rendered by StreamingEntry, and nothing else clears it once
+          // streaming ends. Keeping it on rollback would leave a stale roll
+          // stranded in the store and flash it into the NEXT turn's streaming
+          // panel — generateResponse only clears the slate a few awaits after
+          // startStreaming.
           ui.setPendingCheckRecord(null)
-          await story.updateEntryTimeEnd(narrationEntry.id)
+          if (worldStateApplied) await story.updateEntryTimeEnd(narrationEntry.id)
+
+          if (turnOutcome.applied === false && turnOutcome.reason === 'rolled_back') {
+            // D-7: the store already toasted the bare fact of the rollback; this
+            // replaces it with the actionable version, because what the user is
+            // left looking at is narration whose world changes never landed. The
+            // retry backup is still intact, so the existing retry button on the
+            // last message re-runs the whole turn.
+            ui.showToast(
+              'World changes could not be saved and were rolled back. The narration was kept — use the retry button on the last message to run this turn again.',
+              'error',
+            )
+          }
 
           if (worldStateApplied && currentStoryRef.settings?.imageGenerationMode !== 'none') {
             const presentCharacters = story.characters.filter(
@@ -820,20 +842,30 @@
         return
       }
 
-      if (
-        narrationEntry &&
-        settings.systemServicesSettings.tts.enabled &&
-        settings.systemServicesSettings.tts.autoPlay
-      ) {
-        emitTTSQueued(narrationEntry.id, fullResponse)
-      }
+      // D-7: skip the whole post-turn tail when classification ran and the world
+      // did NOT advance. On a rollback the narration describes growth/checks that
+      // never landed, so reading it aloud is wrong and the background tasks would
+      // durably persist chapters, lore and style summaries of an unbacked
+      // narrative. On the replay-skip path the tail already ran for this entry
+      // once, so re-running it would double up. `null` (classification never
+      // reached) keeps the pre-D-7 behaviour.
+      const skipPostTurnTail = turnOutcome !== null && !turnOutcome.applied
+      if (!skipPostTurnTail) {
+        if (
+          narrationEntry &&
+          settings.systemServicesSettings.tts.enabled &&
+          settings.systemServicesSettings.tts.autoPlay
+        ) {
+          emitTTSQueued(narrationEntry.id, fullResponse)
+        }
 
-      const coordinator = new BackgroundTaskCoordinator(buildBackgroundTaskDependencies())
-      const input = buildBackgroundTaskInput(countStyleReview, styleReviewSource)
-      if (!story.memoryConfig.autoSummarize) input.chapterCheck.tokensOutsideBuffer = 0
-      coordinator
-        .runBackgroundTasks(input)
-        .catch((err) => log('Background tasks failed (non-fatal)', err))
+        const coordinator = new BackgroundTaskCoordinator(buildBackgroundTaskDependencies())
+        const input = buildBackgroundTaskInput(countStyleReview, styleReviewSource)
+        if (!story.memoryConfig.autoSummarize) input.chapterCheck.tokensOutsideBuffer = 0
+        coordinator
+          .runBackgroundTasks(input)
+          .catch((err) => log('Background tasks failed (non-fatal)', err))
+      }
 
       // Android: notify user that generation completed while app is still backgrounded.
       // Awaited so the foreground service isn't torn down before the notification fires.
@@ -1054,6 +1086,15 @@
     inputValue = ''
     if (textareaRef) textareaRef.scrollTop = 0
 
+    // D-1: a previous turn's write batch can still be open here — Stop flips
+    // ui.isGenerating false before the pipeline loop drains, so submit is
+    // re-enabled while that turn is still flushing. Waiting it out (bounded:
+    // the batch holds no I/O, so ms-to-seconds) keeps this turn's writes out of
+    // the old batch and makes the double-begin error ("Previous turn is still
+    // saving") unreachable rather than merely translated. Placed after the input
+    // is cleared so the await does not widen the double-submit window.
+    await database.whenBatchIdle()
+
     const embeddedImages = await database.getEmbeddedImagesForStory(story.currentStory.id)
     ui.createRetryBackup(
       story.currentStory.id,
@@ -1111,6 +1152,16 @@
     }
     ui.setLastLorebookRetrieval(null)
     ui.setLastRetrievalResult(null)
+
+    // D-1: the stopped turn's batch can still be open — `isGenerating` was
+    // flipped above, but the pipeline loop only breaks at its next event, and a
+    // turn that reached applyClassificationResult is mid-flush. The cleanup
+    // below (delete entries, delete entities created after the backup, restore
+    // character/time-tracker snapshots) writes through the same proxy, so
+    // without this wait those deletes buffer into the dying turn's transaction
+    // — dropped on its abort, or committed as part of a turn they were meant to
+    // undo. The batch holds no I/O, so the wait is ms-to-seconds.
+    await database.whenBatchIdle()
 
     const result = await retryService.handleStopGeneration(
       backup,
@@ -1184,6 +1235,12 @@
     ui.clearActionChoices(storyId)
     ui.setLastRetrievalResult(null)
     lastImageGenContext = null
+
+    // D-1: the retry button un-hides the moment `isGenerating` clears, which
+    // Stop does before the stopped turn's batch drains. Same reasoning as
+    // handleStopGeneration — this path runs the identical cleanup writes and
+    // then starts a fresh turn, so both halves have to wait the batch out.
+    await database.whenBatchIdle()
 
     const result = await retryService.handleRetryLastMessage(
       backup,
