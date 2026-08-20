@@ -12,7 +12,9 @@ import type { PresetPack, FullPack } from './types'
  * overwritten on a deliberate version bump. Log the reason on each bump:
  *   1 — 2026-08-19: classifier now lists present characters (presentCharacterNames).
  */
-const SERVICE_TEMPLATE_SYNC_VERSION = 1
+// 2 — 2026-08-19: risk-assess DC guidance biased to easy + booru scene-prompt
+//     writer template reach existing custom-pack stories (e.g. wizard-generated).
+const SERVICE_TEMPLATE_SYNC_VERSION = 2
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

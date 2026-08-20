@@ -19,7 +19,9 @@ export const riskAssessResultSchema = z.object({
     .min(DC_MIN)
     .max(DC_MAX)
     .optional()
-    .describe('Difficulty class 8-24 when risky'),
+    .describe(
+      'Difficulty class when risky; default LOW (8-11 easy, 14 moderate), reserve 17+ for dangerous or expert feats. Set by fictional difficulty, not to force failure.',
+    ),
   essenceCost: z
     .number()
     .int()

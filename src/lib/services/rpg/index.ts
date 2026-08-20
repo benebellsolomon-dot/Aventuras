@@ -51,7 +51,13 @@ export {
   sheetOrDefault,
   writeRpgSheet,
 } from './metadata'
-export { applyLevelGrants, crossingKey, spendPoint, type SpendTarget } from './leveling'
+export {
+  applyLevelGrants,
+  crossingKey,
+  spendPoint,
+  withStartingGrant,
+  type SpendTarget,
+} from './leveling'
 export { detectRpgDrift } from './drift'
 export { buildTargetCheckModifiers } from './modifiers'
 export { beLogStyle, buildTurnLog, type BeLogStyle, type TurnLogRow } from './turnlog'

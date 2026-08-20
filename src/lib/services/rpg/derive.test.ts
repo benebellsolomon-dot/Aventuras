@@ -186,13 +186,16 @@ describe('checkRecordTargets (Phase 5 D2)', () => {
 })
 
 describe('defaultRpgSheet', () => {
-  it('level 1, all attributes 10, no ranks, essence full', () => {
+  it('level 1, all attributes 10, no ranks, essence full, creation points granted', () => {
     const sheet = defaultRpgSheet()
     expect(sheet.level).toBe(1)
     expect(Object.values(sheet.attributes)).toEqual([10, 10, 10, 10, 10, 10])
     expect(sheet.skills).toEqual({})
     expect(sheet.essence).toEqual({ current: 8, max: 8 })
-    expect(sheet.unspentPoints).toEqual({ attribute: 0, skill: 0 })
+    // A fresh sheet starts with the creation grant applied so the player can
+    // specialize immediately via the Sheet panel.
+    expect(sheet.unspentPoints).toEqual({ attribute: 8, skill: 6 })
+    expect(sheet.startingGrant).toBe(true)
     expect(sheet.awardedMilestones).toEqual([])
   })
 })

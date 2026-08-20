@@ -50,6 +50,12 @@ export interface RpgSheet {
   awardedMilestones: string[]
   /** One-turn continuity carrier from RPG drift detection; cleared next apply. */
   driftNote?: { note: string }
+  /**
+   * True once the one-time creation point grant (STARTING_POINTS) has been added.
+   * Absent on sheets that predate the grant — `withStartingGrant` tops those up
+   * exactly once and sets this, so the grant never double-applies.
+   */
+  startingGrant?: boolean
 }
 
 export interface CheckModifier {

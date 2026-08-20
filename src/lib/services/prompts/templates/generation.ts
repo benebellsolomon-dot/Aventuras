@@ -74,6 +74,7 @@ Characters present: {{ npcsPresent }}
 Decide: is this action risky enough to deserve a skill check?
 - risky=false for: talking, observing, trivial movement, anything with no meaningful failure mode.
 - risky=true needs: a governing skill and a DC. DC rubric: 8 trivial-but-fumblable · 11 easy · 14 moderate · 17 hard · 20 very hard · 24 near-impossible.
+- Default to the LOW end. Most actions worth a roll are trivial-to-easy (8-11); reserve 14+ for genuinely demanding tasks and 17+ for dangerous or expert-level feats. Set the DC from how hard the task is in the fiction, NOT to make the player fail — a character acting within their competence should usually succeed. Consider the Player sheet above: an action squarely in a strong skill deserves a forgiving DC.
 - If the action channels the player's catalytic power (growth influence, transformation magic), set essenceCost 1-3 by potency.
 - When the action targets a specific character, set targetCharacter to her exact name.`,
 }

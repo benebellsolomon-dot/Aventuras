@@ -11,6 +11,7 @@ import {
   ESSENCE_PER_LEVEL,
   HOURS_PER_PERIOD,
   SKILL_BY_ID,
+  STARTING_POINTS,
 } from './constants'
 import type { AttributeId, RpgSheet, SkillId } from './types'
 
@@ -107,7 +108,10 @@ export function defaultRpgSheet(): RpgSheet {
   for (const id of ATTRIBUTE_IDS) attributes[id] = 10
   return {
     level: 1,
-    unspentPoints: { attribute: 0, skill: 0 },
+    // Creation grant already applied (marker set) so a brand-new protagonist can
+    // specialize immediately via the Sheet panel instead of starting at flat 10s.
+    unspentPoints: { ...STARTING_POINTS },
+    startingGrant: true,
     attributes,
     skills: {},
     essence: { current: essenceMax(1), max: essenceMax(1) },

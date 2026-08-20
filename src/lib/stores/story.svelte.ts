@@ -73,6 +73,7 @@ import {
   periodIndex,
   readRpgSheet,
   sheetOrDefault,
+  withStartingGrant,
   writeRpgSheet,
   type CheckRecord,
 } from '$lib/services/rpg'
@@ -1857,7 +1858,7 @@ class StoryStore {
 
     const entry = await this.addLorebookEntry(buildSpellEntryData(gen))
     try {
-      const sheet = readRpgSheet(protagonist.metadata) ?? defaultRpgSheet()
+      const sheet = sheetOrDefault(protagonist.metadata)
       if (!sheet.knownSpells.includes(entry.id)) {
         const nextSheet = { ...sheet, knownSpells: [...sheet.knownSpells, entry.id] }
         await this.updateCharacter(protagonist.id, {
@@ -3585,8 +3586,11 @@ class StoryStore {
     if (!protagonist) return []
 
     const storedSheet = readRpgSheet(protagonist.metadata)
-    let sheet = storedSheet ?? defaultRpgSheet()
-    const sheetBeforeJson = JSON.stringify(sheet)
+    // Baseline for the change check is the STORED sheet (pre-grant), so applying
+    // the one-time creation grant to a sheet that predates it counts as a change
+    // and persists — otherwise the grant would re-derive on every read forever.
+    const sheetBeforeJson = storedSheet ? JSON.stringify(storedSheet) : null
+    let sheet = withStartingGrant(storedSheet ?? defaultRpgSheet())
 
     // 1. Essence spend from the resolved check (never below zero; an
     //    insufficient-essence record spent nothing by construction).

@@ -62,6 +62,15 @@ export const HOURS_PER_PERIOD = 6
 
 // ---- Leveling ----
 export const POINTS_PER_LEVEL = { attribute: 1, skill: 2 } as const
+/**
+ * Points granted ONCE at character creation so the protagonist starts specialized
+ * instead of at the flat 10/10/… baseline (spent via the Sheet panel). Sized to a
+ * D5 level-1 build — enough for a ~+3 primary attribute plus a couple of signature
+ * skills, so the DC rubric (11 easy · 14 moderate · 17 hard) is fair rather than a
+ * coin-flip at +0. Granted idempotently via the sheet's `startingGrant` marker, so
+ * existing characters that predate this receive it exactly once.
+ */
+export const STARTING_POINTS = { attribute: 8, skill: 6 } as const
 /** Attribute scores are point-spent up to this cap (D&D-familiar ceiling). */
 export const ATTRIBUTE_CAP = 20
 export const SKILL_RANK_CAP = 10

@@ -35,7 +35,9 @@ export const actionChoiceSchema = z.object({
     .min(DC_MIN)
     .max(DC_MAX)
     .optional()
-    .describe('Difficulty class 8-24 for a risky choice'),
+    .describe(
+      'Difficulty class for a risky choice; default LOW (8-11 easy, 14 moderate), reserve 17+ for dangerous or expert feats. Set by fictional difficulty, not to force failure.',
+    ),
   /** The girl this action targets — enables bond/quirk check modifiers. */
   targetCharacter: z
     .string()

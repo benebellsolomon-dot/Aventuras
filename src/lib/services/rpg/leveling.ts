@@ -7,9 +7,30 @@
  * sheet, so a branch replay or re-cross NEVER double-grants.
  */
 
-import { ATTRIBUTE_CAP, POINTS_PER_LEVEL, SKILL_RANK_CAP } from './constants'
+import { ATTRIBUTE_CAP, POINTS_PER_LEVEL, SKILL_RANK_CAP, STARTING_POINTS } from './constants'
 import { essenceMax } from './derive'
 import type { AttributeId, RpgSheet, SkillId } from './types'
+
+/**
+ * Apply the one-time creation point grant if the sheet has not received it yet.
+ * Purely ADDITIVE and idempotent: it only adds STARTING_POINTS to the unspent
+ * pool and sets the `startingGrant` marker — it never touches spent stats, so it
+ * is safe to run on a sheet at any level (an existing character that predates the
+ * grant simply gains their overdue creation points). The marker guarantees it can
+ * never double-apply. A fresh `defaultRpgSheet` already carries the marker, so
+ * this is a no-op there.
+ */
+export function withStartingGrant(sheet: RpgSheet): RpgSheet {
+  if (sheet.startingGrant) return sheet
+  return {
+    ...sheet,
+    startingGrant: true,
+    unspentPoints: {
+      attribute: sheet.unspentPoints.attribute + STARTING_POINTS.attribute,
+      skill: sheet.unspentPoints.skill + STARTING_POINTS.skill,
+    },
+  }
+}
 
 /** Stable idempotency key for one milestone crossing. */
 export const crossingKey = (characterId: string, massKg: number): string =>

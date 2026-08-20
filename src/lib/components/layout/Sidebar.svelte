@@ -18,7 +18,7 @@
   import CharacterPanel from '$lib/components/world/CharacterPanel.svelte'
   import SheetPanel from '$lib/components/world/SheetPanel.svelte'
   import HaremPanel from '$lib/components/world/HaremPanel.svelte'
-  import { readRpgSheet } from '$lib/services/rpg'
+  import { sheetOrDefault } from '$lib/services/rpg'
 
   import LocationPanel from '$lib/components/world/LocationPanel.svelte'
   import InventoryPanel from '$lib/components/world/InventoryPanel.svelte'
@@ -65,8 +65,8 @@
     if (!isBeMode) return false
     const protagonist = story.characters.find((c) => c.relationship === 'self')
     if (!protagonist) return false
-    const sheet = readRpgSheet(protagonist.metadata)
-    return !!sheet && sheet.unspentPoints.attribute + sheet.unspentPoints.skill > 0
+    const sheet = sheetOrDefault(protagonist.metadata)
+    return sheet.unspentPoints.attribute + sheet.unspentPoints.skill > 0
   })
 
   function handleSwipeLeft() {

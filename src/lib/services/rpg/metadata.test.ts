@@ -2,13 +2,34 @@ import { describe, expect, it } from 'vitest'
 
 import { defaultBodyState, writeBodyState } from '$lib/services/be'
 import { defaultRpgSheet } from './derive'
-import { RPG_SHEET_KEY, readRpgSheet, writeRpgSheet } from './metadata'
+import { RPG_SHEET_KEY, readRpgSheet, sheetOrDefault, writeRpgSheet } from './metadata'
 
 describe('rpgSheet metadata round-trip', () => {
   it('write → read identity', () => {
     const sheet = { ...defaultRpgSheet(), level: 3, skills: { alchemy: 2 } }
     const metadata = writeRpgSheet(null, sheet)
     expect(readRpgSheet(metadata)).toEqual(sheet)
+  })
+
+  it('sheetOrDefault grants creation points to a stored sheet that predates them', () => {
+    // A legacy sheet: no startingGrant marker, all-baseline, zero points.
+    const legacy = {
+      ...defaultRpgSheet(),
+      startingGrant: undefined,
+      unspentPoints: { attribute: 0, skill: 0 },
+    }
+    const metadata = writeRpgSheet(null, legacy)
+    // Raw read is untouched (round-trip fidelity); the grant only rides sheetOrDefault.
+    expect(readRpgSheet(metadata)?.unspentPoints).toEqual({ attribute: 0, skill: 0 })
+    const resolved = sheetOrDefault(metadata)
+    expect(resolved.unspentPoints).toEqual({ attribute: 8, skill: 6 })
+    expect(resolved.startingGrant).toBe(true)
+  })
+
+  it('sheetOrDefault does not re-grant a sheet that already has the marker', () => {
+    const already = { ...defaultRpgSheet(), unspentPoints: { attribute: 2, skill: 1 } }
+    const resolved = sheetOrDefault(writeRpgSheet(null, already))
+    expect(resolved.unspentPoints).toEqual({ attribute: 2, skill: 1 })
   })
 
   it('deep-copy isolation: mutating the source sheet after write cannot reach storage', () => {

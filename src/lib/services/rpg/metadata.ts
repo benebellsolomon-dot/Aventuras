@@ -7,6 +7,7 @@
 
 import { z } from 'zod'
 import { defaultRpgSheet } from './derive'
+import { withStartingGrant } from './leveling'
 import type { RpgSheet } from './types'
 
 export const RPG_SHEET_KEY = 'rpgSheet'
@@ -36,6 +37,7 @@ export const rpgSheetSchema = z
     knownSpells: z.array(z.string()).default([]),
     awardedMilestones: z.array(z.string()).default([]),
     driftNote: z.object({ note: z.string() }).passthrough().optional(),
+    startingGrant: z.boolean().optional(),
   })
   .passthrough()
 
@@ -45,7 +47,11 @@ export const rpgSheetSchema = z
  * the check pipeline, prompt builder, and UI can never diverge on baseline.
  */
 export function sheetOrDefault(metadata: Record<string, unknown> | null): RpgSheet {
-  return readRpgSheet(metadata) ?? defaultRpgSheet()
+  // withStartingGrant tops up the one-time creation points on any sheet that
+  // predates them (idempotent via the marker), so every reader — check
+  // resolution, the Sheet panel, odds display, the prompt builder — sees the
+  // grant consistently even before a turn persists it.
+  return withStartingGrant(readRpgSheet(metadata) ?? defaultRpgSheet())
 }
 
 /** Read the sheet out of a character's metadata; null when absent/unparseable. */
