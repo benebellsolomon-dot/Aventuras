@@ -664,8 +664,12 @@
             result: event.result,
           })
           // CR-1: false ⇒ the turn's world-state changes rolled back (or were
-          // skipped). Skip image-gen and translation, which would otherwise run
-          // against reverted entities and persist state the world never committed.
+          // skipped). That gates the manual-image context captured below (so a
+          // later regenerate cannot be built from reverted entities) and the
+          // world-state translation (which would persist state the world never
+          // committed). The turn's own image generation is NOT gated here — it
+          // runs in the pipeline's ImagePhase against the pre-turn snapshot,
+          // which stays consistent with a rolled-back turn.
           const worldStateApplied = await story.applyClassificationResult(
             event.result,
             narrationEntry.id,

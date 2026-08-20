@@ -68,10 +68,12 @@ class BackupService {
       }
     } catch (error) {
       console.warn('[Backup] VACUUM INTO failed, falling back to direct file copy:', error)
-      // Fallback: try reading the DB file directly from app data dir
+      // Fallback: read the DB file directly. `sqlite:aventura.db` resolves under
+      // the app CONFIG dir (tauri-plugin-sql), which differs from the app DATA
+      // dir on Linux — appDataDir here would copy a non-existent/stale file.
       try {
-        const appDataDir = await path.appDataDir()
-        const dbPath = await path.join(appDataDir, 'aventura.db')
+        const appConfigDir = await path.appConfigDir()
+        const dbPath = await path.join(appConfigDir, 'aventura.db')
         if (await exists(dbPath)) {
           dbBytes = await readFile(dbPath)
         }
@@ -224,12 +226,14 @@ class BackupService {
     console.log('[Restore] Closing database connection...')
     await database.close()
 
-    // 5. Overwrite the database file
-    const appDataDir = await path.appDataDir()
-    const dbPath = await path.join(appDataDir, 'aventura.db')
+    // 5. Overwrite the database file. `sqlite:aventura.db` resolves under the app
+    //    CONFIG dir (tauri-plugin-sql), which differs from the app DATA dir on
+    //    Linux — restoring into appDataDir would leave the live DB untouched.
+    const appConfigDir = await path.appConfigDir()
+    const dbPath = await path.join(appConfigDir, 'aventura.db')
 
     // Write a safety copy of the current DB first
-    const safetyPath = await path.join(appDataDir, 'aventura-pre-restore.db')
+    const safetyPath = await path.join(appConfigDir, 'aventura-pre-restore.db')
     try {
       if (await exists(dbPath)) {
         const currentDb = await readFile(dbPath)
@@ -247,7 +251,7 @@ class BackupService {
     // Also clean up WAL/SHM files that could conflict with the restored DB
     for (const suffix of ['-wal', '-shm']) {
       try {
-        const walPath = await path.join(appDataDir, `aventura.db${suffix}`)
+        const walPath = await path.join(appConfigDir, `aventura.db${suffix}`)
         if (await exists(walPath)) {
           await remove(walPath)
           console.log(`[Restore] Removed ${suffix} file`)

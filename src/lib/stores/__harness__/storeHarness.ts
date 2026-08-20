@@ -48,6 +48,12 @@ export function makeDbRecorder(): DbRecorder {
     {
       get(_t, prop: string) {
         if (prop === 'then') return undefined // not a thenable
+        // Two batch-state readers need real values, not the generic
+        // resolves-undefined stub: `isBatchOpen()` is SYNC and a Promise would be
+        // truthy at every call site, and `waitForBatchClose()` is awaited before a
+        // re-read, so it must settle. Neither is recorded — they are reads.
+        if (prop === 'isBatchOpen') return () => false
+        if (prop === 'waitForBatchClose') return () => Promise.resolve()
         // Every method (including the CR-1 batch API — beginWriteBatch,
         // commitWriteBatch, abortWriteBatch — and the entity writes) is recorded
         // and resolves undefined, unless failOn(method) is set for it. The store
@@ -83,6 +89,10 @@ export function makeSettings(overrides: Record<string, boolean> = {}) {
       lightweightBranches: false,
       ...overrides,
     },
+    // No preset assigned ⇒ creation-time identity hygiene (fired fire-and-forget
+    // for every new character) short-circuits to a clean no-op instead of
+    // reaching a missing settings surface and rejecting.
+    getServicePresetId: () => null,
   }
 }
 

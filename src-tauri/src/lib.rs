@@ -270,10 +270,16 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            // MUST match how `tauri-plugin-sql` resolves "sqlite:aventura.db":
+            // its wrapper.rs maps the connection string against `app_config_dir`.
+            // The two dirs are the same path on macOS and Windows but differ on
+            // Linux (~/.config vs ~/.local/share), where using app_data_dir would
+            // point the checksum patch and the turn-flush pool at a different
+            // (missing) file than the one the app actually uses.
             let db_path = app
                 .path()
-                .app_data_dir()
-                .expect("failed to get app data dir")
+                .app_config_dir()
+                .expect("failed to get app config dir")
                 .join("aventura.db");
 
             if db_path.try_exists().expect("failed to check db path") {

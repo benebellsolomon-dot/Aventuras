@@ -1028,10 +1028,14 @@ class StoryStore {
     log('Updating background image...', { hasData: !!imageData })
     this.currentBgImage = imageData
 
-    // Keep the currentStory object in sync to prevent any potential inconsistency
-    if (this.currentStory) {
-      this.currentStory.currentBgImage = imageData
-    }
+    // Keep the currentStory object in sync to prevent any potential inconsistency.
+    // The in-place write is deliberate: `saveBackground` is a direct write that
+    // commits independently of any open turn batch, so the new value must NOT be
+    // captured (and later reverted) by a turn's rollback snapshot — reassigning
+    // the whole object would leave a rolled-back turn showing a stale image that
+    // disagrees with the DB, and would wake every $effect keyed on currentStory.
+    // $state's deep proxy keeps this targeted mutation reactive.
+    this.currentStory.currentBgImage = imageData
 
     await database.saveBackground(
       this.currentStory.id,
@@ -1047,6 +1051,17 @@ class StoryStore {
    * Used when background processes update translations.
    */
   async refreshWorldState(): Promise<void> {
+    if (!this.currentStory) return
+
+    // Never read-and-reassign the store arrays mid-turn (CR-1): reads bypass the
+    // write buffer, so a refresh while a turn's batch is open would replace them
+    // with PRE-batch rows and drop the turn's uncommitted changes. Defer rather
+    // than skip — this is the only path that surfaces background translations
+    // into memory, so dropping it would hide them until a story reload. Waiting
+    // for commit/abort yields post-turn truth.
+    // Loop: a new batch can open between a waiter resolving and our reads.
+    while (database.isBatchOpen()) await database.waitForBatchClose()
+    // The user may have closed or switched stories while we waited.
     if (!this.currentStory) return
 
     const storyId = this.currentStory.id
@@ -2954,9 +2969,19 @@ class StoryStore {
         storyBeats: this.storyBeats,
         entries: this.entries,
       }
-      this.transactionalTurn = true
+      // Begin OUTSIDE the try (and before the flag): if a batch is already open —
+      // a second turn entering while this one runs — the throw must propagate
+      // untouched, because the catch below would abort the OTHER turn's batch and
+      // revert this turn's snapshot against writes it never made. Retranslate it
+      // first: the raw message surfaces verbatim in a story system entry.
       try {
         database.beginWriteBatch()
+      } catch (error) {
+        console.error('[StoryStore] beginWriteBatch refused — a turn is still saving:', error)
+        throw new Error('Previous turn is still saving — wait a moment and retry', { cause: error })
+      }
+      this.transactionalTurn = true
+      try {
         await runWrites()
         await database.commitWriteBatch()
       } catch (error) {
@@ -3019,7 +3044,11 @@ class StoryStore {
     // never adds latency to the turn or narration. Runs only for brand-new
     // characters (never updates); each call swallows its own errors.
     for (const characterId of newlyCreatedCharacterIds) {
-      void this.runIdentityHygiene(characterId)
+      // Contractually never-throws, but an unhandled rejection here would be
+      // invisible — keep a guard so a contract break shows up as a warning.
+      void this.runIdentityHygiene(characterId).catch((error) =>
+        console.warn('[StoryStore] Identity hygiene failed:', error),
+      )
     }
 
     return true
@@ -3042,8 +3071,42 @@ class StoryStore {
     const character = resolve()
     if (!character) return
     await applyIdentityHygiene(character, resolve, (id, updates) =>
-      this.updateCharacter(id, updates),
+      this.persistIdentityHygiene(id, updates),
     )
+  }
+
+  /**
+   * Persist one identity-hygiene patch: immutable in-memory update plus a DIRECT
+   * database write. Deliberately NOT `this.updateCharacter` — hygiene fires after
+   * its own turn commits, so by the time the LLM extraction returns the NEXT
+   * turn's write batch may be open, and going through the buffered path would
+   * sweep this write into that unrelated transaction (CR-1 invariant).
+   *
+   * Two guards replace the COW step the buffered path used to provide. A missing
+   * id means the store moved on (story switched mid-extraction) and the caller's
+   * snapshot is stale — throw rather than write a phantom row;
+   * `applyIdentityHygiene` catches. A character that a COW would have to clone
+   * (same test as `cowCharacter`: it belongs to a different branch than the one
+   * now current) is skipped rather than cloned — the clone routes through the
+   * buffered write path, and hygiene is one-shot best-effort, so silently
+   * updating a parent branch's row is the only outcome we must avoid.
+   */
+  private async persistIdentityHygiene(id: string, updates: Partial<Character>): Promise<void> {
+    const existing = this.characters.find((c) => c.id === id)
+    if (!existing) throw new Error(`Character not found: ${id}`)
+
+    const branchId = this.currentStory?.currentBranchId
+    if (
+      branchId &&
+      existing.branchId !== branchId &&
+      settings.experimentalFeatures.lightweightBranches
+    ) {
+      log('Identity hygiene skipped — character belongs to another branch', id, existing.branchId)
+      return
+    }
+
+    this.characters = this.characters.map((c) => (c.id === id ? { ...c, ...updates } : c))
+    await database.updateCharacterDirect(id, updates)
   }
 
   /**
@@ -3452,10 +3515,11 @@ class StoryStore {
         createdCharacterIds,
       )
 
-      // wrapUpdate SWALLOWS the failure (it only counts toward the abort
-      // threshold), so the yield below cannot infer success from the await
-      // returning — it reads this flag, set last inside the closure exactly
-      // like the pendingLog push.
+      // wrapUpdate's failure handling is mode-dependent: in a transactional turn
+      // it RETHROWS (the turn rolls back), but on the legacy path it SWALLOWS the
+      // failure (counting it toward the 3-strike abort). In that second mode the
+      // yield below cannot infer success from the await returning — it reads this
+      // flag, set last inside the closure exactly like the pendingLog push.
       let bodyWriteLanded = false
       await this.wrapUpdate('BE body state', character.name, async () => {
         const { entity: ownedChar, wasCowed } = await this.cowCharacter(character)

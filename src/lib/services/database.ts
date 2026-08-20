@@ -136,10 +136,18 @@ class DatabaseService {
    * (`select`) are never buffered. Only one batch may be open at a time.
    *
    * INVARIANT: only the turn's own writes may be buffered. Writes that can be
-   * in-flight concurrently with a turn (background image/sprite/portrait saves)
-   * MUST go through `executeDirect` so they are never captured by an open batch.
+   * in-flight concurrently with a turn (background image/sprite/portrait/
+   * background-scene saves, deferred identity hygiene) and every transaction
+   * control statement (`withTransaction`'s BEGIN/COMMIT/ROLLBACK) MUST go
+   * through `executeDirect` so they are never captured by an open batch.
    */
   private writeBatch: BufferedWrite[] | null = null
+  /**
+   * Resolvers parked by `waitForBatchClose` while a batch is open. Both
+   * `commitWriteBatch` and `abortWriteBatch` drain them once the batch is
+   * cleared, so a deferred reader never waits on a batch that already ended.
+   */
+  private batchCloseWaiters: (() => void)[] = []
 
   async init(): Promise<void> {
     if (this.db) return
@@ -209,21 +217,65 @@ class DatabaseService {
    * Flush the buffered writes in one real transaction (Rust `exec_batch_tx`:
    * BEGIN → all statements → COMMIT on a dedicated single connection). Throws if
    * the transaction fails; SQLite has then rolled every statement back, so the
-   * caller reverts its in-memory snapshot. A no-op if nothing was buffered.
+   * caller reverts its in-memory snapshot. Flushing nothing is a no-op, but
+   * committing with NO batch open throws: that means the batch was aborted (or
+   * never begun) underneath the caller, and silently reporting success there
+   * would let a torn turn look committed.
    */
   async commitWriteBatch(): Promise<void> {
     const batch = this.writeBatch
+    if (!batch) {
+      // Throwing here must not strand a waiter parked against a batch that has
+      // already gone away underneath us.
+      this.releaseBatchCloseWaiters()
+      throw new Error('commitWriteBatch called with no open write batch')
+    }
     this.writeBatch = null
-    if (!batch || batch.length === 0) return
-    await invoke('exec_batch_tx', { statements: batch })
+    try {
+      if (batch.length === 0) return
+      await invoke('exec_batch_tx', { statements: batch })
+    } finally {
+      // Released after the flush settles (committed, or rolled back by SQLite on
+      // failure) so a deferred reader sees post-turn truth, and after
+      // `writeBatch` is cleared so it sees the batch closed.
+      this.releaseBatchCloseWaiters()
+    }
   }
 
   /**
    * Discard an open write batch without flushing. Nothing was executed, so there
    * is nothing to undo in the DB — the caller reverts its in-memory snapshot.
+   * Idempotent: a no-op when no batch is open, so an error path can abort
+   * unconditionally.
    */
   abortWriteBatch(): void {
     this.writeBatch = null
+    this.releaseBatchCloseWaiters()
+  }
+
+  /** True while a write batch is open (writes buffered, reads live). */
+  isBatchOpen(): boolean {
+    return this.writeBatch !== null
+  }
+
+  /**
+   * Resolve once no write batch is open — immediately when there is none.
+   * For work that must re-read the DB into memory but would read PRE-batch rows
+   * mid-turn (`refreshWorldState`): deferring until the turn commits or aborts
+   * yields post-turn truth instead of dropping the refresh entirely.
+   */
+  waitForBatchClose(): Promise<void> {
+    if (!this.writeBatch) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      this.batchCloseWaiters.push(resolve)
+    })
+  }
+
+  /** Drain the parked `waitForBatchClose` resolvers. Safe to call with none. */
+  private releaseBatchCloseWaiters(): void {
+    const waiters = this.batchCloseWaiters
+    this.batchCloseWaiters = []
+    for (const resolve of waiters) resolve()
   }
 
   /** The unwrapped handle, opening the DB if needed. Bypasses write batching. */
@@ -247,6 +299,14 @@ class DatabaseService {
   /**
    * Close the database connection. After calling this, the next
    * getDb() / init() call will re-open the connection.
+   *
+   * An open write batch deliberately SURVIVES a close. The batch is not tied to
+   * this plugin connection at all — it is a plain BufferedWrite[] that
+   * `commitWriteBatch` flushes through the separate Rust `exec_batch_tx` pool,
+   * which opens its own connection. Aborting it here would let the rest of the
+   * turn's writes run unbuffered against the reopened handle and then make
+   * `commitWriteBatch` throw, tearing the turn: half of it durably persisted
+   * while the store reports a full in-memory rollback.
    */
   async close(): Promise<void> {
     if (this.db) {
@@ -267,16 +327,21 @@ class DatabaseService {
   /**
    * Run a callback inside a BEGIN/COMMIT transaction.
    * Automatically rolls back on error.
+   *
+   * The control statements go through `executeDirect` (CR-1): a caller can run
+   * this while a turn batch is open (e.g. the runtime-variable editor deleting
+   * during a turn), and a buffered BEGIN would be replayed inside the turn's own
+   * Rust transaction — a nested BEGIN there fails and rolls the whole turn back.
+   * The callback's own statements still use whatever handle it calls.
    */
   async withTransaction<T>(fn: () => Promise<T>): Promise<T> {
-    const db = await this.getDb()
-    await db.execute('BEGIN')
+    await this.executeDirect('BEGIN')
     try {
       const result = await fn()
-      await db.execute('COMMIT')
+      await this.executeDirect('COMMIT')
       return result
     } catch (error) {
-      await db.execute('ROLLBACK')
+      await this.executeDirect('ROLLBACK')
       throw error
     }
   }
@@ -990,8 +1055,15 @@ class DatabaseService {
     )
   }
 
-  async updateCharacter(id: string, updates: Partial<Character>): Promise<void> {
-    const db = await this.getDb()
+  /**
+   * Build the UPDATE statement for a character patch, or `null` when the patch
+   * touches no column. Shared by `updateCharacter` (batch-aware) and
+   * `updateCharacterDirect` (raw handle) so both serialize columns identically.
+   */
+  private buildCharacterUpdate(
+    id: string,
+    updates: Partial<Character>,
+  ): { sql: string; values: any[] } | null {
     const setClauses: string[] = []
     const values: any[] = []
 
@@ -1083,9 +1155,29 @@ class DatabaseService {
       values.push(updates.translationLanguage || null)
     }
 
-    if (setClauses.length === 0) return
+    if (setClauses.length === 0) return null
     values.push(id)
-    await db.execute(`UPDATE characters SET ${setClauses.join(', ')} WHERE id = ?`, values)
+    return { sql: `UPDATE characters SET ${setClauses.join(', ')} WHERE id = ?`, values }
+  }
+
+  async updateCharacter(id: string, updates: Partial<Character>): Promise<void> {
+    const statement = this.buildCharacterUpdate(id, updates)
+    if (!statement) return
+    const db = await this.getDb()
+    await db.execute(statement.sql, statement.values)
+  }
+
+  /**
+   * Update a character on the raw handle, bypassing turn write-batching (CR-1).
+   * For deferred background work that can land mid-turn — creation-time identity
+   * hygiene fires after its own turn commits, by which point the NEXT turn's
+   * batch may be open, and sweeping this write into that transaction would
+   * commit it with (or roll it back alongside) an unrelated turn.
+   */
+  async updateCharacterDirect(id: string, updates: Partial<Character>): Promise<void> {
+    const statement = this.buildCharacterUpdate(id, updates)
+    if (!statement) return
+    await this.executeDirect(statement.sql, statement.values)
   }
 
   async deleteCharacter(id: string): Promise<void> {
@@ -2607,6 +2699,10 @@ class DatabaseService {
 
   /**
    * Save a background image for a story/branch/checkpoint.
+   *
+   * A background-scene generation is a background image write that can land
+   * mid-turn, so it uses `executeDirect` to bypass turn write-batching (CR-1) —
+   * same reasoning as `updateCharacterPortrait`.
    */
   async saveBackground(
     storyId: string,
@@ -2614,17 +2710,15 @@ class DatabaseService {
     checkpointId: string | null,
     imageData: string | null,
   ): Promise<void> {
-    const db = await this.getDb()
-
     if (!imageData) {
       // If clearing, delete entries for this specific context
       if (checkpointId) {
-        await db.execute('DELETE FROM background_images WHERE story_id = ? AND checkpoint_id = ?', [
-          storyId,
-          checkpointId,
-        ])
+        await this.executeDirect(
+          'DELETE FROM background_images WHERE story_id = ? AND checkpoint_id = ?',
+          [storyId, checkpointId],
+        )
       } else {
-        await db.execute(
+        await this.executeDirect(
           'DELETE FROM background_images WHERE story_id = ? AND branch_id IS ? AND checkpoint_id IS NULL',
           [storyId, branchId],
         )
@@ -2638,7 +2732,7 @@ class DatabaseService {
 
     if (checkpointId) {
       // Checkpoints always get a new entry or replace existing for that checkpoint
-      await db.execute(
+      await this.executeDirect(
         'INSERT OR REPLACE INTO background_images (id, story_id, branch_id, checkpoint_id, image_data, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         [id, storyId, branchId, checkpointId, imageData, now],
       )
@@ -2646,12 +2740,12 @@ class DatabaseService {
       // For branches (including main), we update the single "current" record for that branch
       const existing = await this.getBackgroundForBranch(storyId, branchId)
       if (existing) {
-        await db.execute(
+        await this.executeDirect(
           'UPDATE background_images SET image_data = ?, created_at = ? WHERE story_id = ? AND branch_id IS ? AND checkpoint_id IS NULL',
           [imageData, now, storyId, branchId],
         )
       } else {
-        await db.execute(
+        await this.executeDirect(
           'INSERT INTO background_images (id, story_id, branch_id, checkpoint_id, image_data, created_at) VALUES (?, ?, ?, ?, ?, ?)',
           [id, storyId, branchId, null, imageData, now],
         )

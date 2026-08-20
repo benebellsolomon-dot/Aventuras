@@ -25,6 +25,10 @@ use tokio::sync::OnceCell;
 /// `tauri-plugin-sql` when the frontend first loads the DB, which can be after
 /// this Rust setup runs (first launch). By the time a turn is played the DB
 /// exists, so `get()` opens the pool then and caches it.
+///
+/// `db_path` is resolved in `lib.rs` from `app_config_dir` — the same directory
+/// the plugin maps `sqlite:aventura.db` against — so this pool always opens the
+/// file the app is actually using (they diverge on Linux).
 pub struct TurnTxPool {
     db_path: PathBuf,
     pool: OnceCell<Pool<Sqlite>>,

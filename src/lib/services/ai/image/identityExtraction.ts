@@ -285,15 +285,17 @@ export function normalizeExtraction(
 export async function extractIdentity(
   input: IdentityExtractionInput,
 ): Promise<IdentityExtraction | null> {
-  // Best-effort guard: skip silently (no toast, no throw) when the service has
-  // no preset assigned — the caller keeps today's behavior.
-  const presetId = settings.getServicePresetId(SERVICE_ID)
-  if (!presetId) {
-    log('no preset assigned for identity extraction — skipping')
-    return null
-  }
-
   try {
+    // Best-effort guard: skip silently (no toast, no throw) when the service has
+    // no preset assigned. Inside the try because the lookup itself can throw on
+    // incomplete settings, and this function's contract is to resolve null on
+    // any failure rather than reject into a fire-and-forget caller.
+    const presetId = settings.getServicePresetId(SERVICE_ID)
+    if (!presetId) {
+      log('no preset assigned for identity extraction — skipping')
+      return null
+    }
+
     const ctx = new ContextBuilder()
     ctx.add({
       characterName: input.name ?? '',
