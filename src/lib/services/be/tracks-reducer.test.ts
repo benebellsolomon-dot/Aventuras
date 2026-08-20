@@ -115,6 +115,46 @@ describe('quirk hooks in isolation', () => {
     expect(result.state.pendingGrowth?.delta).toBe(2) // 1 + 1, not overwritten to 1
   })
 
+  it('a banked pending delta lands +1/turn and re-stages the rest (M-2)', () => {
+    // The land cap is quirk-independent; tested on a plain girl so the slow_burn
+    // milestone bonus doesn't muddy the per-turn count. A +3 bank must NOT dump
+    // +3 in one turn — it lands +1 and carries the remainder forward.
+    const staged: BodyState = { ...stateWith(), pendingGrowth: { delta: 3, source: 'catalyst' } }
+    const t1 = reduceCharacterBody(staged, [], config, 'meter-1', 'Mira')
+    expect(t1.state.tier).toBe(7) // 6 → 7, only +1 landed
+    expect(t1.state.pendingGrowth).toEqual({ delta: 2, source: 'catalyst' })
+
+    const t2 = reduceCharacterBody(t1.state, [], config, 'meter-2', 'Mira')
+    expect(t2.state.tier).toBe(8) // +1 again
+    expect(t2.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
+
+    const t3 = reduceCharacterBody(t2.state, [], config, 'meter-3', 'Mira')
+    expect(t3.state.tier).toBe(9) // last +1 drains the bank
+    expect(t3.state.pendingGrowth).toBeUndefined()
+  })
+
+  it('slow_burn: a big bank no longer dumps all at once — meters out over turns (M-2)', () => {
+    const staged: BodyState = {
+      ...stateWith({ quirks: ['slow_burn'] }),
+      pendingGrowth: { delta: 4, source: 'catalyst' },
+    }
+    const t1 = reduceCharacterBody(staged, [], config, 'sb-meter-1', 'Mira')
+    // Pre-fix this landed the whole +4 (+1 milestone) in one turn. Now the base
+    // land is capped at +1 (a slow_burn milestone crossing may add its own +1),
+    // and a remainder must carry forward rather than all draining now.
+    expect(t1.state.tier).toBeLessThanOrEqual(8) // never the full +4 dump to 10
+    expect(t1.state.pendingGrowth).toBeDefined()
+    expect(t1.state.pendingGrowth!.delta).toBeGreaterThanOrEqual(2)
+  })
+
+  it('a banked delta at the size cap is dropped, not re-staged forever (M-2)', () => {
+    const capped = { ...config, sizeCapTier: 6 }
+    const staged: BodyState = { ...stateWith(), pendingGrowth: { delta: 3, source: 'catalyst' } }
+    const result = reduceCharacterBody(staged, [], capped, 'cap-1', 'Mira')
+    expect(result.state.tier).toBe(6) // already at cap, nothing lands
+    expect(result.state.pendingGrowth).toBeUndefined() // dropped, no infinite re-stage
+  })
+
   it('greedy_flesh: armed cooldown is one beat shorter', () => {
     const seed = seedFor((r) => resolveGrowthOutcome(r, 2) === 'success')
     const plain = reduceCharacterBody(stateWith(), [catalyst(2)], config, seed, 'Mira')

@@ -29,7 +29,15 @@ async function saveFile(content: string, defaultPath: string): Promise<boolean> 
 }
 
 export async function exportLorebook(options: LorebookExportOptions): Promise<boolean> {
-  const { format, entries, filename } = options
+  const { format, filename } = options
+
+  // M-6 (research/54): learned spells are a runtime persistence artifact linked to a
+  // character's knownSpells — they must not ride a LOREBOOK export. Re-importing a
+  // file containing a `type:'spell'` entry recreates it with no knownSpells link (an
+  // orphan), and the sillytavern/aventura formats would otherwise dump it verbatim
+  // (only exportToText already skips it). Full-story backup export is a separate path
+  // and keeps spells for a complete snapshot. Filtered here so every format agrees.
+  const entries = options.entries.filter((e) => e.type !== 'spell')
 
   if (entries.length === 0) {
     throw new Error('No entries to export')

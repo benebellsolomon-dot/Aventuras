@@ -19,6 +19,7 @@ import {
   CHECK_DEBUFF_DC_PENALTY,
   GROWTH_EVENT_KINDS,
   SPELL_BAND_INTENSITY_DELTA,
+  SPELL_CONDITION_DEFAULT_TTL,
   SUPPLY_SURGE_MAX_DELTA,
 } from './constants'
 import type { CheckBand } from './roll'
@@ -109,13 +110,18 @@ function clampIntensity(n: number): number {
 const GROWTH_KIND_SET: ReadonlySet<string> = new Set(GROWTH_EVENT_KINDS)
 
 /**
- * R9 anti-double-application (research/50): on a cast turn the spell's effects
- * are authoritative for the target, so the classifier's duplicate same-kind
- * events for that girl are dropped — otherwise a cast that grows her, and whose
- * prose describes the growth, grows her twice (spell event + re-proposed event).
- * Narrow by design: growth is a family (any spell growth kind suppresses all
- * classifier growth kinds); induction/milking dedupe on the exact kind; unrelated
- * classifier events survive untouched. Returns the classifier events to KEEP;
+ * R9 anti-double-application (research/50), one-per-source (M-1, research/54): on a
+ * cast turn the spell's prose describes its own effect, so the classifier tends to
+ * re-propose that same effect for the target — grow her twice (spell event +
+ * mirrored event) unless suppressed. The suppression is BUDGETED, not blanket: the
+ * spell supersedes only as many classifier events as it actually contributes, so a
+ * genuinely independent second cause (e.g. an in-prose potion the classifier read
+ * as `contact`) survives its own roll rather than being erased with the mirror.
+ * Growth is deduped as a FAMILY (any spell growth kind covers any classifier growth
+ * kind, shared budget = spell growth-event count); every other kind dedupes on the
+ * exact kind (per-kind budget). Extra classifier events beyond the budget are kept.
+ * (The reducer's per-turn cooldown still bounds landed growth to one/turn, so kept
+ * extras add roll attempts, never runaway.) Returns the classifier events to KEEP;
  * the caller appends the spell events after them (stable, index-seeded order).
  */
 export function dedupeForCast(
@@ -123,12 +129,34 @@ export function dedupeForCast(
   spellEvents: ReadonlyArray<BeEvent>,
 ): BeEvent[] {
   if (spellEvents.length === 0) return [...classifierEvents]
-  const spellHasGrowth = spellEvents.some((e) => GROWTH_KIND_SET.has(e.kind))
-  const spellKinds = new Set(spellEvents.map((e) => e.kind))
-  return classifierEvents.filter((e) => {
-    if (spellHasGrowth && GROWTH_KIND_SET.has(e.kind)) return false
-    return !spellKinds.has(e.kind)
-  })
+
+  // Budget of classifier events the spell may supersede: growth is one shared
+  // pool across the family; other kinds are counted per exact kind.
+  let growthBudget = spellEvents.filter((e) => GROWTH_KIND_SET.has(e.kind)).length
+  const kindBudget = new Map<string, number>()
+  for (const e of spellEvents) {
+    if (GROWTH_KIND_SET.has(e.kind)) continue
+    kindBudget.set(e.kind, (kindBudget.get(e.kind) ?? 0) + 1)
+  }
+
+  const kept: BeEvent[] = []
+  for (const e of classifierEvents) {
+    if (GROWTH_KIND_SET.has(e.kind)) {
+      if (growthBudget > 0) {
+        growthBudget-- // this one mirrors a spell growth event — drop it
+        continue
+      }
+      kept.push(e) // independent growth cause beyond the spell's contribution
+      continue
+    }
+    const budget = kindBudget.get(e.kind) ?? 0
+    if (budget > 0) {
+      kindBudget.set(e.kind, budget - 1) // mirrors a same-kind spell event — drop it
+      continue
+    }
+    kept.push(e)
+  }
+  return kept
 }
 
 /**
@@ -188,7 +216,9 @@ export function translateSpellEffects(
       case 'condition':
         out.softConditions.push({
           label: effect.label ?? 'enchanted',
-          ...(effect.ttl !== undefined ? { ttl: effect.ttl } : {}),
+          // L-1: a cast condition with no ttl must not be permanent — default it
+          // so it decays and can't crowd MAX_BE_CONDITIONS.
+          ttl: effect.ttl ?? SPELL_CONDITION_DEFAULT_TTL,
         })
         break
       case 'check_debuff':

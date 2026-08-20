@@ -16,6 +16,10 @@ import { createLogger } from '$lib/log'
 
 const log = createLogger('RollbackService')
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 class RollbackService {
   /**
    * Roll back world state changes for entries at position >= fromPosition.
@@ -47,6 +51,7 @@ class RollbackService {
       restoredStoryBeats: 0,
       restoredTimeTracker: false,
       restoredCurrentLocation: false,
+      failures: [],
     }
 
     // Get entries to rollback, sorted position DESC (newest first)
@@ -103,6 +108,12 @@ class RollbackService {
         log('Time tracker restored to', earliestTimeTracker)
       } catch (error) {
         console.error('[RollbackService] Failed to restore time tracker:', error)
+        summary.failures.push({
+          operation: 'restore',
+          entityType: 'timeTracker',
+          id: null,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -119,6 +130,12 @@ class RollbackService {
         log('Current location restored to', earliestCurrentLocationId)
       } catch (error) {
         console.error('[RollbackService] Failed to restore current location:', error)
+        summary.failures.push({
+          operation: 'restore',
+          entityType: 'currentLocation',
+          id: earliestCurrentLocationId ?? null,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -159,6 +176,12 @@ class RollbackService {
         summary.deletedCharacters++
       } catch (error) {
         console.warn('[RollbackService] Failed to delete character', id, error)
+        summary.failures.push({
+          operation: 'delete',
+          entityType: 'character',
+          id,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -168,6 +191,12 @@ class RollbackService {
         summary.deletedLocations++
       } catch (error) {
         console.warn('[RollbackService] Failed to delete location', id, error)
+        summary.failures.push({
+          operation: 'delete',
+          entityType: 'location',
+          id,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -177,6 +206,12 @@ class RollbackService {
         summary.deletedItems++
       } catch (error) {
         console.warn('[RollbackService] Failed to delete item', id, error)
+        summary.failures.push({
+          operation: 'delete',
+          entityType: 'item',
+          id,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -186,6 +221,12 @@ class RollbackService {
         summary.deletedStoryBeats++
       } catch (error) {
         console.warn('[RollbackService] Failed to delete story beat', id, error)
+        summary.failures.push({
+          operation: 'delete',
+          entityType: 'storyBeat',
+          id,
+          error: errorMessage(error),
+        })
       }
     }
   }
@@ -206,11 +247,23 @@ class RollbackService {
           relationship: charBefore.relationship,
           traits: charBefore.traits,
           visualDescriptors: charBefore.visualDescriptors,
+          // M-3: restore the story-tracked current look too. Absent on pre-M-3
+          // deltas → leave it untouched (writing null would wrongly clear a
+          // legitimately-set value those older snapshots never recorded).
+          ...(charBefore.currentVisualDescriptors !== undefined
+            ? { currentVisualDescriptors: charBefore.currentVisualDescriptors }
+            : {}),
           ...(charBefore.metadata !== undefined ? { metadata: charBefore.metadata } : {}),
         })
         summary.restoredCharacters++
       } catch (error) {
         console.warn('[RollbackService] Failed to restore character', charBefore.id, error)
+        summary.failures.push({
+          operation: 'restore',
+          entityType: 'character',
+          id: charBefore.id,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -225,6 +278,12 @@ class RollbackService {
         summary.restoredLocations++
       } catch (error) {
         console.warn('[RollbackService] Failed to restore location', locBefore.id, error)
+        summary.failures.push({
+          operation: 'restore',
+          entityType: 'location',
+          id: locBefore.id,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -239,6 +298,12 @@ class RollbackService {
         summary.restoredItems++
       } catch (error) {
         console.warn('[RollbackService] Failed to restore item', itemBefore.id, error)
+        summary.failures.push({
+          operation: 'restore',
+          entityType: 'item',
+          id: itemBefore.id,
+          error: errorMessage(error),
+        })
       }
     }
 
@@ -253,6 +318,12 @@ class RollbackService {
         summary.restoredStoryBeats++
       } catch (error) {
         console.warn('[RollbackService] Failed to restore story beat', beatBefore.id, error)
+        summary.failures.push({
+          operation: 'restore',
+          entityType: 'storyBeat',
+          id: beatBefore.id,
+          error: errorMessage(error),
+        })
       }
     }
   }
@@ -275,6 +346,19 @@ class RollbackService {
   }
 }
 
+/**
+ * A single world-state undo operation that failed during rollback. A non-empty
+ * `failures` list means the rollback was PARTIAL — some entities remain in their
+ * post-turn state. Callers must treat this as a hard stop: deleting the entries
+ * (and their deltas) would strand those mutations with no record left to retry.
+ */
+export interface RollbackFailure {
+  operation: 'delete' | 'restore'
+  entityType: 'character' | 'location' | 'item' | 'storyBeat' | 'timeTracker' | 'currentLocation'
+  id: string | null
+  error: string
+}
+
 export interface RollbackSummary {
   entriesProcessed: number
   entriesWithDelta: number
@@ -289,6 +373,8 @@ export interface RollbackSummary {
   restoredStoryBeats: number
   restoredTimeTracker: boolean
   restoredCurrentLocation: boolean
+  /** Per-entity undo failures. Non-empty ⇒ rollback was partial (see RollbackFailure). */
+  failures: RollbackFailure[]
 }
 
 export const rollbackService = new RollbackService()

@@ -8,9 +8,70 @@ Lenses: (A) crash-recovery / multi-write partial-failure · (B) BE reducer/lacta
 correctness · (C) pack-template persistence + spell-entry handling. Line numbers are as of
 commit `7393061d`.
 
+## Fix pass status — 2026-08-19 (continuation session)
+
+Worked the ranked order. **Shipped:** CR-2 (prior session) · **H-1** · **M-1** · **M-2** ·
+**M-3** · **M-4** · **M-6** · **L-1** · **CR-1** (2026-08-19, the last item — Rust-backed atomic
+write batch; see CRITICAL below). Each landed with tests; full suite green (702), svelte-check 0,
+eslint clean. M-3/M-4, M-1/M-2, and CR-1 (two rounds) got adversarial review passes.
+
+**M-5 (replay-idempotency guards) — implemented then REVERTED.** Two-reviewer adversarial
+pass found: (1) there is **no code path** that re-invokes `applyClassificationResult` for an
+existing `entryId` — single call site (`ActionInput.svelte:662`), fresh `crypto.randomUUID()`
+per turn — so the guards were **dead code**; and (2) `applyClassificationResult` unconditionally
+**overwrites** `worldStateDelta` every run (~`story.svelte.ts:2890`), so on any *future* replay
+the guards would produce a *degraded* delta (missing before-states + empty beLog/checkLog →
+un-undoable mutations, plus the marker gets snapshotted into the new before-state → rollback
+restores it → genuine re-narration stays permanently blocked). Bolting M-5 on independently is
+worse-than-nothing. **Replay-safety is folded into CR-1** (below), the only place it's solvable
+correctly (mutation writes + delta write made atomic together, with a "delta already exists for
+this entryId ⇒ replay ⇒ skip/merge" guard at the top of `applyClassificationResult`).
+
+**New CR-1 sub-items surfaced by the M-3/M-4/M-5 reviews (do inside the CR-1 transaction work):**
+- **Delta-overwrite-on-resume** — `applyClassificationResult` must not blindly overwrite an
+  existing `worldStateDelta`; detect the replay and skip/merge. (This is what made M-5 unsafe.)
+- **BE↔RPG milestone atomicity (pre-existing, reviewer "Finding 2", LOW)** — a character's BE
+  body write can land (crossing committed to `crossings`) while the protagonist RPG-sheet write
+  then fails; `awardedMilestones` isn't persisted but the mass IS, so it never re-crosses and the
+  level is lost. Independent of M-4; needs the turn wrapped atomically. M-5's essence/body guards
+  belong here too (guard spend/regen/growth but keep the idempotent level-grant un-gated).
+
+Remaining LOWs (L-2..L-10) intentionally not fixed — see the LOW section / recommended order:
+L-2 is not a real one-liner (new conditions bypass decay the turn added, so `ttl:0`=0-turns needs
+insertion-time filtering, near-zero value); L-3/L-4/L-5/L-7/L-8 acknowledged-by-design; L-6 folds
+into CR-1; L-9 moot (CR-2 became a versioned one-time sync); L-10 latent.
+
 ## CRITICAL
 
-### CR-1 — No transaction across a turn's ~12 writes; delta written last, non-fatally → un-rollbackable half-applied state  *(pre-existing; the long-flagged W5-D1)*
+### CR-1 — No transaction across a turn's ~12 writes; delta written last, non-fatally → un-rollbackable half-applied state  *(pre-existing; the long-flagged W5-D1)* — ✅ FIXED (2026-08-19)
+**FIXED via a Rust-backed atomic write batch.** The originally-approved approach (wrap the turn in
+the JS `database.withTransaction`) was built, then **refuted by adversarial review**: `tauri-plugin-sql`
+v2 runs on a sqlx connection **pool**, so `BEGIN`/`COMMIT` issued as separate `execute()` calls can
+land on different pooled connections — the JS helper does **not** actually roll back (the repo already
+documents this in `database.ts` `bulkInsertEntries`, and does its one real tx Rust-side in
+`migration_patch.rs`). Replacement, since the turn does **only writes** mid-turn (zero DB reads —
+verified): buffer the turn's writes in JS and flush them in ONE real transaction Rust-side.
+- **Rust** `src-tauri/src/turn_tx.rs`: `exec_batch_tx` command runs the buffered statements in
+  `pool.begin()`/`tx.commit()` on a dedicated `max_connections=1` pool (`foreign_keys` + `busy_timeout`),
+  lazily opened. Any statement error → whole batch rolls back.
+- **`database.ts`**: a Proxy over the tauri `Database` buffers `execute` while a batch is open;
+  `beginWriteBatch`/`commitWriteBatch`(→`exec_batch_tx`)/`abortWriteBatch`. WAL + `synchronous=NORMAL`
+  now enabled. Background image/sprite/portrait writes go through `executeDirect` (raw handle) so a
+  write completing mid-turn is never swept into the turn's batch (cross-batch contamination fix).
+- **`story.svelte.ts`**: the turn runs `beginWriteBatch → runWrites → commitWriteBatch`; a failure →
+  `abortWriteBatch` + in-memory snapshot revert (immutable-update discipline makes the pre-turn
+  snapshot an exact revert — no DB reload). `applyClassificationResult` returns a success boolean;
+  `ActionInput` skips image-gen/translation on rollback. wrapUpdate aborts the whole turn on the first
+  write failure in transactional mode (legacy best-effort path unchanged when tracking is off).
+- **Replay guard**: skip if the entry already carries a `worldStateDelta` (defensive; no re-apply path
+  exists today). Under atomicity there is never a partial-persist to reconcile, so the fine-grained
+  **M-5 stateful replay guards are moot** and were NOT re-added.
+- Tests: store harness drives the real path (batch commit failure → rollback); `database.batch.test.ts`
+  proves buffer + background-bypass. Two adversarial Opus review rounds (persistence discipline);
+  round-2 findings (contamination, WAL, begin-outside-try) fixed. 702 tests green, check 0, eslint clean.
+
+*Original finding below.*
+
 `story.svelte.ts:2158–2792` apply every entity write (characters, locations, items, beats,
 time, BE body, milk, RPG sheet) as separate committed `await database.*` calls with NO
 transaction; the `worldStateDelta` (the rollback record) is persisted LAST at

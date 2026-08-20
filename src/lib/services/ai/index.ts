@@ -1229,9 +1229,10 @@ class AIService {
           (c) => c.name.toLowerCase() === charName.toLowerCase(),
         )
         if (character) {
-          await database.updateCharacter(character.id, {
-            portrait: result.base64,
-          })
+          // Direct write (CR-1): a portrait can complete mid-turn; routing it
+          // through the turn's buffered updateCharacter would sweep it into the
+          // turn's transaction. updateCharacterPortrait bypasses the batch.
+          await database.updateCharacterPortrait(character.id, result.base64)
           log('Saved portrait to character', { characterId: character.id, name: charName })
         }
       }

@@ -8,7 +8,11 @@ import {
   translateSpellEffects,
   type EffectTag,
 } from './effects'
-import { CHECK_DEBUFF_CONDITION_PREFIX, SUPPLY_SURGE_MAX_DELTA } from './constants'
+import {
+  CHECK_DEBUFF_CONDITION_PREFIX,
+  SPELL_CONDITION_DEFAULT_TTL,
+  SUPPLY_SURGE_MAX_DELTA,
+} from './constants'
 import type { BeEvent } from './types'
 
 describe('EffectTag vocabulary (Phase 4 Step 1)', () => {
@@ -110,6 +114,14 @@ describe('translateSpellEffects — channel routing (Phase 4 Step 2)', () => {
     expect(out.supplyDelta).toBe(2)
   })
 
+  it('a condition effect with no ttl gets a default (never permanent) (L-1)', () => {
+    const out = translateSpellEffects([{ kind: 'condition', label: 'glamour' }], 'success', T)
+    const cond = out.softConditions.find((c) => c.label === 'glamour')
+    expect(cond).toBeDefined()
+    expect(cond!.ttl).toBe(SPELL_CONDITION_DEFAULT_TTL)
+    expect(cond!.ttl).toBeGreaterThan(0)
+  })
+
   it('fail band applies NOTHING (essence still spent by the caller)', () => {
     const effects: EffectTag[] = [
       { kind: 'growth', intensity: 3 },
@@ -177,17 +189,35 @@ describe('dedupeForCast — R9 anti-double-application (Phase 4 Step 4)', () => 
   const T = 'Amelia'
   const ev = (kind: BeEvent['kind'], intensity = 1): BeEvent => ({ character: T, kind, intensity })
 
-  it('a spell growth suppresses ALL classifier growth kinds for the girl', () => {
+  it('one spell growth supersedes ONE classifier growth event, not the whole family (M-1)', () => {
     const classifier = [ev('catalyst'), ev('contact'), ev('attempt')]
     const spell = [ev('catalyst', 2)]
-    // only the classifier growth kinds are dropped; the spell event is appended by the caller
-    expect(dedupeForCast(classifier, spell)).toEqual([])
+    // budget = 1 spell growth → drop the first growth-family event; the other two
+    // are genuinely independent causes and survive their own reducer rolls.
+    expect(dedupeForCast(classifier, spell)).toEqual([ev('contact'), ev('attempt')])
   })
 
-  it('induction and milking dedupe on the exact kind only', () => {
+  it('growth budget scales with the number of spell growth events', () => {
+    const classifier = [ev('catalyst'), ev('contact'), ev('attempt')]
+    // two spell growth events → drop two classifier growth events, keep one
+    expect(dedupeForCast(classifier, [ev('catalyst', 2), ev('contact')])).toEqual([ev('attempt')])
+  })
+
+  it('a lone classifier growth is fully superseded by a spell growth', () => {
+    expect(dedupeForCast([ev('catalyst')], [ev('catalyst', 2)])).toEqual([])
+  })
+
+  it('induction and milking dedupe on the exact kind, one-per-source (M-1)', () => {
     const classifier = [ev('induction'), ev('milking'), ev('catalyst')]
     expect(dedupeForCast(classifier, [ev('induction')])).toEqual([ev('milking'), ev('catalyst')])
     expect(dedupeForCast(classifier, [ev('milking')])).toEqual([ev('induction'), ev('catalyst')])
+  })
+
+  it('a second independent milking (drain) survives one spell milking — additive (M-1)', () => {
+    const classifier = [ev('milking'), ev('milking')]
+    // one spell milking supersedes only one classifier drain; the second is a real
+    // independent drain and stays (drains are additive in the reducer).
+    expect(dedupeForCast(classifier, [ev('milking')])).toEqual([ev('milking')])
   })
 
   it('unrelated classifier events survive', () => {

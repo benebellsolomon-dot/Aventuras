@@ -4,6 +4,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 mod matting;
 mod migration_patch;
 mod sync;
+mod turn_tx;
 
 use sync::commands::{
     clear_received_stories, get_received_stories, start_sync_server, stop_sync_server,
@@ -279,6 +280,10 @@ pub fn run() {
                 tauri::async_runtime::block_on(migration_patch::apply_checksum_patch(&db_path));
             }
 
+            // Dedicated single-connection pool for atomic turn flushes (CR-1).
+            // Opened lazily on first use — the DB may not exist yet on first run.
+            app.manage(turn_tx::TurnTxPool::new(db_path));
+
             Ok(())
         })
         .plugin(tauri_plugin_fs::init())
@@ -298,6 +303,7 @@ pub fn run() {
             sync_push_story,
             matting::sprite_matting_available,
             matting::sprite_finish,
+            turn_tx::exec_batch_tx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

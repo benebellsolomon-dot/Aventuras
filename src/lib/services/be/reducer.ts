@@ -24,6 +24,7 @@ import {
   ENGORGED_TTL,
   GROWTH_DELTA_BY_OUTCOME,
   MAX_BE_CONDITIONS,
+  MAX_GROWTH_LAND_PER_TURN,
   MILKING_DRAIN_PER_INTENSITY,
   OVERFILL_ADD_BASE,
   OVERFILL_FILL_THRESHOLD,
@@ -215,7 +216,14 @@ export function reduceCharacterBody(
   // ---- Step 3: land the anticipation remainder (locked or off-screen holds it staged) ----
   if (pendingGrowth && !state.locked && ticksEnabled) {
     const tierBeforeLand = tier
-    const landed = landGrowth(pendingGrowth.delta)
+    // M-2 (research/54): meter the release. A slow_burn girl can bank a pending
+    // delta > 1 across turns; land at most MAX_GROWTH_LAND_PER_TURN this turn and
+    // re-stage the rest so the bank drains at the normal +1/turn cadence instead
+    // of dumping +4/+5 at once. Normal anticipation stages ≤1, so this is a no-op
+    // for everyone but a slow_burn bank.
+    const wantLand = Math.min(pendingGrowth.delta, MAX_GROWTH_LAND_PER_TURN)
+    const remainder = pendingGrowth.delta - wantLand
+    const landed = landGrowth(wantLand)
     // slow_burn: her delayed growth lingers — when the land crosses an
     // interaction milestone, it settles one tier deeper (research/48 hook table).
     let slowBurnBonus = 0
@@ -235,10 +243,13 @@ export function reduceCharacterBody(
       tierAfter: tier,
       note:
         landed > 0
-          ? `anticipation lands +${landed}${slowBurnBonus > 0 ? ` (+${slowBurnBonus} slow burn)` : ''}`
+          ? `anticipation lands +${landed}${slowBurnBonus > 0 ? ` (+${slowBurnBonus} slow burn)` : ''}${remainder > 0 ? ` (+${remainder} re-staged)` : ''}`
           : 'capped out',
     })
-    pendingGrowth = undefined
+    // Re-stage the un-landed remainder for next turn; drop it only if NOTHING
+    // landed (size cap hit — otherwise it would re-stage forever at the cap).
+    pendingGrowth =
+      landed > 0 && remainder > 0 ? { delta: remainder, source: pendingGrowth.source } : undefined
   }
 
   // ---- Step 4: soft states (LLM-proposed, clamp-applied) ----

@@ -918,6 +918,22 @@ class StoryStore {
 
       log('Rollback summary:', rollbackSummary)
 
+      // H-1: if any world-state undo failed, the rollback is PARTIAL — some entities
+      // are still in their post-turn state. Deleting the entries now would destroy the
+      // deltas needed to retry, stranding those mutations permanently. Abort instead and
+      // surface the failure; the deltas survive, and the idempotent rollback can be
+      // re-run (a fresh delete attempt) once the underlying cause clears.
+      if (rollbackSummary.failures.length > 0) {
+        const failedNames = rollbackSummary.failures
+          .map((f) => `${f.operation} ${f.entityType}${f.id ? ` ${f.id}` : ''}`)
+          .join(', ')
+        console.error('[StoryStore] Partial rollback — aborting delete:', rollbackSummary.failures)
+        throw new Error(
+          `Couldn't fully undo world-state changes for this entry (${rollbackSummary.failures.length} step(s) failed: ${failedNames}). ` +
+            `The entry was kept so nothing is left in a half-undone state — try deleting again.`,
+        )
+      }
+
       // Now cascade-delete entries from this position onward (skip rollback — already done)
       await this.deleteEntriesFromPosition(existingEntry.position, { skipRollback: true })
 
@@ -1999,15 +2015,26 @@ class StoryStore {
    * Prevents database errors from breaking the entire classification pipeline.
    */
   private classificationErrors = 0
+  /**
+   * True while applyClassificationResult runs inside the CR-1 turn transaction.
+   * In that mode a single entity-write failure must abort the whole turn so the
+   * transaction rolls back (all-or-nothing). Best-effort swallowing with the
+   * 3-strike counter is only for the legacy, non-transactional path (tracking
+   * off — no delta to keep atomic).
+   */
+  private transactionalTurn = false
 
   private async wrapUpdate(label: string, entityName: string, fn: () => Promise<void>) {
     try {
       await fn()
       this.classificationErrors = 0
     } catch (err) {
-      this.classificationErrors++
       console.error(`[StoryStore] ${label} failed for ${entityName}:`, err)
       ui.showToast(`${label} failed: ${entityName}`, 'warning')
+      // CR-1: inside a transactional turn the first failure aborts everything —
+      // rethrow so withTransaction rolls back rather than committing a partial turn.
+      if (this.transactionalTurn) throw err
+      this.classificationErrors++
       if (this.classificationErrors >= 3) {
         const count = this.classificationErrors
         this.classificationErrors = 0
@@ -2019,15 +2046,36 @@ class StoryStore {
   /**
    * Apply classification results to update world state.
    * This is Phase 4 of the processing pipeline per design doc.
+   *
+   * Returns whether the turn's world-state changes were durably persisted:
+   * `true` on a committed (or tracking-off best-effort) turn, `false` when the
+   * turn rolled back (CR-1) or was skipped. The caller uses this to gate
+   * downstream work (image gen, translation) that assumes the world advanced.
    */
   async applyClassificationResult(
     result: ClassificationResult,
     entryId?: string,
     checkRecord: CheckRecord | null = null,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!this.currentStory) {
       log('applyClassificationResult: No story loaded, skipping')
-      return
+      return false
+    }
+
+    // CR-1 replay guard: a delta already recorded for this entry means the turn
+    // already committed (post-CR-1 the delta is written last, inside the turn
+    // transaction — it exists iff every write landed). Re-running would overwrite
+    // the good delta with a degraded one and double-apply stateful engine effects
+    // (essence spend, body growth). With the turn now atomic there is never a
+    // partial-persist to reconcile, so the safe replay semantics are: skip.
+    if (entryId) {
+      const existingDelta = this.entries.find((e) => e.id === entryId)?.worldStateDelta
+      if (existingDelta) {
+        log('applyClassificationResult: delta already exists for entry, skipping (replay guard)', {
+          entryId,
+        })
+        return false
+      }
     }
 
     log('applyClassificationResult called', {
@@ -2091,6 +2139,9 @@ class StoryStore {
             relationship: existing.relationship,
             traits: [...existing.traits],
             visualDescriptors: { ...existing.visualDescriptors },
+            currentVisualDescriptors: existing.currentVisualDescriptors
+              ? { ...existing.currentVisualDescriptors }
+              : null,
             metadata: existing.metadata ? { ...existing.metadata } : null,
           })
         }
@@ -2162,184 +2213,467 @@ class StoryStore {
       }
     }
 
-    // Apply character updates
-    for (const update of result.entryUpdates.characterUpdates) {
-      await this.wrapUpdate('Update character', update.name, async () => {
-        let existing = this.characters.find(
-          (c) => c.name.toLowerCase() === update.name.toLowerCase(),
-        )
+    // beLog/checkLog live in method scope: runWrites assigns them and the
+    // post-commit hasChanges block below reads them.
+    let beLog: BeLogRecord[] = []
+    let checkLog: CheckRecord[] = []
 
-        // If character doesn't exist yet, create it first
-        if (!existing) {
-          const newCharData = result.entryUpdates.newCharacters.find(
-            (nc) => nc.name.toLowerCase() === update.name.toLowerCase(),
+    // CR-1: the turn's entity/engine writes + the delta write are wrapped so
+    // they commit all-or-nothing. Defined as a closure so it can run either
+    // inside withTransaction (tracking on) or directly (legacy path).
+    const runWrites = async (): Promise<void> => {
+      if (!this.currentStory) return
+      // Apply character updates
+      for (const update of result.entryUpdates.characterUpdates) {
+        await this.wrapUpdate('Update character', update.name, async () => {
+          let existing = this.characters.find(
+            (c) => c.name.toLowerCase() === update.name.toLowerCase(),
           )
-          log('Creating character from update (not found):', update.name)
-          const charMetadata: Record<string, unknown> = { source: 'classifier' }
-          if (newCharData) {
+
+          // If character doesn't exist yet, create it first
+          if (!existing) {
+            const newCharData = result.entryUpdates.newCharacters.find(
+              (nc) => nc.name.toLowerCase() === update.name.toLowerCase(),
+            )
+            log('Creating character from update (not found):', update.name)
+            const charMetadata: Record<string, unknown> = { source: 'classifier' }
+            if (newCharData) {
+              const newCharInlineVars = extractInlineCustomVars(
+                newCharData as unknown as Record<string, unknown>,
+                defsByName,
+              )
+              if (Object.keys(newCharInlineVars).length > 0) {
+                Object.assign(charMetadata, mergeRuntimeVars(null, newCharInlineVars, defsByName))
+              }
+            }
+            const character: Character = {
+              id: crypto.randomUUID(),
+              storyId,
+              name: newCharData?.name ?? update.name,
+              description: newCharData?.description ?? null,
+              relationship: newCharData?.relationship ?? null,
+              traits: newCharData?.traits ?? [],
+              visualDescriptors: newCharData?.visualDescriptors ?? {},
+              status: (newCharData?.status as Character['status']) ?? 'active',
+              metadata: charMetadata,
+              portrait: null,
+              branchId: this.currentStory?.currentBranchId ?? null,
+            }
+            await database.addCharacter(character)
+            this.characters = [...this.characters, character]
+            if (trackingEnabled) createdCharacterIds.push(character.id)
+            newlyCreatedCharacterIds.push(character.id)
+            existing = character
+          }
+
+          if (existing) {
+            log('Updating character:', update.name, update.changes)
+            const changes: Partial<Character> = {}
+            if (update.changes.status) changes.status = update.changes.status
+            if (update.changes.relationship) {
+              if (existing.relationship === 'self') {
+                // Preserve protagonist relationship; only set via explicit swap.
+              } else if (update.changes.relationship !== 'self') {
+                changes.relationship = update.changes.relationship
+              }
+            }
+            if (update.changes.newTraits?.length || update.changes.removeTraits?.length) {
+              let traits = [...existing.traits]
+              if (update.changes.removeTraits?.length) {
+                const toRemove = new Set(update.changes.removeTraits.map((t) => t.toLowerCase()))
+                traits = traits.filter((t) => !toRemove.has(t.toLowerCase()))
+              }
+              if (update.changes.newTraits?.length) {
+                traits = [...traits, ...update.changes.newTraits]
+              }
+              const traitMap = new Map(traits.map((t) => [t.toLowerCase(), t]))
+              changes.traits = Array.from(traitMap.values())
+            }
+            // Visual descriptor updates land on the story-tracked CURRENT look —
+            // never the canonical baseline (Ben's two-layer ruling 2026-07-19).
+            // The classifier proposes transient scene state ("hair spread across
+            // soaked linens", scene clothing, size prose); writing it over the
+            // baseline destroyed the identity that portraits/anchors/sprites
+            // render from and thrashed the sprite appearance hash. The baseline
+            // is user-owned; "Adopt as baseline" in the panel promotes tracked
+            // changes deliberately.
+            if (
+              update.changes.visualDescriptors &&
+              Object.keys(update.changes.visualDescriptors).length > 0
+            ) {
+              changes.currentVisualDescriptors = update.changes.visualDescriptors
+            }
+            // Merge inline runtime variable values into metadata if present
+            const charInlineVars = extractInlineCustomVars(
+              update.changes as unknown as Record<string, unknown>,
+              defsByName,
+            )
+            if (Object.keys(charInlineVars).length > 0) {
+              changes.metadata = mergeRuntimeVars(existing.metadata, charInlineVars, defsByName)
+            }
+            // COW: ensure entity is owned by current branch before updating
+            const { entity: ownedChar, wasCowed: charWasCowed } = await this.cowCharacter(existing)
+            await database.updateCharacter(ownedChar.id, changes)
+            this.characters = this.characters.map((c) =>
+              c.id === ownedChar.id ? { ...c, ...changes } : c,
+            )
+            // If COW'd, track override as created (rollback = delete override)
+            if (charWasCowed && trackingEnabled) {
+              createdCharacterIds.push(ownedChar.id)
+              const idx = charactersBefore.findIndex((cb) => cb.id === existing.id)
+              if (idx !== -1) charactersBefore.splice(idx, 1)
+            }
+          }
+        })
+      }
+
+      // Apply location updates
+      for (const update of result.entryUpdates.locationUpdates) {
+        await this.wrapUpdate('Update location', update.name, async () => {
+          let existing = this.locations.find(
+            (l) => l.name.toLowerCase() === update.name.toLowerCase(),
+          )
+
+          // If location doesn't exist yet, create it first
+          if (!existing) {
+            // Check if newLocations has data for this name
+            const newLocData = result.entryUpdates.newLocations.find(
+              (nl) => nl.name.toLowerCase() === update.name.toLowerCase(),
+            )
+            log('Creating location from update (not found):', update.name)
+            const locMetadata: Record<string, unknown> = { source: 'classifier' }
+            if (newLocData) {
+              const newLocInlineVars = extractInlineCustomVars(
+                newLocData as unknown as Record<string, unknown>,
+                defsByName,
+              )
+              if (Object.keys(newLocInlineVars).length > 0) {
+                Object.assign(locMetadata, mergeRuntimeVars(null, newLocInlineVars, defsByName))
+              }
+            }
+            const location: Location = {
+              id: crypto.randomUUID(),
+              storyId,
+              name: newLocData?.name ?? update.name,
+              description: newLocData?.description ?? null,
+              visited: newLocData?.visited ?? false,
+              current: newLocData?.current ?? false,
+              connections: [],
+              metadata: locMetadata,
+              branchId: this.currentStory?.currentBranchId ?? null,
+            }
+            await database.addLocation(location)
+            this.locations = [...this.locations, location]
+            if (trackingEnabled) createdLocationIds.push(location.id)
+            existing = location
+          }
+
+          if (existing) {
+            log('Updating location:', update.name, update.changes)
+            const changes: Partial<Location> = {}
+            if (update.changes.visited !== undefined) changes.visited = update.changes.visited
+            if (update.changes.description) {
+              changes.description = update.changes.description
+            }
+            if (update.changes.descriptionAddition) {
+              const addition = update.changes.descriptionAddition.trim()
+              if (addition) {
+                changes.description =
+                  (changes.description ?? existing.description)
+                    ? `${changes.description ?? existing.description} ${addition}`
+                    : addition
+              }
+            }
+            // Merge inline runtime variable values into metadata if present
+            const locInlineVars = extractInlineCustomVars(
+              update.changes as unknown as Record<string, unknown>,
+              defsByName,
+            )
+            if (Object.keys(locInlineVars).length > 0) {
+              changes.metadata = mergeRuntimeVars(existing.metadata, locInlineVars, defsByName)
+            }
+
+            // COW: ensure entity is owned by current branch before updating
+            const { entity: ownedLoc, wasCowed: locWasCowed } = await this.cowLocation(existing)
+
+            if (update.changes.current === true) {
+              changes.visited = true
+              if (this.isCowBranch()) {
+                // COW-aware: targeted updates instead of blanket clear
+                const prevCurrent = this.locations.find((l) => l.current && l.id !== ownedLoc.id)
+                if (prevCurrent) {
+                  const { entity: ownedPrev, wasCowed: prevWasCowed } =
+                    await this.cowLocation(prevCurrent)
+                  await database.updateLocation(ownedPrev.id, { current: false })
+                  this.locations = this.locations.map((l) =>
+                    l.id === ownedPrev.id ? { ...l, current: false } : l,
+                  )
+                  if (prevWasCowed && trackingEnabled) {
+                    createdLocationIds.push(ownedPrev.id)
+                    const prevIdx = locationsBefore.findIndex((lb) => lb.id === prevCurrent.id)
+                    if (prevIdx !== -1) locationsBefore.splice(prevIdx, 1)
+                  }
+                }
+                await database.updateLocation(ownedLoc.id, { ...changes, current: true })
+                this.locations = this.locations.map((l) =>
+                  l.id === ownedLoc.id ? { ...l, ...changes, current: true, visited: true } : l,
+                )
+              } else {
+                await database.setCurrentLocation(storyId, ownedLoc.id)
+                if (Object.keys(changes).length > 0) {
+                  await database.updateLocation(ownedLoc.id, changes)
+                }
+                this.locations = this.locations.map((l) => {
+                  if (l.id === ownedLoc.id) {
+                    return { ...l, ...changes, current: true, visited: true }
+                  }
+                  return { ...l, current: false }
+                })
+              }
+              if (locWasCowed && trackingEnabled) {
+                createdLocationIds.push(ownedLoc.id)
+                const idx = locationsBefore.findIndex((lb) => lb.id === existing.id)
+                if (idx !== -1) locationsBefore.splice(idx, 1)
+              }
+              return
+            }
+
+            if (update.changes.current === false) changes.current = false
+            if (Object.keys(changes).length === 0) {
+              // Even if no changes, track COW if it happened
+              if (locWasCowed && trackingEnabled) {
+                createdLocationIds.push(ownedLoc.id)
+                const idx = locationsBefore.findIndex((lb) => lb.id === existing.id)
+                if (idx !== -1) locationsBefore.splice(idx, 1)
+              }
+              return
+            }
+            await database.updateLocation(ownedLoc.id, changes)
+            this.locations = this.locations.map((l) =>
+              l.id === ownedLoc.id ? { ...l, ...changes } : l,
+            )
+            if (locWasCowed && trackingEnabled) {
+              createdLocationIds.push(ownedLoc.id)
+              const idx = locationsBefore.findIndex((lb) => lb.id === existing.id)
+              if (idx !== -1) locationsBefore.splice(idx, 1)
+            }
+          }
+        })
+      }
+
+      // Apply item updates
+      for (const update of result.entryUpdates.itemUpdates) {
+        await this.wrapUpdate('Update item', update.name, async () => {
+          let existing = this.items.find((i) => i.name.toLowerCase() === update.name.toLowerCase())
+
+          // If item doesn't exist yet, create it first
+          if (!existing) {
+            const newItemData = result.entryUpdates.newItems.find(
+              (ni) => ni.name.toLowerCase() === update.name.toLowerCase(),
+            )
+            log('Creating item from update (not found):', update.name)
+            const itemMetadata: Record<string, unknown> = { source: 'classifier' }
+            if (newItemData) {
+              const newItemInlineVars = extractInlineCustomVars(
+                newItemData as unknown as Record<string, unknown>,
+                defsByName,
+              )
+              if (Object.keys(newItemInlineVars).length > 0) {
+                Object.assign(itemMetadata, mergeRuntimeVars(null, newItemInlineVars, defsByName))
+              }
+            }
+            const item: Item = {
+              id: crypto.randomUUID(),
+              storyId,
+              name: newItemData?.name ?? update.name,
+              description: newItemData?.description ?? null,
+              quantity: newItemData?.quantity ?? 1,
+              equipped: false,
+              location: newItemData?.location ?? 'inventory',
+              metadata: itemMetadata,
+              branchId: this.currentStory?.currentBranchId ?? null,
+            }
+            await database.addItem(item)
+            this.items = [...this.items, item]
+            if (trackingEnabled) createdItemIds.push(item.id)
+            existing = item
+          }
+
+          if (existing) {
+            log('Updating item:', update.name, update.changes)
+            const changes: Partial<Item> = {}
+            if (update.changes.quantity !== undefined) changes.quantity = update.changes.quantity
+            if (update.changes.equipped !== undefined) changes.equipped = update.changes.equipped
+            if (update.changes.location) changes.location = update.changes.location
+            // Merge inline runtime variable values into metadata if present
+            const itemInlineVars = extractInlineCustomVars(
+              update.changes as unknown as Record<string, unknown>,
+              defsByName,
+            )
+            if (Object.keys(itemInlineVars).length > 0) {
+              changes.metadata = mergeRuntimeVars(existing.metadata, itemInlineVars, defsByName)
+            }
+            // COW: ensure entity is owned by current branch before updating
+            const { entity: ownedItem, wasCowed: itemWasCowed } = await this.cowItem(existing)
+            await database.updateItem(ownedItem.id, changes)
+            this.items = this.items.map((i) => (i.id === ownedItem.id ? { ...i, ...changes } : i))
+            if (itemWasCowed && trackingEnabled) {
+              createdItemIds.push(ownedItem.id)
+              const idx = itemsBefore.findIndex((ib) => ib.id === existing.id)
+              if (idx !== -1) itemsBefore.splice(idx, 1)
+            }
+          }
+        })
+      }
+
+      // Apply story beat updates (mark as completed/failed)
+      for (const update of result.entryUpdates.storyBeatUpdates) {
+        await this.wrapUpdate('Update story beat', update.title, async () => {
+          let existing = this.storyBeats.find(
+            (b) => b.title.toLowerCase() === update.title.toLowerCase(),
+          )
+
+          // If story beat doesn't exist yet, create it first
+          if (!existing) {
+            const newBeatData = result.entryUpdates.newStoryBeats.find(
+              (nb) => nb.title.toLowerCase() === update.title.toLowerCase(),
+            )
+            log('Creating story beat from update (not found):', update.title)
+            const beatMetadata: Record<string, unknown> = { source: 'classifier' }
+            if (newBeatData) {
+              const newBeatInlineVars = extractInlineCustomVars(
+                newBeatData as unknown as Record<string, unknown>,
+                defsByName,
+              )
+              if (Object.keys(newBeatInlineVars).length > 0) {
+                Object.assign(beatMetadata, mergeRuntimeVars(null, newBeatInlineVars, defsByName))
+              }
+            }
+            const beat: StoryBeat = {
+              id: crypto.randomUUID(),
+              storyId,
+              title: newBeatData?.title ?? update.title,
+              description: newBeatData?.description ?? null,
+              type: newBeatData?.type ?? 'event',
+              status: newBeatData?.status ?? 'active',
+              triggeredAt: Date.now(),
+              metadata: beatMetadata,
+              branchId: this.currentStory?.currentBranchId ?? null,
+            }
+            await database.addStoryBeat(beat)
+            this.storyBeats = [...this.storyBeats, beat]
+            if (trackingEnabled) createdStoryBeatIds.push(beat.id)
+            existing = beat
+          }
+
+          if (existing) {
+            log('Updating story beat:', update.title, update.changes)
+            const changes: Partial<StoryBeat> = {}
+            if (update.changes.status) {
+              changes.status = update.changes.status
+              // Set resolvedAt timestamp when completing or failing
+              if (update.changes.status === 'completed' || update.changes.status === 'failed') {
+                changes.resolvedAt = Date.now()
+              }
+            }
+            if (update.changes.description) changes.description = update.changes.description
+            // Merge inline runtime variable values into metadata if present
+            const beatInlineVars = extractInlineCustomVars(
+              update.changes as unknown as Record<string, unknown>,
+              defsByName,
+            )
+            if (Object.keys(beatInlineVars).length > 0) {
+              changes.metadata = mergeRuntimeVars(existing.metadata, beatInlineVars, defsByName)
+            }
+            // COW: ensure entity is owned by current branch before updating
+            const { entity: ownedBeat, wasCowed: beatWasCowed } = await this.cowStoryBeat(existing)
+            await database.updateStoryBeat(ownedBeat.id, changes)
+            this.storyBeats = this.storyBeats.map((b) =>
+              b.id === ownedBeat.id ? { ...b, ...changes } : b,
+            )
+            if (beatWasCowed && trackingEnabled) {
+              createdStoryBeatIds.push(ownedBeat.id)
+              const idx = storyBeatsBefore.findIndex((sb) => sb.id === existing.id)
+              if (idx !== -1) storyBeatsBefore.splice(idx, 1)
+            }
+          }
+        })
+      }
+
+      // Add new characters (check for duplicates)
+      for (const newChar of result.entryUpdates.newCharacters) {
+        await this.wrapUpdate('Add character', newChar.name, async () => {
+          const exists = this.characters.some(
+            (c) => c.name.toLowerCase() === newChar.name.toLowerCase(),
+          )
+          if (!exists) {
+            log('Adding new character:', newChar.name)
+            const charMetadata: Record<string, unknown> = { source: 'classifier' }
             const newCharInlineVars = extractInlineCustomVars(
-              newCharData as unknown as Record<string, unknown>,
+              newChar as unknown as Record<string, unknown>,
               defsByName,
             )
             if (Object.keys(newCharInlineVars).length > 0) {
               Object.assign(charMetadata, mergeRuntimeVars(null, newCharInlineVars, defsByName))
             }
-          }
-          const character: Character = {
-            id: crypto.randomUUID(),
-            storyId,
-            name: newCharData?.name ?? update.name,
-            description: newCharData?.description ?? null,
-            relationship: newCharData?.relationship ?? null,
-            traits: newCharData?.traits ?? [],
-            visualDescriptors: newCharData?.visualDescriptors ?? {},
-            status: (newCharData?.status as Character['status']) ?? 'active',
-            metadata: charMetadata,
-            portrait: null,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addCharacter(character)
-          this.characters = [...this.characters, character]
-          if (trackingEnabled) createdCharacterIds.push(character.id)
-          newlyCreatedCharacterIds.push(character.id)
-          existing = character
-        }
-
-        if (existing) {
-          log('Updating character:', update.name, update.changes)
-          const changes: Partial<Character> = {}
-          if (update.changes.status) changes.status = update.changes.status
-          if (update.changes.relationship) {
-            if (existing.relationship === 'self') {
-              // Preserve protagonist relationship; only set via explicit swap.
-            } else if (update.changes.relationship !== 'self') {
-              changes.relationship = update.changes.relationship
+            const character: Character = {
+              id: crypto.randomUUID(),
+              storyId,
+              name: newChar.name,
+              description: newChar.description ?? null,
+              relationship: newChar.relationship ?? null,
+              traits: newChar.traits ?? [],
+              visualDescriptors: newChar.visualDescriptors ?? {},
+              status: 'active',
+              metadata: charMetadata,
+              portrait: null,
+              branchId: this.currentStory?.currentBranchId ?? null,
             }
+            await database.addCharacter(character)
+            this.characters = [...this.characters, character]
+            if (trackingEnabled) createdCharacterIds.push(character.id)
+            newlyCreatedCharacterIds.push(character.id)
           }
-          if (update.changes.newTraits?.length || update.changes.removeTraits?.length) {
-            let traits = [...existing.traits]
-            if (update.changes.removeTraits?.length) {
-              const toRemove = new Set(update.changes.removeTraits.map((t) => t.toLowerCase()))
-              traits = traits.filter((t) => !toRemove.has(t.toLowerCase()))
-            }
-            if (update.changes.newTraits?.length) {
-              traits = [...traits, ...update.changes.newTraits]
-            }
-            const traitMap = new Map(traits.map((t) => [t.toLowerCase(), t]))
-            changes.traits = Array.from(traitMap.values())
-          }
-          // Visual descriptor updates land on the story-tracked CURRENT look —
-          // never the canonical baseline (Ben's two-layer ruling 2026-07-19).
-          // The classifier proposes transient scene state ("hair spread across
-          // soaked linens", scene clothing, size prose); writing it over the
-          // baseline destroyed the identity that portraits/anchors/sprites
-          // render from and thrashed the sprite appearance hash. The baseline
-          // is user-owned; "Adopt as baseline" in the panel promotes tracked
-          // changes deliberately.
-          if (
-            update.changes.visualDescriptors &&
-            Object.keys(update.changes.visualDescriptors).length > 0
-          ) {
-            changes.currentVisualDescriptors = update.changes.visualDescriptors
-          }
-          // Merge inline runtime variable values into metadata if present
-          const charInlineVars = extractInlineCustomVars(
-            update.changes as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(charInlineVars).length > 0) {
-            changes.metadata = mergeRuntimeVars(existing.metadata, charInlineVars, defsByName)
-          }
-          // COW: ensure entity is owned by current branch before updating
-          const { entity: ownedChar, wasCowed: charWasCowed } = await this.cowCharacter(existing)
-          await database.updateCharacter(ownedChar.id, changes)
-          this.characters = this.characters.map((c) =>
-            c.id === ownedChar.id ? { ...c, ...changes } : c,
-          )
-          // If COW'd, track override as created (rollback = delete override)
-          if (charWasCowed && trackingEnabled) {
-            createdCharacterIds.push(ownedChar.id)
-            const idx = charactersBefore.findIndex((cb) => cb.id === existing.id)
-            if (idx !== -1) charactersBefore.splice(idx, 1)
-          }
-        }
-      })
-    }
+        })
+      }
 
-    // Apply location updates
-    for (const update of result.entryUpdates.locationUpdates) {
-      await this.wrapUpdate('Update location', update.name, async () => {
-        let existing = this.locations.find(
-          (l) => l.name.toLowerCase() === update.name.toLowerCase(),
-        )
+      // Handle scene.currentLocationName - update current location if specified
+      // Runs before newLocations so stubs are available for merging
+      if (result.scene.currentLocationName) {
+        await this.wrapUpdate('Set scene location', result.scene.currentLocationName, async () => {
+          const locationName = result.scene.currentLocationName!.toLowerCase()
+          let currentLoc = this.locations.find((l) => l.name.toLowerCase() === locationName)
 
-        // If location doesn't exist yet, create it first
-        if (!existing) {
-          // Check if newLocations has data for this name
-          const newLocData = result.entryUpdates.newLocations.find(
-            (nl) => nl.name.toLowerCase() === update.name.toLowerCase(),
-          )
-          log('Creating location from update (not found):', update.name)
-          const locMetadata: Record<string, unknown> = { source: 'classifier' }
-          if (newLocData) {
-            const newLocInlineVars = extractInlineCustomVars(
-              newLocData as unknown as Record<string, unknown>,
-              defsByName,
+          // If location doesn't exist yet, create a stub
+          if (!currentLoc) {
+            log(
+              'Creating stub location from scene.currentLocationName:',
+              result.scene.currentLocationName,
             )
-            if (Object.keys(newLocInlineVars).length > 0) {
-              Object.assign(locMetadata, mergeRuntimeVars(null, newLocInlineVars, defsByName))
+            const stubLocation: Location = {
+              id: crypto.randomUUID(),
+              storyId,
+              name: result.scene.currentLocationName!,
+              description: null,
+              visited: true,
+              current: false,
+              connections: [],
+              metadata: { source: 'classifier' },
+              branchId: this.currentStory?.currentBranchId ?? null,
             }
-          }
-          const location: Location = {
-            id: crypto.randomUUID(),
-            storyId,
-            name: newLocData?.name ?? update.name,
-            description: newLocData?.description ?? null,
-            visited: newLocData?.visited ?? false,
-            current: newLocData?.current ?? false,
-            connections: [],
-            metadata: locMetadata,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addLocation(location)
-          this.locations = [...this.locations, location]
-          if (trackingEnabled) createdLocationIds.push(location.id)
-          existing = location
-        }
-
-        if (existing) {
-          log('Updating location:', update.name, update.changes)
-          const changes: Partial<Location> = {}
-          if (update.changes.visited !== undefined) changes.visited = update.changes.visited
-          if (update.changes.description) {
-            changes.description = update.changes.description
-          }
-          if (update.changes.descriptionAddition) {
-            const addition = update.changes.descriptionAddition.trim()
-            if (addition) {
-              changes.description =
-                (changes.description ?? existing.description)
-                  ? `${changes.description ?? existing.description} ${addition}`
-                  : addition
-            }
-          }
-          // Merge inline runtime variable values into metadata if present
-          const locInlineVars = extractInlineCustomVars(
-            update.changes as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(locInlineVars).length > 0) {
-            changes.metadata = mergeRuntimeVars(existing.metadata, locInlineVars, defsByName)
+            await database.addLocation(stubLocation)
+            this.locations = [...this.locations, stubLocation]
+            if (trackingEnabled) createdLocationIds.push(stubLocation.id)
+            currentLoc = stubLocation
           }
 
-          // COW: ensure entity is owned by current branch before updating
-          const { entity: ownedLoc, wasCowed: locWasCowed } = await this.cowLocation(existing)
-
-          if (update.changes.current === true) {
-            changes.visited = true
+          if (currentLoc && !currentLoc.current) {
+            log('Setting current location from scene:', currentLoc.name)
             if (this.isCowBranch()) {
-              // COW-aware: targeted updates instead of blanket clear
-              const prevCurrent = this.locations.find((l) => l.current && l.id !== ownedLoc.id)
+              // COW-aware: targeted updates
+              const { entity: ownedTarget, wasCowed: targetWasCowed } =
+                await this.cowLocation(currentLoc)
+              const prevCurrent = this.locations.find((l) => l.current && l.id !== ownedTarget.id)
               if (prevCurrent) {
                 const { entity: ownedPrev, wasCowed: prevWasCowed } =
                   await this.cowLocation(prevCurrent)
@@ -2349,492 +2683,220 @@ class StoryStore {
                 )
                 if (prevWasCowed && trackingEnabled) {
                   createdLocationIds.push(ownedPrev.id)
-                  const prevIdx = locationsBefore.findIndex((lb) => lb.id === prevCurrent.id)
-                  if (prevIdx !== -1) locationsBefore.splice(prevIdx, 1)
+                  const idx = locationsBefore.findIndex((lb) => lb.id === prevCurrent.id)
+                  if (idx !== -1) locationsBefore.splice(idx, 1)
                 }
               }
-              await database.updateLocation(ownedLoc.id, { ...changes, current: true })
+              await database.updateLocation(ownedTarget.id, { current: true, visited: true })
               this.locations = this.locations.map((l) =>
-                l.id === ownedLoc.id ? { ...l, ...changes, current: true, visited: true } : l,
+                l.id === ownedTarget.id ? { ...l, current: true, visited: true } : l,
               )
-            } else {
-              await database.setCurrentLocation(storyId, ownedLoc.id)
-              if (Object.keys(changes).length > 0) {
-                await database.updateLocation(ownedLoc.id, changes)
+              if (targetWasCowed && trackingEnabled) {
+                createdLocationIds.push(ownedTarget.id)
+                const idx = locationsBefore.findIndex((lb) => lb.id === currentLoc!.id)
+                if (idx !== -1) locationsBefore.splice(idx, 1)
               }
-              this.locations = this.locations.map((l) => {
-                if (l.id === ownedLoc.id) {
-                  return { ...l, ...changes, current: true, visited: true }
+            } else {
+              await database.setCurrentLocation(storyId, currentLoc.id)
+              this.locations = this.locations.map((l) => ({
+                ...l,
+                current: l.id === currentLoc!.id,
+                visited: l.id === currentLoc!.id ? true : l.visited,
+              }))
+            }
+          }
+        })
+      }
+
+      // Add new locations (check for duplicates, merge into recently created)
+      for (const newLoc of result.entryUpdates.newLocations) {
+        await this.wrapUpdate('Add location', newLoc.name, async () => {
+          const existing = this.locations.find(
+            (l) => l.name.toLowerCase() === newLoc.name.toLowerCase(),
+          )
+          if (existing && createdLocationIds.includes(existing.id)) {
+            // Merge into location created earlier in this classification run
+            // (e.g. stub from scene.currentLocationName or from update handler)
+            log('Merging new location into recently created:', newLoc.name)
+            const changes: Partial<Location> = {}
+            if (newLoc.description && !existing.description) {
+              changes.description = newLoc.description
+            }
+            if (newLoc.visited !== undefined && newLoc.visited !== existing.visited) {
+              changes.visited = newLoc.visited
+            }
+            if (newLoc.current && !existing.current) {
+              changes.current = true
+              changes.visited = true
+            }
+            // Merge inline runtime variable values into metadata if present
+            const newLocInlineVars = extractInlineCustomVars(
+              newLoc as unknown as Record<string, unknown>,
+              defsByName,
+            )
+            if (Object.keys(newLocInlineVars).length > 0) {
+              changes.metadata = mergeRuntimeVars(existing.metadata, newLocInlineVars, defsByName)
+            }
+            if (Object.keys(changes).length > 0) {
+              await database.updateLocation(existing.id, changes)
+              this.locations = this.locations.map((l) =>
+                l.id === existing.id ? { ...l, ...changes } : l,
+              )
+            }
+          } else if (!existing) {
+            log('Adding new location:', newLoc.name)
+            // If this is the current location, unset others first
+            if (newLoc.current) {
+              if (this.isCowBranch()) {
+                // COW-aware: targeted unset of previous current
+                const prevCurrent = this.locations.find((l) => l.current)
+                if (prevCurrent) {
+                  const { entity: ownedPrev } = await this.cowLocation(prevCurrent)
+                  await database.updateLocation(ownedPrev.id, { current: false })
+                  this.locations = this.locations.map((l) =>
+                    l.id === ownedPrev.id ? { ...l, current: false } : l,
+                  )
                 }
-                return { ...l, current: false }
-              })
+              } else {
+                this.locations = this.locations.map((l) => ({ ...l, current: false }))
+                for (const l of this.locations) {
+                  await database.updateLocation(l.id, { current: false })
+                }
+              }
             }
-            if (locWasCowed && trackingEnabled) {
-              createdLocationIds.push(ownedLoc.id)
-              const idx = locationsBefore.findIndex((lb) => lb.id === existing.id)
-              if (idx !== -1) locationsBefore.splice(idx, 1)
+            const locMetadata: Record<string, unknown> = { source: 'classifier' }
+            const newLocInlineVars = extractInlineCustomVars(
+              newLoc as unknown as Record<string, unknown>,
+              defsByName,
+            )
+            if (Object.keys(newLocInlineVars).length > 0) {
+              Object.assign(locMetadata, mergeRuntimeVars(null, newLocInlineVars, defsByName))
             }
-            return
-          }
-
-          if (update.changes.current === false) changes.current = false
-          if (Object.keys(changes).length === 0) {
-            // Even if no changes, track COW if it happened
-            if (locWasCowed && trackingEnabled) {
-              createdLocationIds.push(ownedLoc.id)
-              const idx = locationsBefore.findIndex((lb) => lb.id === existing.id)
-              if (idx !== -1) locationsBefore.splice(idx, 1)
+            const location: Location = {
+              id: crypto.randomUUID(),
+              storyId,
+              name: newLoc.name,
+              description: newLoc.description ?? null,
+              visited: newLoc.visited ?? false,
+              current: newLoc.current ?? false,
+              connections: [],
+              metadata: locMetadata,
+              branchId: this.currentStory?.currentBranchId ?? null,
             }
-            return
+            await database.addLocation(location)
+            this.locations = [...this.locations, location]
+            if (trackingEnabled) createdLocationIds.push(location.id)
           }
-          await database.updateLocation(ownedLoc.id, changes)
-          this.locations = this.locations.map((l) =>
-            l.id === ownedLoc.id ? { ...l, ...changes } : l,
-          )
-          if (locWasCowed && trackingEnabled) {
-            createdLocationIds.push(ownedLoc.id)
-            const idx = locationsBefore.findIndex((lb) => lb.id === existing.id)
-            if (idx !== -1) locationsBefore.splice(idx, 1)
-          }
-        }
-      })
-    }
+        })
+      }
 
-    // Apply item updates
-    for (const update of result.entryUpdates.itemUpdates) {
-      await this.wrapUpdate('Update item', update.name, async () => {
-        let existing = this.items.find((i) => i.name.toLowerCase() === update.name.toLowerCase())
-
-        // If item doesn't exist yet, create it first
-        if (!existing) {
-          const newItemData = result.entryUpdates.newItems.find(
-            (ni) => ni.name.toLowerCase() === update.name.toLowerCase(),
-          )
-          log('Creating item from update (not found):', update.name)
-          const itemMetadata: Record<string, unknown> = { source: 'classifier' }
-          if (newItemData) {
+      // Add new items (check for duplicates)
+      for (const newItem of result.entryUpdates.newItems) {
+        await this.wrapUpdate('Add item', newItem.name, async () => {
+          const exists = this.items.some((i) => i.name.toLowerCase() === newItem.name.toLowerCase())
+          if (!exists) {
+            log('Adding new item:', newItem.name)
+            const itemMetadata: Record<string, unknown> = { source: 'classifier' }
             const newItemInlineVars = extractInlineCustomVars(
-              newItemData as unknown as Record<string, unknown>,
+              newItem as unknown as Record<string, unknown>,
               defsByName,
             )
             if (Object.keys(newItemInlineVars).length > 0) {
               Object.assign(itemMetadata, mergeRuntimeVars(null, newItemInlineVars, defsByName))
             }
+            const item: Item = {
+              id: crypto.randomUUID(),
+              storyId,
+              name: newItem.name,
+              description: newItem.description ?? null,
+              quantity: newItem.quantity ?? 1,
+              equipped: false,
+              location: newItem.location ?? 'inventory',
+              metadata: itemMetadata,
+              branchId: this.currentStory?.currentBranchId ?? null,
+            }
+            await database.addItem(item)
+            this.items = [...this.items, item]
+            if (trackingEnabled) createdItemIds.push(item.id)
           }
-          const item: Item = {
-            id: crypto.randomUUID(),
-            storyId,
-            name: newItemData?.name ?? update.name,
-            description: newItemData?.description ?? null,
-            quantity: newItemData?.quantity ?? 1,
-            equipped: false,
-            location: newItemData?.location ?? 'inventory',
-            metadata: itemMetadata,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addItem(item)
-          this.items = [...this.items, item]
-          if (trackingEnabled) createdItemIds.push(item.id)
-          existing = item
-        }
+        })
+      }
 
-        if (existing) {
-          log('Updating item:', update.name, update.changes)
-          const changes: Partial<Item> = {}
-          if (update.changes.quantity !== undefined) changes.quantity = update.changes.quantity
-          if (update.changes.equipped !== undefined) changes.equipped = update.changes.equipped
-          if (update.changes.location) changes.location = update.changes.location
-          // Merge inline runtime variable values into metadata if present
-          const itemInlineVars = extractInlineCustomVars(
-            update.changes as unknown as Record<string, unknown>,
-            defsByName,
+      // Add new story beats (check for duplicates)
+      for (const newBeat of result.entryUpdates.newStoryBeats) {
+        await this.wrapUpdate('Add story beat', newBeat.title, async () => {
+          const exists = this.storyBeats.some(
+            (b) => b.title.toLowerCase() === newBeat.title.toLowerCase(),
           )
-          if (Object.keys(itemInlineVars).length > 0) {
-            changes.metadata = mergeRuntimeVars(existing.metadata, itemInlineVars, defsByName)
-          }
-          // COW: ensure entity is owned by current branch before updating
-          const { entity: ownedItem, wasCowed: itemWasCowed } = await this.cowItem(existing)
-          await database.updateItem(ownedItem.id, changes)
-          this.items = this.items.map((i) => (i.id === ownedItem.id ? { ...i, ...changes } : i))
-          if (itemWasCowed && trackingEnabled) {
-            createdItemIds.push(ownedItem.id)
-            const idx = itemsBefore.findIndex((ib) => ib.id === existing.id)
-            if (idx !== -1) itemsBefore.splice(idx, 1)
-          }
-        }
-      })
-    }
-
-    // Apply story beat updates (mark as completed/failed)
-    for (const update of result.entryUpdates.storyBeatUpdates) {
-      await this.wrapUpdate('Update story beat', update.title, async () => {
-        let existing = this.storyBeats.find(
-          (b) => b.title.toLowerCase() === update.title.toLowerCase(),
-        )
-
-        // If story beat doesn't exist yet, create it first
-        if (!existing) {
-          const newBeatData = result.entryUpdates.newStoryBeats.find(
-            (nb) => nb.title.toLowerCase() === update.title.toLowerCase(),
-          )
-          log('Creating story beat from update (not found):', update.title)
-          const beatMetadata: Record<string, unknown> = { source: 'classifier' }
-          if (newBeatData) {
+          if (!exists) {
+            log('Adding new story beat:', newBeat.title)
+            const beatMetadata: Record<string, unknown> = { source: 'classifier' }
             const newBeatInlineVars = extractInlineCustomVars(
-              newBeatData as unknown as Record<string, unknown>,
+              newBeat as unknown as Record<string, unknown>,
               defsByName,
             )
             if (Object.keys(newBeatInlineVars).length > 0) {
               Object.assign(beatMetadata, mergeRuntimeVars(null, newBeatInlineVars, defsByName))
             }
-          }
-          const beat: StoryBeat = {
-            id: crypto.randomUUID(),
-            storyId,
-            title: newBeatData?.title ?? update.title,
-            description: newBeatData?.description ?? null,
-            type: newBeatData?.type ?? 'event',
-            status: newBeatData?.status ?? 'active',
-            triggeredAt: Date.now(),
-            metadata: beatMetadata,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addStoryBeat(beat)
-          this.storyBeats = [...this.storyBeats, beat]
-          if (trackingEnabled) createdStoryBeatIds.push(beat.id)
-          existing = beat
-        }
-
-        if (existing) {
-          log('Updating story beat:', update.title, update.changes)
-          const changes: Partial<StoryBeat> = {}
-          if (update.changes.status) {
-            changes.status = update.changes.status
-            // Set resolvedAt timestamp when completing or failing
-            if (update.changes.status === 'completed' || update.changes.status === 'failed') {
-              changes.resolvedAt = Date.now()
+            const beat: StoryBeat = {
+              id: crypto.randomUUID(),
+              storyId,
+              title: newBeat.title,
+              description: newBeat.description ?? null,
+              type: newBeat.type ?? 'event',
+              status: newBeat.status ?? 'active',
+              triggeredAt: Date.now(),
+              metadata: beatMetadata,
+              branchId: this.currentStory?.currentBranchId ?? null,
             }
+            await database.addStoryBeat(beat)
+            this.storyBeats = [...this.storyBeats, beat]
+            if (trackingEnabled) createdStoryBeatIds.push(beat.id)
           }
-          if (update.changes.description) changes.description = update.changes.description
-          // Merge inline runtime variable values into metadata if present
-          const beatInlineVars = extractInlineCustomVars(
-            update.changes as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(beatInlineVars).length > 0) {
-            changes.metadata = mergeRuntimeVars(existing.metadata, beatInlineVars, defsByName)
-          }
-          // COW: ensure entity is owned by current branch before updating
-          const { entity: ownedBeat, wasCowed: beatWasCowed } = await this.cowStoryBeat(existing)
-          await database.updateStoryBeat(ownedBeat.id, changes)
-          this.storyBeats = this.storyBeats.map((b) =>
-            b.id === ownedBeat.id ? { ...b, ...changes } : b,
-          )
-          if (beatWasCowed && trackingEnabled) {
-            createdStoryBeatIds.push(ownedBeat.id)
-            const idx = storyBeatsBefore.findIndex((sb) => sb.id === existing.id)
-            if (idx !== -1) storyBeatsBefore.splice(idx, 1)
-          }
-        }
-      })
-    }
+        })
+      }
 
-    // Add new characters (check for duplicates)
-    for (const newChar of result.entryUpdates.newCharacters) {
-      await this.wrapUpdate('Add character', newChar.name, async () => {
-        const exists = this.characters.some(
-          (c) => c.name.toLowerCase() === newChar.name.toLowerCase(),
+      // Apply time progression from scene data
+      if (result.scene.timeProgression && result.scene.timeProgression !== 'none') {
+        await this.applyTimeProgression(result.scene.timeProgression)
+      }
+
+      // BE engine (Phase A): deterministic body-state reduction. Runs after every
+      // entity loop and BEFORE the delta is built/saved so its writes are
+      // rollback-visible (research/31 §2.2). beLog/checkLog are declared in the
+      // method scope above so hasChanges can still read them after the transaction.
+      if (this.currentStory.settings?.beMode === true) {
+        const beResult = await this.applyBeEvents(
+          result,
+          entryId,
+          trackingEnabled,
+          charactersBefore,
+          createdCharacterIds,
+          // Read-only here (milk quality, research/49 R8) — applyRpgTurn stays the
+          // single writer of the check's effects.
+          checkRecord,
+          itemsBefore,
+          createdItemIds,
         )
-        if (!exists) {
-          log('Adding new character:', newChar.name)
-          const charMetadata: Record<string, unknown> = { source: 'classifier' }
-          const newCharInlineVars = extractInlineCustomVars(
-            newChar as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(newCharInlineVars).length > 0) {
-            Object.assign(charMetadata, mergeRuntimeVars(null, newCharInlineVars, defsByName))
-          }
-          const character: Character = {
-            id: crypto.randomUUID(),
-            storyId,
-            name: newChar.name,
-            description: newChar.description ?? null,
-            relationship: newChar.relationship ?? null,
-            traits: newChar.traits ?? [],
-            visualDescriptors: newChar.visualDescriptors ?? {},
-            status: 'active',
-            metadata: charMetadata,
-            portrait: null,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addCharacter(character)
-          this.characters = [...this.characters, character]
-          if (trackingEnabled) createdCharacterIds.push(character.id)
-          newlyCreatedCharacterIds.push(character.id)
-        }
-      })
-    }
-
-    // Handle scene.currentLocationName - update current location if specified
-    // Runs before newLocations so stubs are available for merging
-    if (result.scene.currentLocationName) {
-      await this.wrapUpdate('Set scene location', result.scene.currentLocationName, async () => {
-        const locationName = result.scene.currentLocationName!.toLowerCase()
-        let currentLoc = this.locations.find((l) => l.name.toLowerCase() === locationName)
-
-        // If location doesn't exist yet, create a stub
-        if (!currentLoc) {
-          log(
-            'Creating stub location from scene.currentLocationName:',
-            result.scene.currentLocationName,
-          )
-          const stubLocation: Location = {
-            id: crypto.randomUUID(),
-            storyId,
-            name: result.scene.currentLocationName!,
-            description: null,
-            visited: true,
-            current: false,
-            connections: [],
-            metadata: { source: 'classifier' },
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addLocation(stubLocation)
-          this.locations = [...this.locations, stubLocation]
-          if (trackingEnabled) createdLocationIds.push(stubLocation.id)
-          currentLoc = stubLocation
-        }
-
-        if (currentLoc && !currentLoc.current) {
-          log('Setting current location from scene:', currentLoc.name)
-          if (this.isCowBranch()) {
-            // COW-aware: targeted updates
-            const { entity: ownedTarget, wasCowed: targetWasCowed } =
-              await this.cowLocation(currentLoc)
-            const prevCurrent = this.locations.find((l) => l.current && l.id !== ownedTarget.id)
-            if (prevCurrent) {
-              const { entity: ownedPrev, wasCowed: prevWasCowed } =
-                await this.cowLocation(prevCurrent)
-              await database.updateLocation(ownedPrev.id, { current: false })
-              this.locations = this.locations.map((l) =>
-                l.id === ownedPrev.id ? { ...l, current: false } : l,
-              )
-              if (prevWasCowed && trackingEnabled) {
-                createdLocationIds.push(ownedPrev.id)
-                const idx = locationsBefore.findIndex((lb) => lb.id === prevCurrent.id)
-                if (idx !== -1) locationsBefore.splice(idx, 1)
-              }
-            }
-            await database.updateLocation(ownedTarget.id, { current: true, visited: true })
-            this.locations = this.locations.map((l) =>
-              l.id === ownedTarget.id ? { ...l, current: true, visited: true } : l,
-            )
-            if (targetWasCowed && trackingEnabled) {
-              createdLocationIds.push(ownedTarget.id)
-              const idx = locationsBefore.findIndex((lb) => lb.id === currentLoc!.id)
-              if (idx !== -1) locationsBefore.splice(idx, 1)
-            }
-          } else {
-            await database.setCurrentLocation(storyId, currentLoc.id)
-            this.locations = this.locations.map((l) => ({
-              ...l,
-              current: l.id === currentLoc!.id,
-              visited: l.id === currentLoc!.id ? true : l.visited,
-            }))
-          }
-        }
-      })
-    }
-
-    // Add new locations (check for duplicates, merge into recently created)
-    for (const newLoc of result.entryUpdates.newLocations) {
-      await this.wrapUpdate('Add location', newLoc.name, async () => {
-        const existing = this.locations.find(
-          (l) => l.name.toLowerCase() === newLoc.name.toLowerCase(),
+        beLog = beResult.beLog
+        // RPG layer: protagonist sheet apply (essence/regen/leveling/drift) —
+        // after the girls' reducer, before the delta, same rollback contract.
+        checkLog = await this.applyRpgTurn(
+          checkRecord,
+          entryId,
+          trackingEnabled,
+          charactersBefore,
+          createdCharacterIds,
+          timeTrackerBefore,
+          beResult.crossings,
         )
-        if (existing && createdLocationIds.includes(existing.id)) {
-          // Merge into location created earlier in this classification run
-          // (e.g. stub from scene.currentLocationName or from update handler)
-          log('Merging new location into recently created:', newLoc.name)
-          const changes: Partial<Location> = {}
-          if (newLoc.description && !existing.description) {
-            changes.description = newLoc.description
-          }
-          if (newLoc.visited !== undefined && newLoc.visited !== existing.visited) {
-            changes.visited = newLoc.visited
-          }
-          if (newLoc.current && !existing.current) {
-            changes.current = true
-            changes.visited = true
-          }
-          // Merge inline runtime variable values into metadata if present
-          const newLocInlineVars = extractInlineCustomVars(
-            newLoc as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(newLocInlineVars).length > 0) {
-            changes.metadata = mergeRuntimeVars(existing.metadata, newLocInlineVars, defsByName)
-          }
-          if (Object.keys(changes).length > 0) {
-            await database.updateLocation(existing.id, changes)
-            this.locations = this.locations.map((l) =>
-              l.id === existing.id ? { ...l, ...changes } : l,
-            )
-          }
-        } else if (!existing) {
-          log('Adding new location:', newLoc.name)
-          // If this is the current location, unset others first
-          if (newLoc.current) {
-            if (this.isCowBranch()) {
-              // COW-aware: targeted unset of previous current
-              const prevCurrent = this.locations.find((l) => l.current)
-              if (prevCurrent) {
-                const { entity: ownedPrev } = await this.cowLocation(prevCurrent)
-                await database.updateLocation(ownedPrev.id, { current: false })
-                this.locations = this.locations.map((l) =>
-                  l.id === ownedPrev.id ? { ...l, current: false } : l,
-                )
-              }
-            } else {
-              this.locations = this.locations.map((l) => ({ ...l, current: false }))
-              for (const l of this.locations) {
-                await database.updateLocation(l.id, { current: false })
-              }
-            }
-          }
-          const locMetadata: Record<string, unknown> = { source: 'classifier' }
-          const newLocInlineVars = extractInlineCustomVars(
-            newLoc as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(newLocInlineVars).length > 0) {
-            Object.assign(locMetadata, mergeRuntimeVars(null, newLocInlineVars, defsByName))
-          }
-          const location: Location = {
-            id: crypto.randomUUID(),
-            storyId,
-            name: newLoc.name,
-            description: newLoc.description ?? null,
-            visited: newLoc.visited ?? false,
-            current: newLoc.current ?? false,
-            connections: [],
-            metadata: locMetadata,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addLocation(location)
-          this.locations = [...this.locations, location]
-          if (trackingEnabled) createdLocationIds.push(location.id)
-        }
-      })
-    }
+      }
 
-    // Add new items (check for duplicates)
-    for (const newItem of result.entryUpdates.newItems) {
-      await this.wrapUpdate('Add item', newItem.name, async () => {
-        const exists = this.items.some((i) => i.name.toLowerCase() === newItem.name.toLowerCase())
-        if (!exists) {
-          log('Adding new item:', newItem.name)
-          const itemMetadata: Record<string, unknown> = { source: 'classifier' }
-          const newItemInlineVars = extractInlineCustomVars(
-            newItem as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(newItemInlineVars).length > 0) {
-            Object.assign(itemMetadata, mergeRuntimeVars(null, newItemInlineVars, defsByName))
-          }
-          const item: Item = {
-            id: crypto.randomUUID(),
-            storyId,
-            name: newItem.name,
-            description: newItem.description ?? null,
-            quantity: newItem.quantity ?? 1,
-            equipped: false,
-            location: newItem.location ?? 'inventory',
-            metadata: itemMetadata,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addItem(item)
-          this.items = [...this.items, item]
-          if (trackingEnabled) createdItemIds.push(item.id)
-        }
-      })
-    }
-
-    // Add new story beats (check for duplicates)
-    for (const newBeat of result.entryUpdates.newStoryBeats) {
-      await this.wrapUpdate('Add story beat', newBeat.title, async () => {
-        const exists = this.storyBeats.some(
-          (b) => b.title.toLowerCase() === newBeat.title.toLowerCase(),
-        )
-        if (!exists) {
-          log('Adding new story beat:', newBeat.title)
-          const beatMetadata: Record<string, unknown> = { source: 'classifier' }
-          const newBeatInlineVars = extractInlineCustomVars(
-            newBeat as unknown as Record<string, unknown>,
-            defsByName,
-          )
-          if (Object.keys(newBeatInlineVars).length > 0) {
-            Object.assign(beatMetadata, mergeRuntimeVars(null, newBeatInlineVars, defsByName))
-          }
-          const beat: StoryBeat = {
-            id: crypto.randomUUID(),
-            storyId,
-            title: newBeat.title,
-            description: newBeat.description ?? null,
-            type: newBeat.type ?? 'event',
-            status: newBeat.status ?? 'active',
-            triggeredAt: Date.now(),
-            metadata: beatMetadata,
-            branchId: this.currentStory?.currentBranchId ?? null,
-          }
-          await database.addStoryBeat(beat)
-          this.storyBeats = [...this.storyBeats, beat]
-          if (trackingEnabled) createdStoryBeatIds.push(beat.id)
-        }
-      })
-    }
-
-    // Apply time progression from scene data
-    if (result.scene.timeProgression && result.scene.timeProgression !== 'none') {
-      await this.applyTimeProgression(result.scene.timeProgression)
-    }
-
-    // BE engine (Phase A): deterministic body-state reduction. Runs after every
-    // entity loop and BEFORE the delta is built/saved so its writes are
-    // rollback-visible (research/31 §2.2).
-    let beLog: BeLogRecord[] = []
-    let checkLog: CheckRecord[] = []
-    if (this.currentStory.settings?.beMode === true) {
-      const beResult = await this.applyBeEvents(
-        result,
-        entryId,
-        trackingEnabled,
-        charactersBefore,
-        createdCharacterIds,
-        // Read-only here (milk quality, research/49 R8) — applyRpgTurn stays the
-        // single writer of the check's effects.
-        checkRecord,
-        itemsBefore,
-        createdItemIds,
-      )
-      beLog = beResult.beLog
-      // RPG layer: protagonist sheet apply (essence/regen/leveling/drift) —
-      // after the girls' reducer, before the delta, same rollback contract.
-      checkLog = await this.applyRpgTurn(
-        checkRecord,
-        entryId,
-        trackingEnabled,
-        charactersBefore,
-        createdCharacterIds,
-        timeTrackerBefore,
-        beResult.crossings,
-      )
-    }
-
-    // Phase 1: Save world state delta on the entry
-    if (trackingEnabled && entryId) {
-      try {
+      // Phase 1: Save world state delta on the entry. CR-1: this is the LAST write
+      // inside the turn transaction — no local try/catch, so a failure here
+      // propagates and rolls the whole turn back (no half-applied, un-rollbackable
+      // state). maybeCreateAutoSnapshot moved out to run only after a durable commit.
+      if (trackingEnabled && entryId) {
         const delta: WorldStateDelta = {
           classificationResult: result as unknown as Record<string, unknown>,
           previousState: {
@@ -2872,13 +2934,51 @@ class StoryStore {
           createdItems: createdItemIds.length,
           createdStoryBeats: createdStoryBeatIds.length,
         })
-
-        // Auto-snapshot if interval reached
-        await this.maybeCreateAutoSnapshot(entryId)
-      } catch (error) {
-        console.error('[StoryStore] Failed to save world state delta:', error)
-        // Non-fatal - don't break the main flow
       }
+    }
+
+    if (trackingEnabled && entryId) {
+      // Atomic path (CR-1): runWrites buffers every DB write (see
+      // database.beginWriteBatch); commitWriteBatch flushes them in ONE real
+      // transaction on a dedicated single connection (Rust exec_batch_tx). A
+      // throw — a logic error in runWrites, or a failed flush that SQLite rolled
+      // back — leaves nothing persisted, and we revert the in-memory arrays to
+      // their pre-turn snapshot. Immutable-update discipline (every mutation
+      // reassigns this.x = this.x.map/.filter/[...], never in-place) makes the
+      // captured references an exact revert matching the rolled-back DB.
+      const snapshot = {
+        currentStory: this.currentStory,
+        characters: this.characters,
+        locations: this.locations,
+        items: this.items,
+        storyBeats: this.storyBeats,
+        entries: this.entries,
+      }
+      this.transactionalTurn = true
+      try {
+        database.beginWriteBatch()
+        await runWrites()
+        await database.commitWriteBatch()
+      } catch (error) {
+        database.abortWriteBatch()
+        console.error('[StoryStore] Turn rolled back — no world-state changes applied:', error)
+        this.currentStory = snapshot.currentStory
+        this.characters = snapshot.characters
+        this.locations = snapshot.locations
+        this.items = snapshot.items
+        this.storyBeats = snapshot.storyBeats
+        this.entries = snapshot.entries
+        ui.showToast('World changes could not be saved and were rolled back', 'error')
+        return false
+      } finally {
+        this.transactionalTurn = false
+      }
+      // Auto-snapshot only after the turn durably committed.
+      await this.maybeCreateAutoSnapshot(entryId)
+    } else {
+      // Legacy path (state tracking off): no delta to keep atomic, so keep the
+      // best-effort per-write behavior (wrapUpdate swallows, 3-strike abort).
+      await runWrites()
     }
 
     log('applyClassificationResult complete', {
@@ -2914,12 +3014,15 @@ class StoryStore {
     }
 
     // Creation-time identity hygiene (research/55 C). Deferred + best-effort:
-    // fired AFTER the turn's writes settle and NOT awaited, so the extra LLM
-    // extraction never adds latency to the turn or narration. Runs only for
-    // brand-new characters (never updates); each call swallows its own errors.
+    // fired AFTER the turn durably committed (a rolled-back turn returns false
+    // above and never reaches here) and NOT awaited, so the extra LLM extraction
+    // never adds latency to the turn or narration. Runs only for brand-new
+    // characters (never updates); each call swallows its own errors.
     for (const characterId of newlyCreatedCharacterIds) {
       void this.runIdentityHygiene(characterId)
     }
+
+    return true
   }
 
   /**
@@ -3326,12 +3429,16 @@ class StoryStore {
 
       // Milestone crossings: carried mass passing an interaction threshold this
       // turn. Seeding is not a crossing — her starting size was not earned.
+      // M-4 (research/54): compute them here but do NOT commit to `crossings`
+      // until the body write actually lands — a swallowed write failure must not
+      // award a permanent protagonist milestone for mass that never persisted.
+      const turnCrossings: string[] = []
       if (!seeded) {
         const massBefore = measurements(state).nowTotalKg
         const massAfter = measurements(nextState).nowTotalKg
         for (const milestone of INTERACTION_MILESTONES) {
           if (massBefore < milestone.massKg && massAfter >= milestone.massKg) {
-            crossings.push(crossingKey(character.id, milestone.massKg))
+            turnCrossings.push(crossingKey(character.id, milestone.massKg))
           }
         }
       }
@@ -3371,8 +3478,12 @@ class StoryStore {
       // Milk becomes inventory (research/49 R7) — ONLY after her body state
       // actually landed. A swallowed body-write failure leaves her fill
       // un-drained in the database, so bottling anyway would duplicate the
-      // milk on every retry of the same turn.
-      if (bodyWriteLanded) await bottleMilkYield()
+      // milk on every retry of the same turn. Milestone crossings commit on the
+      // same gate (M-4): no persisted growth ⇒ no earned milestone.
+      if (bodyWriteLanded) {
+        crossings.push(...turnCrossings)
+        await bottleMilkYield()
+      }
     }
 
     return { beLog, crossings }
@@ -3566,6 +3677,9 @@ class StoryStore {
       relationship: character.relationship,
       traits: [...character.traits],
       visualDescriptors: { ...character.visualDescriptors },
+      currentVisualDescriptors: character.currentVisualDescriptors
+        ? { ...character.currentVisualDescriptors }
+        : null,
       metadata: character.metadata ? { ...character.metadata } : null,
     })
   }

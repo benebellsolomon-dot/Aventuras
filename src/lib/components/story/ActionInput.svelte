@@ -663,13 +663,20 @@
             messageId: narrationEntry.id,
             result: event.result,
           })
-          await story.applyClassificationResult(event.result, narrationEntry.id, resolvedCheck)
+          // CR-1: false ⇒ the turn's world-state changes rolled back (or were
+          // skipped). Skip image-gen and translation, which would otherwise run
+          // against reverted entities and persist state the world never committed.
+          const worldStateApplied = await story.applyClassificationResult(
+            event.result,
+            narrationEntry.id,
+            resolvedCheck,
+          )
           // The persisted delta now carries the checkLog; the transient card
           // handoff is done.
           ui.setPendingCheckRecord(null)
           await story.updateEntryTimeEnd(narrationEntry.id)
 
-          if (currentStoryRef.settings?.imageGenerationMode !== 'none') {
+          if (worldStateApplied && currentStoryRef.settings?.imageGenerationMode !== 'none') {
             const presentCharacters = story.characters.filter(
               (c) =>
                 event.result.scene.presentCharacterNames.includes(c.name) ||
@@ -696,7 +703,10 @@
           }
 
           const translationSettings = settings.translationSettings
-          if (TranslationService.shouldTranslateWorldState(translationSettings)) {
+          if (
+            worldStateApplied &&
+            TranslationService.shouldTranslateWorldState(translationSettings)
+          ) {
             const translationService = new WorldStateTranslationService({
               translateUIElements: aiService.translateUIElements.bind(aiService),
             })
