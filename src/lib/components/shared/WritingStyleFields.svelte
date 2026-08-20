@@ -90,6 +90,17 @@
     growthKindsTouched ? growthKindsDraft : (beGrowthEligibleKinds ?? []),
   )
 
+  // Silent dead-end guard: growth restricted to catalyst-only WITHOUT a cosmology
+  // means the classifier never learns what a catalyst is, so no growth event ever
+  // fires and characters stay frozen at their seed tier. (Contact/Attempt fire from
+  // prose without a cosmology, so a set that includes them is safe.)
+  const growthDeadEnd = $derived(
+    beMode &&
+      !(beGrowthCosmology ?? '').trim() &&
+      growthKinds.length > 0 &&
+      growthKinds.every((k) => k === 'catalyst'),
+  )
+
   function toggleGrowthKind(kind: string, enabled: boolean) {
     if (!onBeGrowthEligibleKindsChange) return
     const known = growthKinds.filter((k) => GROWTH_KIND_CHOICES.some((c) => c.value === k))
@@ -380,6 +391,13 @@
             </Label>
           </div>
         {/each}
+        {#if growthDeadEnd}
+          <p class="pt-1 text-xs font-medium text-amber-500">
+            ⚠ Growth is restricted to <strong>Catalyst</strong> events, but no Growth Cosmology is set
+            above — the classifier won't know what counts as a catalyst, so growth will never fire and
+            characters stay their starting size. Add a Growth Cosmology, or also enable Contact / Attempt.
+          </p>
+        {/if}
       </div>
     {/if}
   </section>

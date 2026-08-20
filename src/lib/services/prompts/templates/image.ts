@@ -436,7 +436,7 @@ SECTION 4 — Characters (feature-bleeding is where multi-person images fail): g
 
 SECTION 4b — Interaction (multi-person scenes): add booru tags for what the people are DOING TOGETHER so the model renders them interacting rather than side by side — e.g. hetero, yuri, yaoi, sex, vaginal, paizuri, cowgirl position, hug, kiss, grabbing, holding, and the body-contact tags the scene implies. Position the bodies relative to each other.
 
-SECTION 5 — Scene tags (always last): location tags (indoors, outdoors, bedroom, forest, castle interior, night city…), time-of-day (day, night, sunset, dawn), lighting (sunlight, golden hour, volumetric lighting, rim lighting, backlighting, dramatic shadow, moonlight, firelight, neon lights), and atmosphere (rain, mist, dust particles, embers, depth of field, bokeh). ALWAYS include the setting — reflect the CURRENT LOCATION below; never drop the environment down to a blank background.
+SECTION 5 — Scene tags (always last): derive CONCRETE, SPECIFIC setting tags from the scene and the narrative beat above — the actual place, architecture, furniture, and objects the prose describes, not just a generic room word (e.g. "ornate manor bedroom, four-poster bed, canopy, velvet drapes, tall arched windows, candelabra" — NOT merely "bedroom"). Then add time-of-day (day, night, sunset, dawn), the named light source and its quality (sunlight, golden hour, volumetric lighting, rim lighting, backlighting, dramatic shadow, moonlight through window, firelight, candlelight, neon lights), and atmosphere (rain, mist, dust particles, embers, depth of field, bokeh). Always ground the image in a real, detailed place drawn from the CURRENT LOCATION and the beat — 4-8 concrete environment tags minimum; never leave the background blank, flat, or generic.
 
 RULES:
 - NEVER put a character's NAME in the prompt ("Amelia", "Hana", …) — booru models do not know names; identity comes from the tags. Drop any name that appears in the scene text or subject data.
@@ -450,7 +450,8 @@ RULES:
 This is the narration's intended moment. Extract WHO is present (INCLUDING unnamed people and the protagonist), the POSE / ACTION, the FRAMING, and the SETTING from it — then re-express everything as booru tags. Do NOT copy its prose sentences, and do NOT copy any character names, into your tags.
 {{ sceneIntent }}
 
-## Narrative beat (extra context)
+## Narrative beat (extra context — your richest source of SETTING detail)
+Mine this for concrete environment details (the place, furnishings, objects, light, time of day) to turn into specific scene tags, especially when the location below is only a bare name.
 {{ narrativeBeat }}
 
 ## Named subjects with locked identity ({{ subjectCount }})

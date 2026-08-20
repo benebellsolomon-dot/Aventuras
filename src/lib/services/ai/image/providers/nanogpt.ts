@@ -45,12 +45,25 @@ export function createNanoGPTProvider(config: ImageProviderConfig): ImageProvide
         height: height || 1024,
       }
 
+      const isBooru = detectPromptDialect(model) === 'booru'
+
+      // Sampling knobs (NanoGPT: guidance_scale default 7.5, num_inference_steps
+      // default 30). Booru anime SDXL checkpoints (Illustrious / Pony / NoobAI)
+      // are trained for LOW guidance — the 7.5 default oversaturates and "burns"
+      // them (blown highlights, crunchy anatomy). ~5 CFG / ~30 steps is the
+      // community sweet spot and the single biggest raw-quality lever here.
+      // Prose/photoreal models keep NanoGPT's defaults. Both overridable per
+      // profile via providerOptions.cfgScale / providerOptions.steps.
+      const cfgScale = (config.providerOptions?.cfgScale as number) ?? (isBooru ? 5 : undefined)
+      const steps = (config.providerOptions?.steps as number) ?? (isBooru ? 30 : undefined)
+      if (typeof cfgScale === 'number') body.guidance_scale = cfgScale
+      if (typeof steps === 'number') body.num_inference_steps = steps
+
       // Booru/SD-family models take a negative prompt; profile config merges
       // with the standard anti-artifact default for booru models (deduped)
       // rather than replacing it, so anatomy/hand negatives always apply.
       // The size-aware negative (suppress smaller band words) stacks on top.
       const configuredNegative = (config.providerOptions?.negativePrompt as string) || ''
-      const isBooru = detectPromptDialect(model) === 'booru'
       const negativePrompt = [
         isBooru
           ? mergeNegativePrompt(configuredNegative, BOORU_DEFAULT_NEGATIVE)
