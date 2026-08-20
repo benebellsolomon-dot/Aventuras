@@ -143,6 +143,12 @@ class DatabaseService {
    */
   private writeBatch: BufferedWrite[] | null = null
   /**
+   * True while a committed batch's Rust transaction is settling. `writeBatch`
+   * is cleared before the flush invoke; this keeps `isBatchOpen()` truthful
+   * for that window.
+   */
+  private flushing = false
+  /**
    * Resolvers parked by `waitForBatchClose` while a batch is open. Both
    * `commitWriteBatch` and `abortWriteBatch` drain them once the batch is
    * cleared, so a deferred reader never waits on a batch that already ended.
@@ -231,13 +237,20 @@ class DatabaseService {
       throw new Error('commitWriteBatch called with no open write batch')
     }
     this.writeBatch = null
+    // The batch stays "open" for waiters until the Rust transaction settles:
+    // isBatchOpen() must not report false during the flush, or a background
+    // writer entering whenBatchIdle mid-flush would run concurrently with the
+    // still-uncommitted transaction (and a turn-created parent row it depends
+    // on would not exist yet).
+    this.flushing = true
     try {
       if (batch.length === 0) return
       await invoke('exec_batch_tx', { statements: batch })
     } finally {
       // Released after the flush settles (committed, or rolled back by SQLite on
-      // failure) so a deferred reader sees post-turn truth, and after
-      // `writeBatch` is cleared so it sees the batch closed.
+      // failure) so a deferred reader sees post-turn truth. flushing clears
+      // FIRST so released waiters re-checking isBatchOpen() see the batch closed.
+      this.flushing = false
       this.releaseBatchCloseWaiters()
     }
   }
@@ -253,9 +266,13 @@ class DatabaseService {
     this.releaseBatchCloseWaiters()
   }
 
-  /** True while a write batch is open (writes buffered, reads live). */
+  /**
+   * True while a write batch is open (writes buffered, reads live) OR its flush
+   * transaction is still settling — background writers must treat both as "the
+   * turn is not done".
+   */
   isBatchOpen(): boolean {
-    return this.writeBatch !== null
+    return this.writeBatch !== null || this.flushing
   }
 
   /**
@@ -265,10 +282,25 @@ class DatabaseService {
    * yields post-turn truth instead of dropping the refresh entirely.
    */
   waitForBatchClose(): Promise<void> {
-    if (!this.writeBatch) return Promise.resolve()
+    // Must park during the flush too (isBatchOpen, not writeBatch): resolving
+    // immediately while isBatchOpen() is still true would make whenBatchIdle's
+    // loop spin hot.
+    if (!this.isBatchOpen()) return Promise.resolve()
     return new Promise<void>((resolve) => {
       this.batchCloseWaiters.push(resolve)
     })
+  }
+
+  /**
+   * Await before background/deferred DB writes so they never join a turn's
+   * transaction (D-3/D-5). A fire-and-forget writer that lands inside the ms
+   * batch window is otherwise buffered into an unrelated turn — dropped if that
+   * turn aborts, and with in-memory effects the turn's rollback snapshot does
+   * not cover. The loop guards against a back-to-back batch: a turn can begin
+   * again in the same tick the previous one released the waiters.
+   */
+  async whenBatchIdle(): Promise<void> {
+    while (this.isBatchOpen()) await this.waitForBatchClose()
   }
 
   /** Drain the parked `waitForBatchClose` resolvers. Safe to call with none. */
@@ -2891,8 +2923,10 @@ class DatabaseService {
 
   /** Wholesale appearance-change invalidation: drop every set except the current hash. */
   async deleteStaleSprites(characterId: string, keepAppearanceHash: string): Promise<number> {
-    const db = await this.getDb()
-    const result = await db.execute(
+    // Direct (CR-1): sprite inserts/updates are raw, so a buffered DELETE
+    // replayed at commit AFTER a raw INSERT would wipe the fresh rows. Keeping
+    // the whole sprite write family on one handle preserves ordering.
+    const result = await this.executeDirect(
       'DELETE FROM character_sprites WHERE character_id = ? AND appearance_hash != ?',
       [characterId, keepAppearanceHash],
     )

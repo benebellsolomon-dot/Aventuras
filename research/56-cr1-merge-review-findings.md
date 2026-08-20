@@ -101,6 +101,56 @@ mid-batch (D-2b); first-run of `apply_checksum_patch` on existing Linux installs
 is a new behavior (benign, worth knowing); raw `rowsAffected` fabrication
 unchanged (D-9).
 
+## D-backlog session 2 (2026-08-20, same day): D-3/D-4/D-5/D-12/D-13 SHIPPED
+
+Two Opus implementation agents + a refutation review of their combined diff + a
+round-3 correction pass. Landed:
+
+- **D-3**: `database.whenBatchIdle()` + guards on every reachable background
+  write site (suggested-actions persist, the four translation callbacks, the
+  chapter + four lore callbacks in ActionInput, retry-state and style-review
+  chains in ui.svelte.ts). Coordinators do no direct DB access (audited) — the
+  ActionInput callback boundary covers every caller.
+- **D-4**: the tracking-off path now runs through the same `runTurnTransaction`
+  (snapshot → begin → runWrites → commit; abort+revert+toast on failure) minus
+  the delta. Tracking-off turns are all-or-nothing (approved Decision-B
+  semantics extended). wrapUpdate's 3-strike swallow is dead code retained as a
+  guard (caller audit: all 12 sites are inside the turn).
+- **D-5**: sprite generation defers via whenBatchIdle at band AND per-cell
+  level; `deleteStaleSprites` now routes DIRECT (round 3) so the delete can
+  never be buffer-reordered against the raw inserts — the structural fix, not
+  just the timing guard. Also closes the M-1 FK case.
+- **D-12**: harness grew 5→10 tests — beMode transactional rollback + passing
+  control, delta-write throw, tracking-off atomicity, and beMode+tracking-OFF
+  engine rollback (the literal D-4 scenario). Plus a latent harness bug fixed
+  (failOn leaked across tests).
+- **D-13**: identity hygiene skips only when NOTHING consumes it
+  (imageGenerationMode 'none' — defaulting unset to 'agentic' like the
+  pipeline — AND beMode off, since sprites/portraits consume hygiene output
+  regardless of mode); null-safe currentStory read; the concurrency cap is a
+  GLOBAL 2-worker pool shared across turns.
+- **Refutation round-3 fixes**: the HIGH mid-flush window — `commitWriteBatch`
+  clears `writeBatch` before the Rust invoke, so `isBatchOpen()` lied during
+  the actual transaction; a `flushing` flag now keeps `isBatchOpen()` true (and
+  `waitForBatchClose` parking) until the flush settles, with a gated-invoke
+  regression test. Suite 842.
+
+Residuals noted by the refutation pass (accepted, documented):
+- **check-then-act gap** on every whenBatchIdle guard: a batch can open between
+  the guard resolving and the write executing (begin is synchronous at turn
+  start only, window is microtasks-to-one-await). Multi-step sites are worst
+  (lore merge = delete-then-add). The immune shape is executeDirect routing or
+  D-2's UI gating — revisit if seen in practice.
+- Retry-state persistence now lands after batch close → a crash in that window
+  leaves stale persisted retry state (was: dropped-on-abort; strictly better).
+  Both ui chains are serial: a stuck head-of-line blocks later writes.
+- Tracking-off turns can now surface the "Previous turn is still saving" error
+  (loud, recoverable — previously could not throw there at all).
+- The rollback snapshot still omits `lorebookEntries`/`chapters` (residual
+  in-memory phantom if a buffered lore write slips the guard gap).
+- Manual-image button dead path (pre-existing): `lastImageGenContext` only
+  assigned when mode ≠ 'none' but the button requires mode == 'none'.
+
 ## DEFERRED — documented backlog, roughly ranked
 
 - **D-1 (MED): stop-generation ordering.** `handleStopGeneration` sets

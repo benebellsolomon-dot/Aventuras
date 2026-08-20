@@ -300,7 +300,12 @@
         analyzeForChapter: aiService.analyzeForChapter.bind(aiService),
         summarizeChapter: aiService.summarizeChapter.bind(aiService),
         getNextChapterNumber: story.getNextChapterNumber.bind(story),
-        addChapter: story.addChapter.bind(story),
+        // D-3: chapter creation runs minutes after the turn that triggered it,
+        // so the guard has to sit at the write itself, not upfront.
+        addChapter: async (chapter) => {
+          await database.whenBatchIdle()
+          await story.addChapter(chapter)
+        },
       },
       loreManagement: {
         runLoreManagement: aiService.runLoreManagement.bind(aiService),
@@ -358,12 +363,23 @@
         tense: story.tense,
       },
       loreCallbacks: {
+        // D-3: a lore session runs long after its turn began; each CRUD write
+        // waits out any open batch so it is never buffered into that turn
+        // (dropped on abort, with the store-side addition left as a phantom).
         onCreateEntry: async (entry) => {
+          await database.whenBatchIdle()
           await story.addLorebookEntry(entry)
         },
-        onUpdateEntry: story.updateLorebookEntry.bind(story),
-        onDeleteEntry: story.deleteLorebookEntry.bind(story),
+        onUpdateEntry: async (id, updates) => {
+          await database.whenBatchIdle()
+          await story.updateLorebookEntry(id, updates)
+        },
+        onDeleteEntry: async (id) => {
+          await database.whenBatchIdle()
+          await story.deleteLorebookEntry(id)
+        },
         onMergeEntries: async (entryIds, mergedEntry) => {
+          await database.whenBatchIdle()
           await story.deleteLorebookEntries(entryIds)
           await story.addLorebookEntry(mergedEntry)
         },
@@ -576,10 +592,16 @@
 
       const persistSuggestedActions = (actions: unknown[], type: 'suggestions' | 'choices') => {
         if (narrationEntry && actions.length > 0) {
+          const entryId = narrationEntry.id
+          // D-3: fire-and-forget write — defer past any open turn batch so it is
+          // never swept into (and dropped by) an unrelated turn's transaction.
           database
-            .updateStoryEntry(narrationEntry.id, {
-              suggestedActions: JSON.stringify(actions),
-            })
+            .whenBatchIdle()
+            .then(() =>
+              database.updateStoryEntry(entryId, {
+                suggestedActions: JSON.stringify(actions),
+              }),
+            )
             .catch((err) =>
               console.warn(`[ActionInput] Failed to save suggested ${type} to entry:`, err),
             )
@@ -732,10 +754,25 @@
                   targetLanguage: translationSettings.targetLanguage,
                 },
                 {
-                  updateCharacter: (id, data) => database.updateCharacter(id, data as any),
-                  updateLocation: (id, data) => database.updateLocation(id, data as any),
-                  updateItem: (id, data) => database.updateItem(id, data as any),
-                  updateStoryBeat: (id, data) => database.updateStoryBeat(id, data as any),
+                  // D-3: the translation persist step can land minutes later,
+                  // inside a later turn's batch window — each entity write waits
+                  // out an open batch so it never joins that turn's transaction.
+                  updateCharacter: async (id, data) => {
+                    await database.whenBatchIdle()
+                    return database.updateCharacter(id, data as any)
+                  },
+                  updateLocation: async (id, data) => {
+                    await database.whenBatchIdle()
+                    return database.updateLocation(id, data as any)
+                  },
+                  updateItem: async (id, data) => {
+                    await database.whenBatchIdle()
+                    return database.updateItem(id, data as any)
+                  },
+                  updateStoryBeat: async (id, data) => {
+                    await database.whenBatchIdle()
+                    return database.updateStoryBeat(id, data as any)
+                  },
                   refreshWorldState: story.refreshWorldState.bind(story),
                 },
               )

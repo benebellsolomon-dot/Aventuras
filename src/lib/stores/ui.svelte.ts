@@ -675,6 +675,9 @@ class UIStore {
   private queueRetryStateWrite(task: () => Promise<void>, label: string) {
     this.retryStateWrite = this.retryStateWrite
       .catch(() => {})
+      // D-3: retry-state saves fire around turn boundaries — defer past an open
+      // batch so they never join (and vanish with) a turn's transaction.
+      .then(() => database.whenBatchIdle())
       .then(task)
       .catch((err) => {
         console.warn(`[UI] Failed to ${label} retry state:`, err)
@@ -1183,6 +1186,9 @@ class UIStore {
   private persistStyleReviewStateForStory(storyId: string, state: PersistentStyleReviewState) {
     this.styleReviewStateWrite = this.styleReviewStateWrite
       .catch(() => {})
+      // D-3: style-review counter writes fire from background tasks mid-turn —
+      // defer past an open batch rather than joining that turn's transaction.
+      .then(() => database.whenBatchIdle())
       .then(() => database.saveStyleReviewState(storyId, state))
       .catch((err) => {
         console.warn('[UI] Failed to persist style review state:', err)

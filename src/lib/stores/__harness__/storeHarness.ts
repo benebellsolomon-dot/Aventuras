@@ -12,6 +12,8 @@
  * implementations and fixtures those mocks return.
  */
 
+import { defaultBodyState, writeBodyState } from '$lib/services/be'
+
 export interface DbCall {
   method: string
   args: unknown[]
@@ -26,6 +28,8 @@ export interface DbRecorder {
   failOn: (method: string, error?: Error) => void
   /** Clear a previously-installed failure. */
   clearFailure: (method: string) => void
+  /** Clear every installed failure — call between tests, the recorder is shared. */
+  clearAllFailures: () => void
   /** Convenience: names of write methods invoked, in order. */
   methodsCalled: () => string[]
 }
@@ -76,6 +80,7 @@ export function makeDbRecorder(): DbRecorder {
     calls,
     failOn: (method, error) => failures.set(method, error ?? new Error(`mock failure: ${method}`)),
     clearFailure: (method) => failures.delete(method),
+    clearAllFailures: () => failures.clear(),
     methodsCalled: () => calls.map((c) => c.method),
   }
 }
@@ -124,6 +129,27 @@ export function makeCharacter(name: string, overrides: AnyRecord = {}): AnyRecor
   }
 }
 
+/**
+ * The protagonist row. `relationship: 'self'` is what the RPG layer keys on —
+ * applyRpgTurn is a no-op without it, and a null metadata means no stored sheet,
+ * so the first beMode turn writes one (creation grant).
+ */
+export function makeProtagonist(name: string, overrides: AnyRecord = {}): AnyRecord {
+  return makeCharacter(name, { relationship: 'self', ...overrides })
+}
+
+/**
+ * A non-protagonist carrying a real BE body state in metadata, so a beMode turn
+ * drives the reducer and an engine write for her (rather than only seeding).
+ */
+export function makeGirlWithBodyState(name: string, overrides: AnyRecord = {}): AnyRecord {
+  return makeCharacter(name, {
+    metadata: writeBodyState(null, { ...defaultBodyState(), quirks: [] }),
+    ...overrides,
+  })
+}
+
+/** Pass `settings: { beMode: true }` etc. — `settings` replaces the empty default. */
 export function makeStory(overrides: AnyRecord = {}): AnyRecord {
   return {
     id: 's1',
@@ -135,7 +161,11 @@ export function makeStory(overrides: AnyRecord = {}): AnyRecord {
   }
 }
 
-/** A ClassificationResult with all arrays empty; pass `entryUpdates`/`scene` overrides. */
+/**
+ * A ClassificationResult with all arrays empty; pass `entryUpdates`/`scene`
+ * overrides. Any other key (e.g. the top-level `beEvents` the BE engine reads)
+ * passes through unchanged.
+ */
 export function makeClassificationResult(overrides: AnyRecord = {}): AnyRecord {
   const entryUpdates = {
     characterUpdates: [],
@@ -154,5 +184,5 @@ export function makeClassificationResult(overrides: AnyRecord = {}): AnyRecord {
     timeProgression: 'none',
     ...((overrides.scene as AnyRecord) ?? {}),
   }
-  return { entryUpdates, scene }
+  return { ...overrides, entryUpdates, scene }
 }

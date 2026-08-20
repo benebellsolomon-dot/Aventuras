@@ -103,6 +103,13 @@ import { grammarService } from '$lib/services/grammar'
 const log = createLogger('StoryStore')
 
 /**
+ * Max concurrent creation-time identity-hygiene extractions (D-13). Each is one
+ * LLM call; a crowd scene creating many characters would otherwise fire them all
+ * at once against the provider.
+ */
+const IDENTITY_HYGIENE_CONCURRENCY = 2
+
+/**
  * Merge LLM-extracted inline runtime vars into entity metadata.runtimeVars.
  * Values are keyed by defId (RuntimeVariable.id), NOT variableName,
  * so renames only change the definition -- stored values follow automatically.
@@ -1060,7 +1067,7 @@ class StoryStore {
     // into memory, so dropping it would hide them until a story reload. Waiting
     // for commit/abort yields post-turn truth.
     // Loop: a new batch can open between a waiter resolving and our reads.
-    while (database.isBatchOpen()) await database.waitForBatchClose()
+    await database.whenBatchIdle()
     // The user may have closed or switched stories while we waited.
     if (!this.currentStory) return
 
@@ -2031,13 +2038,21 @@ class StoryStore {
    */
   private classificationErrors = 0
   /**
-   * True while applyClassificationResult runs inside the CR-1 turn transaction.
-   * In that mode a single entity-write failure must abort the whole turn so the
-   * transaction rolls back (all-or-nothing). Best-effort swallowing with the
-   * 3-strike counter is only for the legacy, non-transactional path (tracking
-   * off — no delta to keep atomic).
+   * True while applyClassificationResult runs inside the turn transaction.
+   * Since D-4 BOTH turn paths (tracking on and tracking off) run inside
+   * `runTurnTransaction`, so this is set for every turn write: a single
+   * entity-write failure aborts the whole turn and the batch rolls back
+   * (all-or-nothing). The 3-strike swallow below is therefore unreachable from
+   * a turn; it is kept as the guard for any future non-turn wrapUpdate caller.
    */
   private transactionalTurn = false
+
+  /**
+   * Shared identity-hygiene work pool (D-13): ids queue here and at most
+   * IDENTITY_HYGIENE_CONCURRENCY workers drain it, globally across turns.
+   */
+  private identityHygieneQueue: string[] = []
+  private identityHygieneWorkers = 0
 
   private async wrapUpdate(label: string, entityName: string, fn: () => Promise<void>) {
     try {
@@ -2047,8 +2062,11 @@ class StoryStore {
       console.error(`[StoryStore] ${label} failed for ${entityName}:`, err)
       ui.showToast(`${label} failed: ${entityName}`, 'warning')
       // CR-1: inside a transactional turn the first failure aborts everything —
-      // rethrow so withTransaction rolls back rather than committing a partial turn.
+      // rethrow so the batch is discarded rather than committing a partial turn.
       if (this.transactionalTurn) throw err
+      // Dead in practice since D-4 (every turn is transactional and no non-turn
+      // caller exists today — audited 2026-08-20). Retained purely as a guard
+      // should a non-transactional caller ever appear.
       this.classificationErrors++
       if (this.classificationErrors >= 3) {
         const count = this.classificationErrors
@@ -2056,6 +2074,61 @@ class StoryStore {
         throw new Error(`Classification pipeline aborted after ${count} consecutive failures`)
       }
     }
+  }
+
+  /**
+   * Run one turn's writes as a single all-or-nothing batch (CR-1, widened to the
+   * tracking-off path by D-4).
+   *
+   * `runWrites` buffers every DB write (see database.beginWriteBatch);
+   * `commitWriteBatch` flushes them in ONE real transaction on a dedicated single
+   * connection (Rust exec_batch_tx). A throw — a logic error in runWrites, or a
+   * failed flush that SQLite rolled back — leaves nothing persisted, and we revert
+   * the in-memory arrays to their pre-turn snapshot. Immutable-update discipline
+   * (every mutation reassigns this.x = this.x.map/.filter/[...], never in-place)
+   * makes the captured references an exact revert matching the rolled-back DB.
+   *
+   * Returns true when the batch committed, false when the turn rolled back.
+   */
+  private async runTurnTransaction(runWrites: () => Promise<void>): Promise<boolean> {
+    const snapshot = {
+      currentStory: this.currentStory,
+      characters: this.characters,
+      locations: this.locations,
+      items: this.items,
+      storyBeats: this.storyBeats,
+      entries: this.entries,
+    }
+    // Begin OUTSIDE the try (and before the flag): if a batch is already open —
+    // a second turn entering while this one runs — the throw must propagate
+    // untouched, because the catch below would abort the OTHER turn's batch and
+    // revert this turn's snapshot against writes it never made. Retranslate it
+    // first: the raw message surfaces verbatim in a story system entry.
+    try {
+      database.beginWriteBatch()
+    } catch (error) {
+      console.error('[StoryStore] beginWriteBatch refused — a turn is still saving:', error)
+      throw new Error('Previous turn is still saving — wait a moment and retry', { cause: error })
+    }
+    this.transactionalTurn = true
+    try {
+      await runWrites()
+      await database.commitWriteBatch()
+    } catch (error) {
+      database.abortWriteBatch()
+      console.error('[StoryStore] Turn rolled back — no world-state changes applied:', error)
+      this.currentStory = snapshot.currentStory
+      this.characters = snapshot.characters
+      this.locations = snapshot.locations
+      this.items = snapshot.items
+      this.storyBeats = snapshot.storyBeats
+      this.entries = snapshot.entries
+      ui.showToast('World changes could not be saved and were rolled back', 'error')
+      return false
+    } finally {
+      this.transactionalTurn = false
+    }
+    return true
   }
 
   /**
@@ -2952,58 +3025,18 @@ class StoryStore {
       }
     }
 
+    // D-4: BOTH paths run the turn's writes as one all-or-nothing batch. Tracking
+    // off used to run them bare and best-effort (wrapUpdate swallowing failures,
+    // no atomicity) even though the BE/RPG engine writes through the same closure
+    // whenever beMode is on. The only remaining differences are delta-side: the
+    // delta write inside runWrites is already gated on `trackingEnabled` (nothing
+    // to write with tracking off), the replay guard above keys on entryId/delta,
+    // and the auto-snapshot only makes sense for a tracked turn.
+    const committed = await this.runTurnTransaction(runWrites)
+    if (!committed) return false
     if (trackingEnabled && entryId) {
-      // Atomic path (CR-1): runWrites buffers every DB write (see
-      // database.beginWriteBatch); commitWriteBatch flushes them in ONE real
-      // transaction on a dedicated single connection (Rust exec_batch_tx). A
-      // throw — a logic error in runWrites, or a failed flush that SQLite rolled
-      // back — leaves nothing persisted, and we revert the in-memory arrays to
-      // their pre-turn snapshot. Immutable-update discipline (every mutation
-      // reassigns this.x = this.x.map/.filter/[...], never in-place) makes the
-      // captured references an exact revert matching the rolled-back DB.
-      const snapshot = {
-        currentStory: this.currentStory,
-        characters: this.characters,
-        locations: this.locations,
-        items: this.items,
-        storyBeats: this.storyBeats,
-        entries: this.entries,
-      }
-      // Begin OUTSIDE the try (and before the flag): if a batch is already open —
-      // a second turn entering while this one runs — the throw must propagate
-      // untouched, because the catch below would abort the OTHER turn's batch and
-      // revert this turn's snapshot against writes it never made. Retranslate it
-      // first: the raw message surfaces verbatim in a story system entry.
-      try {
-        database.beginWriteBatch()
-      } catch (error) {
-        console.error('[StoryStore] beginWriteBatch refused — a turn is still saving:', error)
-        throw new Error('Previous turn is still saving — wait a moment and retry', { cause: error })
-      }
-      this.transactionalTurn = true
-      try {
-        await runWrites()
-        await database.commitWriteBatch()
-      } catch (error) {
-        database.abortWriteBatch()
-        console.error('[StoryStore] Turn rolled back — no world-state changes applied:', error)
-        this.currentStory = snapshot.currentStory
-        this.characters = snapshot.characters
-        this.locations = snapshot.locations
-        this.items = snapshot.items
-        this.storyBeats = snapshot.storyBeats
-        this.entries = snapshot.entries
-        ui.showToast('World changes could not be saved and were rolled back', 'error')
-        return false
-      } finally {
-        this.transactionalTurn = false
-      }
       // Auto-snapshot only after the turn durably committed.
       await this.maybeCreateAutoSnapshot(entryId)
-    } else {
-      // Legacy path (state tracking off): no delta to keep atomic, so keep the
-      // best-effort per-write behavior (wrapUpdate swallows, 3-strike abort).
-      await runWrites()
     }
 
     log('applyClassificationResult complete', {
@@ -3043,15 +3076,62 @@ class StoryStore {
     // above and never reaches here) and NOT awaited, so the extra LLM extraction
     // never adds latency to the turn or narration. Runs only for brand-new
     // characters (never updates); each call swallows its own errors.
-    for (const characterId of newlyCreatedCharacterIds) {
-      // Contractually never-throws, but an unhandled rejection here would be
-      // invisible — keep a guard so a contract break shows up as a warning.
-      void this.runIdentityHygiene(characterId).catch((error) =>
-        console.warn('[StoryStore] Identity hygiene failed:', error),
-      )
+    // D-13: the hygiene output (imageTags bank + cleaned descriptors) feeds
+    // EVERY image surface — inline/agentic scenes AND the beMode sprite/portrait
+    // paths, which render regardless of imageGenerationMode. Skip only when
+    // nothing consumes it: images off AND beMode off. Unset mode defaults to
+    // 'agentic' to match the generation pipeline's own default, and currentStory
+    // is re-read optionally — the user can close the story during the awaits
+    // above. The rest run through a small concurrency cap so a crowd scene does
+    // not fire N LLM calls at once.
+    const settingsNow = this.currentStory?.settings
+    const nothingConsumesHygiene =
+      (settingsNow?.imageGenerationMode ?? 'agentic') === 'none' && !settingsNow?.beMode
+    if (!nothingConsumesHygiene) {
+      this.runIdentityHygieneBatch(newlyCreatedCharacterIds)
     }
 
     return true
+  }
+
+  /**
+   * Fire-and-forget the turn's identity-hygiene calls with a concurrency cap
+   * (D-13). Returns synchronously — the turn never waits on the chain — while a
+   * crowd scene's N new characters drain through at most
+   * IDENTITY_HYGIENE_CONCURRENCY LLM extractions at a time. Per-call error
+   * semantics are unchanged: each rejection is warned about and the queue
+   * continues.
+   */
+  private runIdentityHygieneBatch(characterIds: string[]): void {
+    if (characterIds.length === 0) return
+    // The queue and worker count are INSTANCE state so the cap is global, not
+    // per-turn — overlapping turns (or a turn plus a retry) share one pool
+    // instead of each spawning their own.
+    this.identityHygieneQueue.push(...characterIds)
+
+    const worker = async (): Promise<void> => {
+      try {
+        for (;;) {
+          const characterId = this.identityHygieneQueue.shift()
+          if (characterId === undefined) return
+          // Contractually never-throws, but an unhandled rejection here would be
+          // invisible — keep a guard so a contract break shows up as a warning.
+          await this.runIdentityHygiene(characterId).catch((error) =>
+            console.warn('[StoryStore] Identity hygiene failed:', error),
+          )
+        }
+      } finally {
+        this.identityHygieneWorkers--
+      }
+    }
+
+    while (
+      this.identityHygieneWorkers < IDENTITY_HYGIENE_CONCURRENCY &&
+      this.identityHygieneWorkers < this.identityHygieneQueue.length
+    ) {
+      this.identityHygieneWorkers++
+      void worker()
+    }
   }
 
   /**
@@ -3515,11 +3595,11 @@ class StoryStore {
         createdCharacterIds,
       )
 
-      // wrapUpdate's failure handling is mode-dependent: in a transactional turn
-      // it RETHROWS (the turn rolls back), but on the legacy path it SWALLOWS the
-      // failure (counting it toward the 3-strike abort). In that second mode the
-      // yield below cannot infer success from the await returning — it reads this
-      // flag, set last inside the closure exactly like the pendingLog push.
+      // Since D-4 every turn is transactional, so a wrapUpdate failure RETHROWS
+      // and rolls the whole turn back — when the await below returns, the write
+      // landed and this flag is always true. It is kept (with the flag-last
+      // discipline) as a guard for any future non-transactional wrapUpdate mode,
+      // where a swallowed failure must not let downstream steps infer success.
       let bodyWriteLanded = false
       await this.wrapUpdate('BE body state', character.name, async () => {
         const { entity: ownedChar, wasCowed } = await this.cowCharacter(character)

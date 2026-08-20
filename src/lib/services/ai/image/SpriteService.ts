@@ -211,6 +211,13 @@ export class SpriteAnchorService {
     needed: SpriteSelection,
     profileId: string,
   ): Promise<void> {
+    // D-5: sprite effects can fire mid-turn. `deleteStaleSprites` is proxy-routed
+    // (buffered), the cell writes are raw — a buffered DELETE replayed at commit
+    // AFTER a raw INSERT would wipe the fresh rows, and a raw write keyed on a
+    // turn-created character would fail its FK while the parent row is still
+    // buffered. Running the whole delete+insert sequence outside any batch fixes
+    // both: post-commit the parent row exists.
+    await database.whenBatchIdle()
     // Wholesale invalidation rides every regeneration: sets from any OTHER
     // appearance hash are stale by definition (bounded ≤35 rows/character).
     await database.deleteStaleSprites(character.id, hash).catch(() => {})
@@ -238,6 +245,10 @@ export class SpriteAnchorService {
     this.inFlight.add(key)
     const rowId = crypto.randomUUID()
     try {
+      // D-5: cells render sequentially over minutes, so a later cell can start
+      // inside a turn batch even though the band's guard already passed. Marked
+      // in-flight first so the guard's await can't admit a duplicate render.
+      await database.whenBatchIdle()
       const existing = await database.getSprite(
         character.id,
         hash,

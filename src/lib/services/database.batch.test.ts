@@ -18,6 +18,9 @@ interface ExecCall {
 const executed: ExecCall[] = []
 // Records the statements handed to exec_batch_tx on flush.
 const invoked: { cmd: string; args: unknown }[] = []
+// When set, the fake invoke awaits this before resolving — lets a test hold
+// the flush transaction open to probe the mid-flush window.
+const invokeControl: { gate: Promise<void> | null } = { gate: null }
 
 const fakeDb = {
   execute: (sql: string, params: unknown[] = []) => {
@@ -32,9 +35,10 @@ vi.mock('@tauri-apps/plugin-sql', () => ({
   default: { load: () => Promise.resolve(fakeDb) },
 }))
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (cmd: string, args: unknown) => {
+  invoke: async (cmd: string, args: unknown) => {
     invoked.push({ cmd, args })
-    return Promise.resolve(undefined)
+    if (invokeControl.gate) await invokeControl.gate
+    return undefined
   },
 }))
 
@@ -54,6 +58,7 @@ describe('DatabaseService write batch (CR-1)', () => {
     await database.init() // idempotent; runs the PRAGMAs once
     executed.length = 0
     invoked.length = 0
+    invokeControl.gate = null
     database.abortWriteBatch() // ensure no batch leaked from a prior test
   })
 
@@ -245,5 +250,128 @@ describe('DatabaseService write batch (CR-1)', () => {
     await waiter
     expect(resolved).toBe(true)
     expect(invoked).toHaveLength(0)
+  })
+
+  it('whenBatchIdle resolves immediately when no batch is open', async () => {
+    expect(database.isBatchOpen()).toBe(false)
+
+    let resolved = false
+    const waiter = database.whenBatchIdle().then(() => {
+      resolved = true
+    })
+    await Promise.resolve()
+    expect(resolved).toBe(true)
+    await waiter
+  })
+
+  it('whenBatchIdle parked during a batch resolves after the commit', async () => {
+    database.beginWriteBatch()
+    await database.updateCharacter('char-1', { status: 'active' })
+
+    let resolved = false
+    const waiter = database.whenBatchIdle().then(() => {
+      resolved = true
+    })
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    await database.commitWriteBatch()
+    await waiter
+    expect(resolved).toBe(true)
+    expect(invoked).toHaveLength(1)
+  })
+
+  it('whenBatchIdle parked during a batch resolves after an abort', async () => {
+    database.beginWriteBatch()
+    await database.updateCharacter('char-1', { status: 'active' })
+
+    let resolved = false
+    const waiter = database.whenBatchIdle().then(() => {
+      resolved = true
+    })
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    database.abortWriteBatch()
+    await waiter
+    expect(resolved).toBe(true)
+    expect(invoked).toHaveLength(0)
+  })
+
+  it('whenBatchIdle re-parks when a second batch opens back-to-back', async () => {
+    database.beginWriteBatch()
+
+    let resolved = false
+    const waiter = database.whenBatchIdle().then(() => {
+      resolved = true
+    })
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    // The next turn begins in the same tick the previous one released its
+    // waiters — a bare waitForBatchClose would resolve straight into the new
+    // batch; the loop must re-park instead.
+    database.abortWriteBatch()
+    database.beginWriteBatch()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    database.abortWriteBatch()
+    await waiter
+    expect(resolved).toBe(true)
+  })
+
+  it('the batch stays "open" for waiters during the flush transaction (mid-flush window)', async () => {
+    // writeBatch is cleared before the Rust invoke; isBatchOpen must stay true
+    // until the transaction settles, or a background writer entering
+    // whenBatchIdle mid-flush would run concurrently with the uncommitted turn.
+    database.beginWriteBatch()
+    await database.updateCharacter('char-1', { status: 'active' })
+
+    let releaseFlush!: () => void
+    invokeControl.gate = new Promise<void>((resolve) => (releaseFlush = resolve))
+    const commit = database.commitWriteBatch()
+    await Promise.resolve() // the invoke has started; the gate holds it open
+    expect(invoked).toHaveLength(1)
+    expect(database.isBatchOpen()).toBe(true)
+
+    let resolved = false
+    const waiter = database.whenBatchIdle().then(() => {
+      resolved = true
+    })
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    releaseFlush()
+    invokeControl.gate = null
+    await commit
+    await waiter
+    expect(resolved).toBe(true)
+    expect(database.isBatchOpen()).toBe(false)
+  })
+
+  it('a background writer that awaits whenBatchIdle never joins the batch flush', async () => {
+    database.beginWriteBatch()
+    await database.updateCharacter('char-1', { status: 'active' })
+
+    // The D-3 background-writer shape: wait out the batch, then write.
+    const background = database
+      .whenBatchIdle()
+      .then(() => database.updateStoryEntry('entry-9', { worldStateDelta: null }))
+    await Promise.resolve()
+    // It neither executed inline nor buffered while the batch was open.
+    expect(realWrites()).toHaveLength(0)
+
+    await database.commitWriteBatch()
+    const stmts = flushedStatements()
+    expect(stmts).toHaveLength(1)
+    expect(stmts[0].sql).toMatch(/UPDATE characters SET status/i)
+
+    await background
+    // It ran post-commit, straight to the DB.
+    const direct = realWrites()
+    expect(direct).toHaveLength(1)
+    expect(direct[0].sql).toMatch(/UPDATE story_entries|UPDATE entries/i)
   })
 })
