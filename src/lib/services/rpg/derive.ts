@@ -70,11 +70,22 @@ export const BAND_LABELS: Readonly<Record<CheckBand, string>> = {
   fail: 'Failure',
 }
 
+/**
+ * "not enough essence (needs 3)" — the honest line for a record that never
+ * rolled. `nat`/`total` are 0 by construction on these, so no surface may print
+ * them as a die result; the cost comes from `essenceRequired` (absent on legacy
+ * records, which just say why without the number).
+ */
+function formatNotAttempted(record: CheckRecord): string {
+  const needs = record.essenceRequired
+  return needs && needs > 0 ? `not enough essence (needs ⬡${needs})` : 'not enough essence'
+}
+
 /** Monospace math line for the roll card / turn log. */
 export function formatCheckMath(record: CheckRecord): string {
   const label = SKILL_DEFS.get(record.skill)?.label ?? record.skill
   if (record.insufficientEssence) {
-    return `${label} — not attempted (insufficient essence)`
+    return `${label} — ${formatNotAttempted(record)}`
   }
   const sign = record.bonus >= 0 ? '+' : ''
   return `${label} d20 ${record.nat} ${sign}${record.bonus} = ${record.total} vs DC ${record.dc}`
@@ -83,8 +94,25 @@ export function formatCheckMath(record: CheckRecord): string {
 /** Compact roll-card line (Phase 5 W3): skill + result vs DC, no d20 breakdown. */
 export function formatCheckMathCompact(record: CheckRecord): string {
   const label = SKILL_DEFS.get(record.skill)?.label ?? record.skill
-  if (record.insufficientEssence) return `${label} — not attempted`
+  if (record.insufficientEssence) return `${label} — ${formatNotAttempted(record)}`
   return `${label} ${record.total} vs DC ${record.dc}`
+}
+
+/**
+ * Outcome word for the roll card / turn log. A record that never rolled is
+ * band-'fail' by construction, but calling it "Failure" reads as a lost roll —
+ * say what actually happened instead.
+ */
+export function checkOutcomeLabel(record: CheckRecord): string {
+  return record.insufficientEssence ? 'Not attempted' : BAND_LABELS[record.band]
+}
+
+/**
+ * Roll-card footnote for a record whose tagged spell was dropped (the sheet does
+ * not know it), so the reader knows why a "cast" shows no cast. Null otherwise.
+ */
+export function unknownSpellNote(record: CheckRecord): string | null {
+  return record.unknownSpellDropped ? 'unknown spell — resolved as a skill check' : null
 }
 
 /**

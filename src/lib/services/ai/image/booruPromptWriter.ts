@@ -55,6 +55,8 @@ import { detectPromptDialect } from './dialect'
 import {
   compressStateCues,
   engineSizeTags,
+  hasActFamilyTag,
+  hasPartneredActTag,
   isSizeVocabularyTag,
   joinTags,
   sanitizeBreastTags,
@@ -115,10 +117,15 @@ const booruScenePromptSchema = z.object({
     .describe(
       'Booru count tags for EVERY person in frame, including unnamed ones (e.g. "1boy, 1girl", "2girls"). Never omitted.',
     ),
+  actInProgress: z
+    .boolean()
+    .describe(
+      'REQUIRED. Is a physical/sexual act actively occurring in this beat (not aftermath, not anticipation)? True mid-act even when something else (growth, a transformation) happens at the same time; false for afterglow, aftermath, or a plain pose.',
+    ),
   action: z
     .string()
     .describe(
-      'What the people are DOING: interaction/sex-act/pose tags (e.g. "hetero, paizuri, breast squeezing, lying on back"). The scene beat, not the people.',
+      'What the people are DOING: interaction/sex-act/pose tags (e.g. "hetero, paizuri, breast squeezing, lying on back"). The scene beat, not the people. When actInProgress is true this MUST open with the act tag family.',
     ),
   characters: z
     .array(z.string())
@@ -711,6 +718,93 @@ function narrativeContext(narrativeText: string): string {
 }
 
 // ============================================================================
+// Act-reliability validation (mechanical backstop)
+// ============================================================================
+
+/**
+ * Count tags that put a male in frame. The count tag is what CONTROLS how many
+ * people render, so a male participant absent from it is absent from the image.
+ */
+const MALE_COUNT_TAG = /^(?:\d+\s*boys?|multiple boys|male focus)$/
+
+/** The writer's protagonist-POV form — a male participant who is the viewer. */
+const POV_MALE_TAGS: ReadonlySet<string> = new Set(['male pov', 'faceless male'])
+
+/** Count tags a lone female subject produces — nobody else is in frame. */
+const LONE_FEMALE_COUNT_TAGS: ReadonlySet<string> = new Set(['1girl', 'solo'])
+
+const MISSING_ACT_NOTE =
+  'Your previous output claimed an act in progress but named no act tag in the action field. ' +
+  'Re-emit with the act tag family first: act, arrangement (hetero/yuri), positions.'
+
+const MISSING_MALE_NOTE =
+  'Your previous output left the male participant out of countTags. He is in frame and the ' +
+  'count tag controls who renders — re-emit countTags with him counted (e.g. "1boy, 1girl"), ' +
+  'keeping his character run in the faceless protagonist-POV form when he is the viewer.'
+
+/** What the deterministic check found wrong, and the correction to re-prompt with. */
+export interface ActReliabilityDefect {
+  /** `actInProgress` was declared but the action block names no act. */
+  missingActTag: boolean
+  /** An act with a male participant, but no male in the count tags. */
+  missingMaleCount: boolean
+  /** The correction appended to the system prompt on the single retry. */
+  note: string
+}
+
+/**
+ * Deterministic check of the writer's own declaration against its own tags.
+ *
+ * The template has been told act-first in three successive rewrites and the
+ * writer still, unreliably, drops the ongoing act (rendering an explicit beat as
+ * an ambiguous pose) and sometimes the male participant with it. Instruction
+ * compliance is not fixable from inside the instructions, so the writer declares
+ * `actInProgress` and this function checks that declaration mechanically:
+ *
+ * - `actInProgress` with no act-family tag in the action block → the exact live
+ *   failure shape ("lying on back, breast expansion, breasts hanging low").
+ * - `actInProgress` with a male participant implied — the arrangement tag
+ *   "hetero", the protagonist-POV form in a run, or a partnered act on a lone
+ *   female count — but no male count tag → he will not render at all.
+ *
+ * Returns `null` when the output is fine (the hot path — no retry, no extra LLM
+ * call). Aftermath is `actInProgress: false` and is never flagged: a plain pose
+ * action is the CORRECT output there.
+ */
+export function detectActDefects(
+  sections: Partial<BooruSceneSections>,
+): ActReliabilityDefect | null {
+  if (!sections.actInProgress) return null
+
+  const actionTags = toTags(sections.action).map((tag) => tag.toLowerCase())
+  const countTags = toTags(sections.countTags).map((tag) => tag.toLowerCase())
+  const runTags = (sections.characters ?? []).flatMap((run) =>
+    toTags(run).map((tag) => tag.toLowerCase()),
+  )
+
+  const missingActTag = !hasActFamilyTag(actionTags)
+
+  const hasMaleCount = countTags.some((tag) => MALE_COUNT_TAG.test(tag))
+  const loneFemale =
+    countTags.length > 0 && countTags.every((tag) => LONE_FEMALE_COUNT_TAGS.has(tag))
+  const povMale = runTags.some((tag) => POV_MALE_TAGS.has(tag))
+  // "yuri" is the writer stating the act has no male in it — believe it.
+  const maleImplied =
+    !actionTags.includes('yuri') &&
+    (povMale || actionTags.includes('hetero') || (loneFemale && hasPartneredActTag(actionTags)))
+  const missingMaleCount = maleImplied && !hasMaleCount
+
+  if (!missingActTag && !missingMaleCount) return null
+  return {
+    missingActTag,
+    missingMaleCount,
+    note: [missingActTag ? MISSING_ACT_NOTE : '', missingMaleCount ? MISSING_MALE_NOTE : '']
+      .filter(Boolean)
+      .join(' '),
+  }
+}
+
+// ============================================================================
 // The LLM call
 // ============================================================================
 
@@ -760,7 +854,7 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
     })
     const { system, user: prompt } = await ctx.render(TEMPLATE_ID)
 
-    const raw = await generateStructured(
+    let raw = await generateStructured(
       {
         presetId,
         schema: booruScenePromptSchema,
@@ -769,6 +863,45 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
       },
       SERVICE_ID,
     )
+
+    // Mechanical act-reliability backstop. Off the hot path by construction:
+    // a compliant output detects no defect and costs zero extra calls. ONE
+    // corrective retry covers both defects; the retry's output is used even if
+    // it is still wrong, because a mediocre prompt beats no image at all.
+    const defect = detectActDefects(raw)
+    if (defect) {
+      log('act-reliability validation failed', {
+        missingActTag: defect.missingActTag,
+        missingMaleCount: defect.missingMaleCount,
+        action: raw.action,
+        countTags: raw.countTags,
+      })
+      try {
+        log('issuing single corrective retry')
+        const retried = await generateStructured(
+          {
+            presetId,
+            schema: booruScenePromptSchema,
+            system: `${system}\n\nCORRECTION — your previous attempt was rejected. ${defect.note}`,
+            prompt,
+          },
+          SERVICE_ID,
+        )
+        const stillWrong = detectActDefects(retried)
+        if (stillWrong) {
+          log('WARN: retry still fails act validation — using it anyway (best effort)', {
+            missingActTag: stillWrong.missingActTag,
+            missingMaleCount: stillWrong.missingMaleCount,
+          })
+        } else {
+          log('retry satisfied act validation')
+        }
+        raw = retried
+      } catch (error) {
+        // A failed retry must not cost us the usable first output.
+        log('corrective retry threw — keeping the first output', error)
+      }
+    }
 
     // Order is imposed here, not asked of the model: the sections come back
     // labelled, so the attention-critical action-before-identity ordering and

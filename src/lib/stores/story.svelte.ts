@@ -3307,8 +3307,10 @@ class StoryStore {
    * every band (a fizzled cast keeps its existing "applies nothing, suppresses
    * nothing" semantics rather than gaining suppression through the back door).
    *
-   * An unknown/unlearned spell never reaches here as a landed band either:
-   * resolveCheck refuses it with band 'fail' before rolling.
+   * An unknown/unlearned spell never reaches here as a cast: resolveCheck drops
+   * the bogus spellId and resolves the action as a plain skill check, so a
+   * growth-intent turn the tagger mis-tagged as a cast promotes through THIS
+   * channel (rolled band and all) instead of being refused outright.
    */
   private computeGrowthIntent(
     checkRecord: CheckRecord | null,
@@ -3325,8 +3327,9 @@ class StoryStore {
    * check was a cast (spellId set) and the band landed (non-fail), resolve the
    * spell entry and translate its EffectTag[] into reducer inputs for the target
    * girl. Returns null when the cast applies no BE effects — a fizzle (fail
-   * band), an unknown/unlearned spell (a stat_invention signal, not an effect),
-   * or an untargeted cast (v1 effects require a girl, R10). Essence is spent by
+   * band), an unknown/unlearned spell (dropped upstream by resolveCheck; only a
+   * legacy record can still carry one), or an untargeted cast (v1 effects
+   * require a girl, R10). Essence is spent by
    * applyRpgTurn regardless; this method never touches the sheet.
    */
   private computeSpellCast(checkRecord: CheckRecord | null): {
@@ -3339,8 +3342,9 @@ class StoryStore {
     supplyDelta: number
   } | null {
     if (!checkRecord?.spellId || checkRecord.band === 'fail') return null
-    // Defense-in-depth: only a KNOWN spell casts. An unknown spellId is refused
-    // here and flagged by the stat_invention detector, never applied.
+    // Defense-in-depth: only a KNOWN spell casts. resolveCheck already drops an
+    // unknown spellId before rolling, so this only catches a persisted legacy
+    // record (or a spell since unlearned) — never applied either way.
     const protagonist = this.characters.find((c) => c.relationship === 'self')
     const known = protagonist ? sheetOrDefault(protagonist.metadata).knownSpells : []
     if (!known.includes(checkRecord.spellId)) return null

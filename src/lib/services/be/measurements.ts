@@ -140,6 +140,36 @@ export function bustCm(
   return bustCmFor(tier, shape, fillPercent, baseline)
 }
 
+/**
+ * The same tape with the milk load emptied out (fill 0) — her size on its own.
+ *
+ * `bustCm` includes current fill BY DESIGN, so a girl who gains a tier while
+ * draining 88% → 8% reads as a NET cm decrease and the number looks like broken
+ * math. Surfaces pair the live figure with this one instead of hiding either.
+ */
+export function dryBustCm(
+  tier: number,
+  shape: BodyShape,
+  baseline?: BodyState['baseline'],
+): number {
+  return bustCmFor(tier, shape, 0, baseline)
+}
+
+/** Smallest rounded-cm gap worth spending a line on; below it the split is noise. */
+const DRY_BUST_NOTE_MIN_CM = 1
+
+/**
+ * "121 cm dry" when the current fill widens the displayed bust by at least a
+ * visible centimetre, else null — an empty girl has nothing to disambiguate.
+ */
+export function dryBustNote(state: BodyState): string | null {
+  const fill = clampPercent(state.fluids.fillPercent)
+  const live = Math.round(bustCm(state.tier, state.shape, fill, state.baseline))
+  const dry = Math.round(dryBustCm(state.tier, state.shape, state.baseline))
+  if (live - dry < DRY_BUST_NOTE_MIN_CM) return null
+  return `${dry} cm dry`
+}
+
 /** Droop / hang depth (cm) — the baked spine hang channel, fill-interpolated (C2). */
 export function droopCm(tier: number, shape: BodyShape, fillPercent = 0): number {
   const curves = DROOP_CM_CURVES[shape] ?? DROOP_CM_CURVES.natural

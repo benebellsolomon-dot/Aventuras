@@ -133,6 +133,7 @@ export function buildCheckTaggingInstruction(sheet: RpgSheet): string {
     "If a choice channels the player's catalytic power (growth influence, transformation magic), also set `essenceCost` 1-3 by potency. Do not tag more than 3 of the choices.",
     'When the action targets a specific character, set `targetCharacter` to her exact name — her trust and traits modify the check.',
     '`induce_lactation` and `milking` actions use the `milking` skill and must set `targetCharacter`.',
+    'Set `spellId` ONLY for an explicit cast of a spell the player already knows, named in the choice text. Physical, sexual, social, and mundane actions are never casts — leave `spellId` off them. Never invent an id, and never point it at a spell the player has not learned.',
     "Set `growthIntent: true` ONLY when the choice's explicit purpose is to grow or transform that character's body — channeling essence into her, working a transformation, feeding her a growth potion. Always set `targetCharacter` alongside it — but never drop `growthIntent` just because you are unsure of the name. A scene that merely happens to be sexual, or where growth is an incidental side effect, is NOT growth intent.",
   ].join('\n')
 }

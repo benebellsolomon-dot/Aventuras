@@ -344,6 +344,112 @@ export function sanitizeBreastTags(
   return { kept, stripped }
 }
 
+// ============================================================================
+// The act family — mechanical backstop for "the writer forgot the act"
+// ============================================================================
+
+/**
+ * Danbooru tags that NAME AN ONGOING ACT between (or by) the people in frame.
+ *
+ * MEASURED FAILURE, repeatedly, across live rounds: told act-first in the
+ * template, the writer still returns an action block like "lying on back,
+ * breast expansion, breasts hanging low, looking down" for a beat that is
+ * mid-paizuri. Nothing in that block names an act, so the model renders an
+ * ambiguous solo pose. Template wording alone has not fixed compliance, so the
+ * writer now also DECLARES whether an act is under way (`actInProgress`) and
+ * this list is what checks the declaration against the tags it actually wrote.
+ *
+ * Curated from the same source as the breast whitelist above — real Danbooru
+ * act vocabulary only. POSITION tags ("straddling", "lying", "on back"),
+ * CONTACT tags ("breast squeezing"), EVENT tags ("breast expansion") and
+ * EXPRESSION tags are deliberately absent: they are exactly what the writer
+ * emits INSTEAD of the act, so counting them would make the check pass on the
+ * failure it exists to catch. Aftermath vocabulary ("after sex", "afterglow")
+ * is absent for the same reason — matching is exact, never substring.
+ */
+export const ACT_FAMILY_TAGS: ReadonlySet<string> = new Set([
+  // Intercourse.
+  'sex',
+  'vaginal',
+  'anal',
+  'implied sex',
+  'sex from behind',
+  'doggystyle',
+  'missionary',
+  'cowgirl position',
+  'reverse cowgirl position',
+  'girl on top',
+  'standing sex',
+  'spooning',
+  'mating press',
+  'prone bone',
+  'suspended congress',
+  'upright straddle',
+  // Oral.
+  'fellatio',
+  'irrumatio',
+  'cunnilingus',
+  'deepthroat',
+  'deep throat',
+  'oral',
+  'implied fellatio',
+  // Hand / foot / breast / body.
+  'handjob',
+  'footjob',
+  'thighjob',
+  'paizuri',
+  'naizuri',
+  'paizuri under clothes',
+  'perpendicular paizuri',
+  'penis between breasts',
+  'grinding',
+  'frottage',
+  'tribadism',
+  'scissoring',
+  'masturbation',
+  'female masturbation',
+  'fingering',
+  // Non-sexual physical acts the template also lists as act tags.
+  'kiss',
+  'french kiss',
+  'hug',
+])
+
+/** Productive act families — penetration variants and the licking/sucking pair. */
+const ACT_FAMILY_PATTERNS: ReadonlyArray<RegExp> = [
+  /^(?:double |triple |multiple |vaginal |anal |oral )?penetration$/,
+  /^(?:vaginal|anal|oral|breast) (?:sex|insertion)$/,
+  /^(?:licking|sucking) (?:penis|pussy|testicles)$/,
+  /^(?:penis|object) in (?:pussy|ass|mouth)$/,
+]
+
+/** True when this one tag names an ongoing act. Exact match, never substring. */
+function isActFamilyTag(tag: string): boolean {
+  const key = sizeKey(tag)
+  return ACT_FAMILY_TAGS.has(key) || ACT_FAMILY_PATTERNS.some((pattern) => pattern.test(key))
+}
+
+/** True when a tag BLOCK names at least one ongoing act. */
+export function hasActFamilyTag(tags: ReadonlyArray<string>): boolean {
+  return tags.some(isActFamilyTag)
+}
+
+/**
+ * Acts one person performs alone — an `actInProgress` scene built on these
+ * needs no second participant, so they never trigger the missing-partner half
+ * of the validation.
+ */
+const SOLO_ACT_TAGS: ReadonlySet<string> = new Set([
+  'masturbation',
+  'female masturbation',
+  'fingering',
+])
+
+/** True when the block names an act that REQUIRES a second person in frame. */
+export function hasPartneredActTag(tags: ReadonlyArray<string>): boolean {
+  return tags.some((tag) => isActFamilyTag(tag) && !SOLO_ACT_TAGS.has(sizeKey(tag)))
+}
+
 /**
  * The engine's canonical size block for one subject — band word, the anchor its
  * tier has earned, and the growth-event tag only on a turn the engine actually

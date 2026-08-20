@@ -89,6 +89,10 @@ export interface CheckRecord {
   band: CheckBand
   essenceSpent: number
   insufficientEssence?: boolean
+  /** The essence the action needed, on an `insufficientEssence` record only —
+   * `essenceSpent` is 0 there, so the cost has nowhere else to live and the roll
+   * card would otherwise have to say "not attempted" without saying how short. */
+  essenceRequired?: number
   drift?: RpgDriftFinding[]
   /** Resolved target character NAME when the check targeted a girl (Phase 2).
    * Display + legacy-record fallback; prefer targetId for identity (Phase 5 D2). */
@@ -106,8 +110,15 @@ export interface CheckRecord {
    * mechanical keys on it. */
   targetInferred?: boolean
   /** Spell lorebook Entry id when this check was a cast (Phase 4). Drives effect
-   * application in the store and marks the turn log / drift as a cast. */
+   * application in the store and marks the turn log / drift as a cast. Set only
+   * for a spell the sheet actually knows — see `unknownSpellDropped`. */
   spellId?: string
+  /**
+   * The tagger claimed a cast of a spell the sheet does not know, so the spellId
+   * was dropped and the action resolved as an ordinary skill check (it still
+   * rolled; nothing cast). Display/debug only — no mechanic keys on it.
+   */
+  unknownSpellDropped?: boolean
   /**
    * The action deliberately tried to grow/transform the target's body without
    * being a formal spell cast (free-text essence channeling, a growth potion).

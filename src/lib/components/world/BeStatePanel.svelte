@@ -10,6 +10,7 @@
     bwhCmString,
     comparative,
     defaultBodyState,
+    dryBustNote,
     fluidPressureLabel,
     measurements,
     readBodyState,
@@ -145,6 +146,9 @@
 {#if bodyState}
   {@const row = bodyRow(bodyState.tier, bodyState.shape)}
   {@const m = measurements(bodyState)}
+  <!-- Bust in the BWH string carries her current milk load, so a drained girl can
+       read smaller than she did a tier ago; the dry figure keeps that legible. -->
+  {@const dry = dryBustNote(bodyState)}
   <div class="bg-muted/40 mt-2 space-y-1 rounded-md p-2">
     <div class="flex items-center justify-between">
       <span class="text-xs font-semibold tracking-wide uppercase">Body State</span>
@@ -188,8 +192,9 @@
       {bandWord(bodyState.tier)} — {comparative(bodyState.tier)}
     </p>
     <p class="text-muted-foreground/80 text-xs">
-      {bwhCmString(bodyState)} · ~{kg(m.dryTotalKg)} kg tissue · ~{Math.round(m.totalBodyWeightKg)} kg
-      total{m.weightFeel ? ` — ${m.weightFeel}` : ''}{m.proportionNote
+      {bwhCmString(bodyState)}{dry ? ` (${dry})` : ''} · ~{kg(m.dryTotalKg)} kg tissue · ~{Math.round(
+        m.totalBodyWeightKg,
+      )} kg total{m.weightFeel ? ` — ${m.weightFeel}` : ''}{m.proportionNote
         ? ` · ${m.proportionNote}`
         : ''}
     </p>

@@ -9,7 +9,7 @@ import {
   periodIndex,
   successOdds,
 } from './derive'
-import type { RpgSheet } from './types'
+import type { CheckRecord, RpgSheet } from './types'
 
 describe('attributeMod', () => {
   const CASES: ReadonlyArray<[number, number]> = [
@@ -119,8 +119,28 @@ describe('formatCheckMath', () => {
         band: 'fail',
         essenceSpent: 0,
         insufficientEssence: true,
+        essenceRequired: 3,
       }),
-    ).toBe('Channeling — not attempted (insufficient essence)')
+    ).toBe('Channeling — not enough essence (needs ⬡3)')
+  })
+
+  it('omits the cost on a legacy record that never recorded one', async () => {
+    const { formatCheckMath } = await import('./derive')
+    expect(
+      formatCheckMath({
+        action: 'x',
+        skill: 'channeling',
+        dc: 10,
+        nat: 0,
+        bonusBreakdown: { attribute: 0, ranks: 0, modifiers: [] },
+        bonus: 0,
+        total: 0,
+        margin: -10,
+        band: 'fail',
+        essenceSpent: 0,
+        insufficientEssence: true,
+      }),
+    ).toBe('Channeling — not enough essence')
   })
 })
 
@@ -158,8 +178,48 @@ describe('formatCheckMathCompact (Phase 5 W3)', () => {
         band: 'fail',
         essenceSpent: 0,
         insufficientEssence: true,
+        essenceRequired: 2,
       }),
-    ).toBe('Channeling — not attempted')
+    ).toBe('Channeling — not enough essence (needs ⬡2)')
+  })
+})
+
+describe('roll-card honesty for records that never rolled', () => {
+  const notAttempted: CheckRecord = {
+    action: 'x',
+    skill: 'channeling',
+    dc: 10,
+    nat: 0,
+    bonusBreakdown: { attribute: 0, ranks: 0, modifiers: [] },
+    bonus: 0,
+    total: 0,
+    margin: -10,
+    band: 'fail',
+    essenceSpent: 0,
+    insufficientEssence: true,
+    essenceRequired: 3,
+  }
+
+  it('neither formatter prints the 0 nat/total as a die result', async () => {
+    const { formatCheckMath, formatCheckMathCompact } = await import('./derive')
+    for (const line of [formatCheckMath(notAttempted), formatCheckMathCompact(notAttempted)]) {
+      expect(line).not.toMatch(/d20/)
+      expect(line).not.toMatch(/\b0\b/)
+    }
+  })
+
+  it('checkOutcomeLabel says "Not attempted" instead of "Failure"', async () => {
+    const { checkOutcomeLabel } = await import('./derive')
+    expect(checkOutcomeLabel(notAttempted)).toBe('Not attempted')
+    expect(checkOutcomeLabel({ ...notAttempted, insufficientEssence: undefined })).toBe('Failure')
+  })
+
+  it('unknownSpellNote fires only on a dropped-spell record', async () => {
+    const { unknownSpellNote } = await import('./derive')
+    expect(unknownSpellNote({ ...notAttempted, unknownSpellDropped: true })).toBe(
+      'unknown spell — resolved as a skill check',
+    )
+    expect(unknownSpellNote(notAttempted)).toBeNull()
   })
 })
 

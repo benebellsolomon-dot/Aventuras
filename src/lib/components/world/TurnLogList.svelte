@@ -2,11 +2,12 @@
   // Harem tab turn log (research/48 Step 9): interleaved checkLog + beLog rows,
   // ordering ruled in rpg/turnlog.ts. Markup only — logic stays testable.
   import {
-    BAND_LABELS,
     beLogStyle,
     buildTurnLog,
+    checkOutcomeLabel,
     formatCheckMath,
     formatCheckMathCompact,
+    unknownSpellNote,
   } from '$lib/services/rpg'
   import { story } from '$lib/stores/story.svelte'
   import type { CheckRecord } from '$lib/services/rpg'
@@ -43,9 +44,14 @@
               row.record.band
             ]}"
           >
-            {row.record.spellId ? '✨' : '🎲'}
-            {mathOf(row.record)} → {BAND_LABELS[row.record.band]}
+            <!-- No die glyph on a record that never rolled (its math line prints
+                 the reason, not a nat/total). -->
+            {row.record.insufficientEssence ? '⬡' : row.record.spellId ? '✨' : '🎲'}
+            {mathOf(row.record)} → {checkOutcomeLabel(row.record)}
             {#if row.record.target}<span class="text-muted-foreground">· {row.record.target}</span
+              >{/if}
+            {#if unknownSpellNote(row.record)}<span class="text-muted-foreground"
+                >· unknown spell</span
               >{/if}
           </div>
         {:else}

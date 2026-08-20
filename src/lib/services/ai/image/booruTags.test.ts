@@ -5,9 +5,12 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  ACT_FAMILY_TAGS,
   compressStateCues,
   engineSizeTags,
   flattenTagGroups,
+  hasActFamilyTag,
+  hasPartneredActTag,
   isSizeVocabularyTag,
   sanitizeBreastTags,
   toTags,
@@ -235,6 +238,81 @@ describe('engineSizeTags', () => {
       'huge breasts',
       'breast expansion',
     ])
+  })
+})
+
+/**
+ * The act-family predicate backs the mechanical act check: it must say YES to
+ * the act tags the writer is supposed to lead with, and NO to the pose, growth
+ * and expression tags it emits INSTEAD of them when it fails.
+ */
+describe('hasActFamilyTag', () => {
+  it('recognizes the act tags, whatever the family', () => {
+    for (const tag of [
+      'sex',
+      'vaginal',
+      'anal',
+      'paizuri',
+      'naizuri',
+      'fellatio',
+      'irrumatio',
+      'handjob',
+      'footjob',
+      'grinding',
+      'sex from behind',
+      'cowgirl position',
+      'missionary',
+      'doggystyle',
+      'standing sex',
+      'implied sex',
+      'cunnilingus',
+      'double penetration',
+      'kiss',
+      'hug',
+    ]) {
+      expect(hasActFamilyTag([tag])).toBe(true)
+    }
+  })
+
+  it('is case- and possessive-insensitive, and finds the act anywhere in the block', () => {
+    expect(hasActFamilyTag(['lying on back', 'Paizuri', 'breast expansion'])).toBe(true)
+  })
+
+  it('says no to the pose, growth and expression tags written in an act’s place', () => {
+    // The measured failure block — nothing here names an act.
+    expect(
+      hasActFamilyTag([
+        'lying on back',
+        'breast expansion',
+        'breasts hanging low',
+        'looking down',
+        'breast squeezing',
+        'straddling',
+        'blush',
+        'half-closed eyes',
+        'hetero',
+      ]),
+    ).toBe(false)
+  })
+
+  it('says no to aftermath vocabulary — matching is exact, never substring', () => {
+    expect(hasActFamilyTag(['after sex', 'afterglow', 'sex hair'])).toBe(false)
+  })
+
+  it('is empty-safe', () => {
+    expect(hasActFamilyTag([])).toBe(false)
+    expect(ACT_FAMILY_TAGS.has('paizuri')).toBe(true)
+  })
+})
+
+describe('hasPartneredActTag', () => {
+  it('counts an act that needs a second person', () => {
+    expect(hasPartneredActTag(['paizuri', 'lying on back'])).toBe(true)
+  })
+
+  it('does not count a solo act', () => {
+    expect(hasPartneredActTag(['masturbation', 'fingering'])).toBe(false)
+    expect(hasActFamilyTag(['masturbation'])).toBe(true)
   })
 })
 

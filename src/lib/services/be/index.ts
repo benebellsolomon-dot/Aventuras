@@ -81,6 +81,8 @@ export {
   bwhCmString,
   capacityMlPerSide,
   droopCm,
+  dryBustCm,
+  dryBustNote,
   dryKgPerSide,
   effectiveSupport,
   fluidPressureLabel,

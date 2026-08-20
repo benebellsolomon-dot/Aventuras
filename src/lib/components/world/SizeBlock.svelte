@@ -7,6 +7,7 @@
     bwhCmString,
     comparative,
     cupLetter,
+    dryBustNote,
     measurements,
     type BodyState,
   } from '$lib/services/be'
@@ -21,6 +22,9 @@
   const cmp = $derived(comparative(state.tier))
   const m = $derived(measurements(state))
   const bwh = $derived(bwhCmString(state))
+  // Bust includes her current milk load, so a drained girl can read smaller than
+  // she was a tier ago. Show what the fill is worth rather than let it confuse.
+  const dry = $derived(dryBustNote(state))
 </script>
 
 <div class="bg-background/60 border-border mt-2 rounded-lg border px-2.5 py-2">
@@ -31,7 +35,11 @@
 
   <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
     <div class="flex justify-between text-[11px]">
-      <span class="text-muted-foreground">bust</span><span>{Math.round(m.bustCm)} cm</span>
+      <span class="text-muted-foreground">bust</span><span
+        >{Math.round(m.bustCm)} cm{#if dry}<span class="text-muted-foreground">
+            ({dry})</span
+          >{/if}</span
+      >
     </div>
     <div class="flex justify-between text-[11px]">
       <span class="text-muted-foreground">band</span><span>{Math.round(m.bandCm)} cm</span>

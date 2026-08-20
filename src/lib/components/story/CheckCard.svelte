@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { Dices } from 'lucide-svelte'
+  import { Dices, ZapOff } from 'lucide-svelte'
   import {
-    BAND_LABELS,
+    checkOutcomeLabel,
     formatCheckMath,
     formatCheckMathCompact,
+    unknownSpellNote,
     type CheckRecord,
   } from '$lib/services/rpg'
   import type { BeLogRecord } from '$lib/services/be'
@@ -43,15 +44,24 @@
   ].split(' ')[0]}"
 >
   <div class="flex items-center gap-2">
-    <Dices class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+    <!-- A record that never rolled must not wear a die icon (nor print nat/total —
+         formatCheckMath already suppresses the d20 for it). -->
+    {#if record.insufficientEssence}
+      <ZapOff class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+    {:else}
+      <Dices class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+    {/if}
     <span class="text-foreground">{mathLine}</span>
     <span class="font-semibold {bandClasses[record.band].split(' ')[1]}"
-      >{BAND_LABELS[record.band]}</span
+      >{checkOutcomeLabel(record)}</span
     >
     {#if record.essenceSpent > 0}
       <span class="text-amber-400/90">⬡ −{record.essenceSpent}</span>
     {/if}
   </div>
+  {#if unknownSpellNote(record)}
+    <div class="text-muted-foreground mt-1 pl-5">{unknownSpellNote(record)}</div>
+  {/if}
   {#if consequences.length > 0}
     <div class="text-muted-foreground mt-1 space-y-0.5 pl-5">
       {#each consequences as row, i (i)}

@@ -33,7 +33,10 @@ import type { PresetPack, FullPack } from './types'
 // 7 — 2026-08-20: risk-assess template teaches the new `growthIntent` flag, so a
 //     free-text "channel more essence into her" action can grow her through the
 //     check instead of dying as a non-eligible classifier `attempt`.
-const SERVICE_TEMPLATE_SYNC_VERSION = 7
+// 8 — 2026-08-20: booru writer declares actInProgress (mechanical act-tag
+//     validation + one corrective retry — template compliance alone kept
+//     dropping the ongoing act from explicit beats).
+const SERVICE_TEMPLATE_SYNC_VERSION = 8
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

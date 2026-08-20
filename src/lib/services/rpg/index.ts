@@ -33,6 +33,7 @@ export {
   attributeMod,
   BAND_LABELS,
   checkBonus,
+  checkOutcomeLabel,
   checkRecordTargets,
   defaultRpgSheet,
   formatCheckMath,
@@ -42,6 +43,7 @@ export {
   periodIndex,
   skillRanks,
   successOdds,
+  unknownSpellNote,
   type OddsBand,
 } from './derive'
 export {

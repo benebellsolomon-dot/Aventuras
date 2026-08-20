@@ -39,23 +39,21 @@ export function resolveCheck(input: ResolveCheckInput): CheckRecord {
   const modifierSum = modifiers.reduce((sum, m) => sum + m.value, 0)
   const bonus = checkBonus(sheet, skill) + modifierSum
 
-  // Unknown spell (Phase 4, research/50 R4): a cast of a spell not in knownSpells
-  // is refused before rolling — no roll, no spend. The stat_invention detector
-  // flags the narrative side; here we only guarantee no unearned essence burn.
-  if (input.spellId !== undefined && !sheet.knownSpells.includes(input.spellId)) {
-    return {
-      action,
-      skill,
-      dc,
-      nat: 0,
-      bonusBreakdown: { attribute, ranks, modifiers },
-      bonus,
-      total: 0,
-      margin: -dc,
-      band: 'fail',
-      essenceSpent: 0,
-    }
-  }
+  // Unknown spell: the tagger is an LLM and attaches spellId to actions that are
+  // not casts at all (live failure: an ordinary physical action tagged with a
+  // spell, refused before rolling, auto-failed, narrated as failure). Refusing
+  // the whole action punishes the player for a tagging mistake, so an unknown
+  // spellId is DROPPED instead and the action resolves as a plain skill check.
+  // The record carries no spellId, so nothing downstream that keys on it — cast
+  // effects, the guaranteed-growth cast channel, the cast prompt directive, the
+  // turn-log cast glyph — can fire; `unknownSpellDropped` is display/debug only.
+  // The SPELLBOOK cast path can only submit a known spell and never lands here.
+  const isKnownSpell = input.spellId !== undefined && sheet.knownSpells.includes(input.spellId)
+  const spellMarker: Pick<CheckRecord, 'spellId' | 'unknownSpellDropped'> = isKnownSpell
+    ? { spellId: input.spellId }
+    : input.spellId !== undefined
+      ? { unknownSpellDropped: true }
+      : {}
 
   // Insufficient essence: the action can't be powered, so the check never
   // rolls — a fail-band record with no spend, never a negative pool.
@@ -72,6 +70,8 @@ export function resolveCheck(input: ResolveCheckInput): CheckRecord {
       band: 'fail',
       essenceSpent: 0,
       insufficientEssence: true,
+      essenceRequired: essenceCost,
+      ...spellMarker,
     }
   }
 
@@ -88,5 +88,6 @@ export function resolveCheck(input: ResolveCheckInput): CheckRecord {
     margin: total - dc,
     band: resolveCheckBand(nat, total, dc),
     essenceSpent: essenceCost,
+    ...spellMarker,
   }
 }

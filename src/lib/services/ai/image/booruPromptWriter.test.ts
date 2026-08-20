@@ -42,6 +42,7 @@ vi.mock('$lib/services/database', () => ({
 import {
   BOORU_MAX_TAGS,
   buildExpressionCues,
+  detectActDefects,
   buildLocationBlock,
   buildSizeSanctions,
   buildSubjectDossier,
@@ -113,6 +114,7 @@ function sections(overrides: Partial<BooruSceneSections> = {}): BooruSceneSectio
     rating: 'general',
     camera: '',
     countTags: '1girl, solo',
+    actInProgress: false,
     action: '',
     characters: [],
     expressions: [],
@@ -315,6 +317,7 @@ describe('composeBooruScenePrompt', () => {
     rating: 'explicit, uncensored, detailed anatomy',
     camera: 'cowboy shot',
     countTags: '1boy, 1girl',
+    actInProgress: true,
     action: 'hetero, paizuri, breast squeezing, penis between breasts, lying on back',
     characters: [
       '(on the right, 1boy, muscular, completely nude)',
@@ -788,6 +791,106 @@ describe('buildSizeSanctions', () => {
   })
 })
 
+/**
+ * The mechanical act backstop. The live failure the check exists for: an
+ * explicit mid-paizuri beat came back declared as an act in progress but with
+ * an action block that named only a pose and the growth event, so the image
+ * rendered an ambiguous solo scene.
+ */
+describe('detectActDefects', () => {
+  it('flags the live failure shape — act declared, no act tag written', () => {
+    const defect = detectActDefects(
+      sections({
+        actInProgress: true,
+        countTags: '1boy, 1girl',
+        action: 'lying on back, breast expansion, breasts hanging low, looking down',
+      }),
+    )
+    expect(defect?.missingActTag).toBe(true)
+    expect(defect?.note).toContain('named no act tag')
+  })
+
+  it('passes an act block that leads with the act tag family', () => {
+    expect(
+      detectActDefects(
+        sections({
+          actInProgress: true,
+          countTags: '1boy, 1girl',
+          action: 'hetero, paizuri, breast squeezing, lying on back, breast expansion',
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  it('never flags aftermath — a plain pose action is correct there', () => {
+    expect(
+      detectActDefects(
+        sections({
+          actInProgress: false,
+          countTags: '1boy, 1girl',
+          action: 'after sex, lying, on back, on bed, afterglow',
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  it('flags a partnered act counted as a lone girl', () => {
+    const defect = detectActDefects(
+      sections({
+        actInProgress: true,
+        countTags: '1girl, solo',
+        action: 'hetero, paizuri, penis between breasts, lying on back',
+      }),
+    )
+    expect(defect?.missingActTag).toBe(false)
+    expect(defect?.missingMaleCount).toBe(true)
+    expect(defect?.note).toContain('countTags')
+  })
+
+  it('flags the protagonist-POV male when the count tags leave him out', () => {
+    const defect = detectActDefects(
+      sections({
+        actInProgress: true,
+        countTags: '1girl',
+        action: 'sex, on back',
+        characters: ['pov, male pov, faceless male, muscular', '1girl, blonde hair'],
+      }),
+    )
+    expect(defect?.missingMaleCount).toBe(true)
+  })
+
+  it('reports both defects in a single note — one retry covers both', () => {
+    const defect = detectActDefects(
+      sections({
+        actInProgress: true,
+        countTags: '1girl, solo',
+        action: 'hetero, lying on back, breast expansion',
+      }),
+    )
+    expect(defect?.missingActTag).toBe(true)
+    expect(defect?.missingMaleCount).toBe(true)
+    expect(defect?.note).toContain('act tag family')
+    expect(defect?.note).toContain('1boy, 1girl')
+  })
+
+  it('demands no male for a solo act or a stated yuri act', () => {
+    expect(
+      detectActDefects(
+        sections({
+          actInProgress: true,
+          countTags: '1girl, solo',
+          action: 'masturbation, fingering',
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      detectActDefects(
+        sections({ actInProgress: true, countTags: '2girls', action: 'yuri, tribadism, on bed' }),
+      ),
+    ).toBeNull()
+  })
+})
+
 describe('writeBooruScenePrompt', () => {
   it('returns null (best-effort) when no preset is assigned', async () => {
     mocks.getServicePresetId.mockReturnValue('')
@@ -910,6 +1013,80 @@ describe('writeBooruScenePrompt', () => {
   })
 })
 
+/**
+ * The act backstop end-to-end. It must stay OFF the hot path (a compliant
+ * writer costs exactly one call) and must never fail the image: a retry that
+ * is still wrong is used anyway.
+ */
+describe('writeBooruScenePrompt — act-reliability retry', () => {
+  /** The measured failure: act declared, action names only pose + growth. */
+  const badSections = sections({
+    actInProgress: true,
+    countTags: '1boy, 1girl',
+    action: 'lying on back, breast expansion, breasts hanging low',
+    scene: 'bedroom',
+  })
+
+  const goodSections = sections({
+    actInProgress: true,
+    countTags: '1boy, 1girl',
+    action: 'hetero, paizuri, lying on back, breast expansion',
+    scene: 'bedroom',
+  })
+
+  it('issues no extra call when the writer got it right', async () => {
+    mocks.generateStructured.mockResolvedValue(goodSections)
+    const result = await writeBooruScenePrompt(baseInput())
+    expect(mocks.generateStructured).toHaveBeenCalledTimes(1)
+    expect(result).toContain('paizuri')
+  })
+
+  it('issues no extra call for an aftermath beat with a plain pose action', async () => {
+    mocks.generateStructured.mockResolvedValue(
+      sections({ actInProgress: false, countTags: '1boy, 1girl', action: 'after sex, lying' }),
+    )
+    await writeBooruScenePrompt(baseInput())
+    expect(mocks.generateStructured).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries once with the correction appended and uses the corrected output', async () => {
+    mocks.generateStructured.mockResolvedValueOnce(badSections).mockResolvedValueOnce(goodSections)
+    const result = await writeBooruScenePrompt(baseInput())
+
+    expect(mocks.generateStructured).toHaveBeenCalledTimes(2)
+    const [retryOpts] = mocks.generateStructured.mock.calls[1]
+    expect(retryOpts.system).toContain('SYS')
+    expect(retryOpts.system).toContain('named no act tag')
+    expect(retryOpts.prompt).toBe('USR')
+    expect(result).toContain('paizuri')
+  })
+
+  it('uses the retry output even when it is still wrong, and never retries twice', async () => {
+    const secondBad = sections({
+      actInProgress: true,
+      countTags: '1boy, 1girl',
+      action: 'lying on back, looking down',
+      scene: 'bedroom',
+    })
+    mocks.generateStructured.mockResolvedValueOnce(badSections).mockResolvedValueOnce(secondBad)
+    const result = await writeBooruScenePrompt(baseInput())
+
+    expect(mocks.generateStructured).toHaveBeenCalledTimes(2)
+    expect(result).toContain('looking down')
+    expect(result).not.toContain('breast expansion')
+  })
+
+  it('keeps the first output when the corrective retry throws', async () => {
+    mocks.generateStructured
+      .mockResolvedValueOnce(badSections)
+      .mockRejectedValueOnce(new Error('model error'))
+    const result = await writeBooruScenePrompt(baseInput())
+
+    expect(mocks.generateStructured).toHaveBeenCalledTimes(2)
+    expect(result).toContain('breast expansion')
+  })
+})
+
 describe('resolveBooruScenePrompt', () => {
   it('returns the original prompt unchanged when the setting is off', async () => {
     mocks.imageGenSettings.dedicatedBooruPromptWriter = false
@@ -959,10 +1136,16 @@ describe('image-booru-scene-prompt template contract', () => {
       if (!match) throw new Error(`worked example is missing the "${field}" field`)
       return JSON.parse(match[1]) as string[]
     }
+    const bool = (field: string): boolean => {
+      const match = content.match(new RegExp(`^\\s*${field}: (true|false)$`, 'm'))
+      if (!match) throw new Error(`worked example is missing the "${field}" field`)
+      return match[1] === 'true'
+    }
     return {
       rating: str('rating'),
       camera: str('camera'),
       countTags: str('countTags'),
+      actInProgress: bool('actInProgress'),
       action: str('action'),
       characters: arr('characters'),
       expressions: arr('expressions'),
@@ -975,6 +1158,7 @@ describe('image-booru-scene-prompt template contract', () => {
       'rating',
       'camera',
       'countTags',
+      'actInProgress',
       'action',
       'characters',
       'expressions',
@@ -1009,6 +1193,19 @@ describe('image-booru-scene-prompt template contract', () => {
     expect(prompt.indexOf('breast expansion')).toBeLessThan(prompt.indexOf('blonde hair'))
     // Size stays hoisted between action and identity (placement is code-side).
     expect(prompt.indexOf('huge breasts')).toBeLessThan(prompt.indexOf('blonde hair'))
+  })
+
+  it('declares the act in its worked example and passes its own validator', () => {
+    const example = parseWorkedExample(template?.content ?? '')
+    expect(example.actInProgress).toBe(true)
+    expect(detectActDefects(example)).toBeNull()
+  })
+
+  it('documents the aftermath counter-example — false needs no act tag', () => {
+    const content = template?.content ?? ''
+    expect(content).toContain('Counter-example')
+    expect(content).toMatch(/actInProgress is FALSE/)
+    expect(content).toContain('AFTERMATH')
   })
 
   it('keeps the worked example on the faceless protagonist-POV form', () => {

@@ -36,7 +36,9 @@ export const riskAssessResultSchema = z.object({
   spellId: z
     .string()
     .optional()
-    .describe('Lorebook entry id of the known spell this action casts, when it is a cast'),
+    .describe(
+      'Lorebook entry id of a spell the player already knows, ONLY when the action is an explicit cast of that spell by name. Omit it for every other action — physical, sexual, social, and mundane actions are never spell casts, and a spell the player has not learned is never a valid id.',
+    ),
   /**
    * The action's explicit purpose is to grow/transform the target's body. A
    * successful check on such an action grows her deterministically (the check IS

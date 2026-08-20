@@ -137,7 +137,9 @@ export class CheckPhase {
         ...(spellId ? { spellId } : {}),
       }),
       ...(target ? { target: target.name, targetId: target.id } : {}),
-      ...(spellId ? { spellId } : {}),
+      // spellId is NOT re-applied here: resolveCheck owns it, and it keeps the
+      // marker only for a spell the sheet actually knows. Re-adding it would
+      // resurrect an unknown-spell tag the resolver deliberately dropped.
       // NOT gated on a resolved target any more. The tagger is an LLM and drops
       // `targetCharacter` intermittently on turns it tagged growth for (live
       // failure: a crit channel, essence spent, zero growth, because the flag was
@@ -148,7 +150,14 @@ export class CheckPhase {
       // this one, is what keeps untargeted "grow the room" nonsense inert.
       ...(growthIntent ? { growthIntent: true } : {}),
     }
-    log('check resolved', { skill, dc, nat: record.nat, total: record.total, band: record.band })
+    log('check resolved', {
+      skill,
+      dc,
+      nat: record.nat,
+      total: record.total,
+      band: record.band,
+      ...(record.unknownSpellDropped ? { unknownSpellDropped: true, taggedSpellId: spellId } : {}),
+    })
 
     yield { type: 'check_resolved', record }
     yield { type: 'phase_complete', phase: 'check', result: record } satisfies PhaseCompleteEvent

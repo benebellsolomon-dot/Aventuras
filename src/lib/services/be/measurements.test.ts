@@ -8,6 +8,8 @@ import {
   bwhCmString,
   capacityMlPerSide,
   droopCm,
+  dryBustCm,
+  dryBustNote,
   dryKgPerSide,
   fluidPressureLabel,
   imageStateCues,
@@ -54,6 +56,40 @@ describe('curves reproduce the baked golden snapshots (the spine, at rung resolu
     const ref = bustCm(47, 'natural', 0)
     expect(bustCm(47, 'natural', 0, { waistCm: 81, build: 'average' })).toBeCloseTo(ref + 20, 0)
     expect(bustCm(47, 'natural', 0, { waistCm: 61, build: 'curvy' })).toBeCloseTo(ref + 3, 0)
+  })
+
+  test('dryBustCm is the same tape at fill 0, so it never moves with fill', () => {
+    expect(dryBustCm(47, 'natural')).toBeCloseTo(bustCm(47, 'natural', 0), 5)
+    expect(dryBustCm(47, 'natural', { waistCm: 81, build: 'average' })).toBeCloseTo(
+      bustCm(47, 'natural', 0, { waistCm: 81, build: 'average' }),
+      5,
+    )
+    expect(dryBustCm(47, 'natural')).toBeLessThan(bustCm(47, 'natural', 100))
+  })
+
+  test('dryBustNote explains a full girl and stays quiet on an empty one', () => {
+    const state = defaultBodyState(47)
+    const empty: BodyState = { ...state, fluids: { ...state.fluids, fillPercent: 0 } }
+    const full: BodyState = { ...state, fluids: { ...state.fluids, fillPercent: 100 } }
+    expect(dryBustNote(empty)).toBeNull()
+    expect(dryBustNote(full)).toBe(
+      `${Math.round(dryBustCm(47, state.shape, state.baseline))} cm dry`,
+    )
+  })
+
+  test('dryBustNote makes the drain-while-growing case legible', () => {
+    // The live failure: +1 tier while draining 88% → 8% reads as a NET cm drop.
+    const base = defaultBodyState(20)
+    const before: BodyState = { ...base, fluids: { ...base.fluids, fillPercent: 88 } }
+    const after: BodyState = { ...base, tier: 21, fluids: { ...base.fluids, fillPercent: 8 } }
+    const liveBefore = bustCm(before.tier, before.shape, 88, before.baseline)
+    const liveAfter = bustCm(after.tier, after.shape, 8, after.baseline)
+    expect(liveAfter).toBeLessThan(liveBefore)
+    // The dry tape, which is what "she grew" means, still goes up.
+    expect(dryBustCm(after.tier, after.shape, after.baseline)).toBeGreaterThan(
+      dryBustCm(before.tier, before.shape, before.baseline),
+    )
+    expect(dryBustNote(before)).not.toBeNull()
   })
 
   test('curves are strictly monotonic in tier', () => {
