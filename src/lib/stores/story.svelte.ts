@@ -2979,6 +2979,11 @@ class StoryStore {
       // rollback-visible (research/31 §2.2). beLog/checkLog are declared in the
       // method scope above so hasChanges can still read them after the transaction.
       if (this.currentStory.settings?.beMode === true) {
+        // Growth-intent target resolution happens ONCE, here, before either
+        // consumer: an untargeted growth check whose subject is unambiguous gets
+        // her filled in, so the reducer, the sheet apply and the persisted
+        // checkLog all agree on who this action was aimed at.
+        const resolvedCheck = this.withInferredGrowthTarget(checkRecord, result)
         const beResult = await this.applyBeEvents(
           result,
           entryId,
@@ -2987,7 +2992,7 @@ class StoryStore {
           createdCharacterIds,
           // Read-only here (milk quality, research/49 R8) — applyRpgTurn stays the
           // single writer of the check's effects.
-          checkRecord,
+          resolvedCheck,
           itemsBefore,
           createdItemIds,
         )
@@ -2995,7 +3000,7 @@ class StoryStore {
         // RPG layer: protagonist sheet apply (essence/regen/leveling/drift) —
         // after the girls' reducer, before the delta, same rollback contract.
         checkLog = await this.applyRpgTurn(
-          checkRecord,
+          resolvedCheck,
           entryId,
           trackingEnabled,
           charactersBefore,
@@ -3229,8 +3234,62 @@ class StoryStore {
   }
 
   /**
+   * Fill an untagged growth-intent check's target from the scene, or leave the
+   * record exactly as it came.
+   *
+   * The check-tagger is an LLM: it emitted `growthIntent` without
+   * `targetCharacter` on a live crit, which used to mean no target, no promotion,
+   * essence spent and zero growth. Requiring TWO tags to land together is the
+   * fragility; a scene with exactly one possible subject does not need the second
+   * one. Candidates use the notion the reducer loop already uses one level down —
+   * a non-protagonist who is scene-present (this turn's classifier presence list)
+   * and already carries body state. Presence that reads as unknown (the
+   * classifier intermittently returns an empty list, or names only untracked
+   * extras) degrades to the whole tracked cast, matching be/presence.ts's
+   * include-when-in-doubt bias; that only ever widens the candidate set, so it
+   * can turn an inference OFF, never on.
+   *
+   * Zero or several candidates → untouched, so nothing is promoted and nothing is
+   * suppressed: ambiguous targeting must not guess between girls. Cast turns are
+   * untouched too (`computeSpellCast` owns those and requires its own tagged
+   * target). The resolved target is written back onto the record so the persisted
+   * checkLog names who was actually affected, with `targetInferred` marking that
+   * the engine — not the tagger — chose her.
+   */
+  private withInferredGrowthTarget(
+    checkRecord: CheckRecord | null,
+    result: ClassificationResult,
+  ): CheckRecord | null {
+    if (!checkRecord || checkRecord.growthIntent !== true) return checkRecord
+    if (checkRecord.spellId) return checkRecord
+    if (checkRecord.target || checkRecord.targetId) return checkRecord
+
+    const tracked = this.characters.filter(
+      (c) => c.relationship !== 'self' && readBodyState(c.metadata) !== null,
+    )
+    const presentNames = new Set(
+      (result.scene?.presentCharacterNames ?? []).map((name) => name.trim().toLowerCase()),
+    )
+    const present = tracked.filter((c) => presentNames.has(c.name.trim().toLowerCase()))
+    const candidates = present.length > 0 ? present : tracked
+    if (candidates.length !== 1) return checkRecord
+
+    const [target] = candidates
+    log('growth-intent target inferred from a single-candidate scene', {
+      target: target.name,
+      band: checkRecord.band,
+    })
+    return { ...checkRecord, target: target.name, targetId: target.id, targetInferred: true }
+  }
+
+  /**
    * Check-backed growth intent → the target this turn's growth promotion applies
    * to (see be/effects.ts `promoteGrowthIntent` for what promotion does).
+   *
+   * The target is whatever the record carries by the time it reaches here: either
+   * the tagger's `targetCharacter` or the sole-candidate fill from
+   * `withInferredGrowthTarget`. Still null-on-no-target — an ambiguous scene
+   * neither promotes nor suppresses.
    *
    * Returns null on a CAST turn even when the flag is set: `computeSpellCast`
    * already owns that turn's growth through the same guaranteed channel plus its

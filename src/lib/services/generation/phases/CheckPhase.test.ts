@@ -185,7 +185,11 @@ describe('CheckPhase — growthIntent threading (check-backed growth)', () => {
     expect(record?.targetId).toBe('char-amelia')
   })
 
-  it('drops the flag when no target girl resolves — growth with no subject is not a claim', async () => {
+  it('keeps the flag when no target girl resolves — the store owns subject resolution', async () => {
+    // Reversal of the shipped gate: dropping the flag here made a landed,
+    // paid-for growth depend on the tagger emitting BOTH tags, and it dropped
+    // `targetCharacter` on a live crit. The untargeted record now travels, and
+    // the store either fills the sole candidate or applies nothing.
     const assessRisk = vi.fn()
     const phase = new CheckPhase({ assessRisk })
     const { record } = await run(phase, {
@@ -200,8 +204,28 @@ describe('CheckPhase — growthIntent threading (check-backed growth)', () => {
         growthIntent: true,
       },
     })
-    expect(record).not.toBeNull()
-    expect(record?.growthIntent).toBeUndefined()
+    expect(record?.growthIntent).toBe(true)
+    expect(record?.target).toBeUndefined()
+    expect(record?.targetId).toBeUndefined()
+    expect(record?.targetInferred).toBeUndefined()
+  })
+
+  it('an untagged-target growth verdict still carries the flag through the free-text path', async () => {
+    const assessRisk = vi.fn().mockResolvedValue({
+      risky: true,
+      skill: 'channeling',
+      dc: 8,
+      essenceCost: 1,
+      growthIntent: true,
+    })
+    const phase = new CheckPhase({ assessRisk })
+    const { record } = await run(phase, {
+      context: makeContext({ content: CONTENT, girls: ['Amelia'] }),
+      actionType: 'do',
+      choiceTag: null,
+    })
+    expect(record?.growthIntent).toBe(true)
+    expect(record?.targetId).toBeUndefined()
   })
 
   it('an untagged / non-growth check leaves the flag off entirely', async () => {

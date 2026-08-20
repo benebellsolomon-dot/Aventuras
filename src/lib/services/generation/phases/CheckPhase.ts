@@ -138,10 +138,15 @@ export class CheckPhase {
       }),
       ...(target ? { target: target.name, targetId: target.id } : {}),
       ...(spellId ? { spellId } : {}),
-      // Gated on a RESOLVED target: growth acts on a girl, so a flag with no
-      // subject would be a claim the engine could never honor. Untargeted
-      // "grow the room" nonsense therefore never reaches the store.
-      ...(growthIntent && target ? { growthIntent: true } : {}),
+      // NOT gated on a resolved target any more. The tagger is an LLM and drops
+      // `targetCharacter` intermittently on turns it tagged growth for (live
+      // failure: a crit channel, essence spent, zero growth, because the flag was
+      // discarded here). Both tags landing together is too fragile a contract, so
+      // the flag now travels untargeted and the STORE resolves the subject — it
+      // knows who is in the scene and who carries body state, and it applies
+      // nothing when zero or several girls could have been meant. That guard, not
+      // this one, is what keeps untargeted "grow the room" nonsense inert.
+      ...(growthIntent ? { growthIntent: true } : {}),
     }
     log('check resolved', { skill, dc, nat: record.nat, total: record.total, band: record.band })
 

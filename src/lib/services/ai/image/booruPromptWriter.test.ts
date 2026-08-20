@@ -592,66 +592,107 @@ describe('composeBooruScenePrompt — engine size sanction', () => {
   ]
 
   /**
-   * The live failure: the narration falsely described massive growth (an engine
-   * bug), and the writer tagged the NARRATIVE for a subject the engine holds at
-   * tier 24 — the "huge breasts" band, where no body-relative anchor is earned.
+   * THE LIVE FAILURE (playtest round 5), verbatim. The narration falsely
+   * described massive growth, and the writer phrased it as "breast spill,
+   * pinned, immobile, trapped" — none of which the previous blacklist's
+   * `breasts …ing` / `…than` patterns matched. It also wrote NO band word, so
+   * the hoist had nothing to hoist and the engine's "huge breasts" only arrived
+   * at the very tail, appended downstream past CLIP's attention window. The
+   * render came back with a tiny bust.
    */
-  const overClaimed: Partial<BooruSceneSections> = {
-    countTags: '1girl, solo',
-    action:
-      'breast expansion, breasts covering stomach, breasts reaching waist, breasts spilling over bed, unable to move, lying on back',
-    characters: ['1girl, blonde hair, golden eyes, fair skin, nude, huge breasts, lactation'],
-    expressions: ['open mouth'],
-    scene: 'bed, night',
+  const liveFailure: Partial<BooruSceneSections> = {
+    rating: 'explicit, uncensored, detailed anatomy',
+    camera: 'wide shot, pov',
+    countTags: '1boy, 1girl',
+    action: 'lying on back, breast spill, pinned, immobile, trapped',
+    characters: [
+      'male pov, faceless male',
+      '1girl, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, naked, lactation',
+    ],
+    expressions: ['', 'blush, half-closed eyes, open mouth, drooling'],
+    scene: 'ornate manor bedroom, large bed, pillows, moonlight through window, night',
   }
 
-  it('strips the narrative size claims the engine tier does not sanction', () => {
-    const prompt = composeBooruScenePrompt(overClaimed, [], blondeAt(24))
+  it('strips the invention and states the engine size after the action block', () => {
+    const prompt = composeBooruScenePrompt(liveFailure, [], blondeAt(24))
     expect(prompt).toBe(
-      '1girl, solo, lying on back, huge breasts, ' +
-        'blonde hair, golden eyes, fair skin, nude, lactation, open mouth, bed, night',
+      'explicit, uncensored, detailed anatomy, wide shot, pov, 1boy, 1girl, ' +
+        'lying on back, huge breasts, ' +
+        'male pov, faceless male, ' +
+        'blonde hair, golden eyes, fair skin, slim, wide hips, young adult, naked, lactation, ' +
+        'blush, half-closed eyes, open mouth, drooling, ' +
+        'ornate manor bedroom, large bed, pillows, moonlight through window, night',
     )
-    for (const invented of [
-      'breast expansion',
-      'breasts covering stomach',
-      'breasts reaching waist',
-      'breasts spilling over bed',
-      'unable to move',
-    ]) {
+    for (const invented of ['breast spill', 'pinned', 'immobile', 'trapped']) {
       expect(prompt).not.toContain(invented)
     }
   })
 
-  it('keeps the growth tag when the engine actually grew her this turn', () => {
-    const prompt = composeBooruScenePrompt(overClaimed, [], blondeAt(24, true))
-    expect(prompt).toContain('breast expansion')
-    expect(prompt).not.toContain('breasts covering stomach')
+  it('states the engine size exactly once, ahead of the character runs', () => {
+    const prompt = composeBooruScenePrompt(liveFailure, [], blondeAt(24))
+    expect(prompt.match(/huge breasts/g)).toHaveLength(1)
+    expect(prompt.indexOf('lying on back')).toBeLessThan(prompt.indexOf('huge breasts'))
+    expect(prompt.indexOf('huge breasts')).toBeLessThan(prompt.indexOf('male pov'))
+    expect(prompt.indexOf('huge breasts')).toBeLessThan(prompt.indexOf('blonde hair'))
   })
 
-  it('keeps the anchor a tier-40 subject earned and drops the one above it', () => {
+  it('injects the band even when the writer wrote no size vocabulary at all', () => {
+    // The half of the failure the hoist could not fix: nothing to hoist.
+    const prompt = composeBooruScenePrompt(
+      { countTags: '1girl, solo', action: 'standing', characters: ['blonde hair, nude'] },
+      [],
+      blondeAt(24),
+    )
+    expect(prompt).toBe('1girl, solo, standing, huge breasts, blonde hair, nude')
+  })
+
+  it('injects the anchor the engine tier has earned, not the writer’s', () => {
     const prompt = composeBooruScenePrompt(
       {
         countTags: '1girl, solo',
         characters: [
-          '1girl, blonde hair, golden eyes, fair skin, hyper breasts, breasts wider than hips, breasts bigger than torso',
+          '1girl, blonde hair, golden eyes, fair skin, hyper breasts, breasts bigger than torso',
         ],
         scene: 'bedroom',
       },
       [],
       blondeAt(40),
     )
-    expect(prompt).toContain('hyper breasts, breasts wider than hips')
+    expect(prompt).toContain('hyper breasts, breasts wider than her hips')
     expect(prompt).not.toContain('breasts bigger than torso')
   })
 
-  it('sanctions each run by its own subject and scene tags by the largest', () => {
+  it('keeps the growth tag only on the turn the engine grew her', () => {
+    const grew = composeBooruScenePrompt(liveFailure, [], blondeAt(24, true))
+    expect(grew).toContain('huge breasts, breast expansion')
+    expect(composeBooruScenePrompt(liveFailure, [], blondeAt(24))).not.toContain('breast expansion')
+  })
+
+  it('keeps the act tags that merely name breasts', () => {
+    const prompt = composeBooruScenePrompt(
+      {
+        countTags: '1boy, 1girl',
+        action: 'hetero, paizuri, breast squeezing, penis between breasts, gigantic breasts',
+        characters: ['pov, male pov, faceless male', '1girl, blonde hair, golden eyes, fair skin'],
+        scene: 'bedroom',
+      },
+      [],
+      blondeAt(24),
+    )
+    expect(prompt).toContain(
+      'hetero, paizuri, breast squeezing, penis between breasts, huge breasts',
+    )
+    expect(prompt).not.toContain('gigantic breasts')
+  })
+
+  it('gives each subject her own engine size, in count-tag order', () => {
     const prompt = composeBooruScenePrompt(
       {
         countTags: '2girls',
         action: 'yuri, hugging, breasts covering stomach',
         characters: [
-          'blonde hair, golden eyes, fair skin, gigantic breasts',
-          'black hair, red eyes, pale skin, gigantic breasts',
+          '1girl, blonde hair, golden eyes, fair skin, gigantic breasts',
+          '1girl, black hair, red eyes, pale skin, gigantic breasts',
         ],
         scene: 'bedroom',
       },
@@ -661,34 +702,47 @@ describe('composeBooruScenePrompt — engine size sanction', () => {
         { identityTags: ravenBank, tier: 45, grewThisTurn: false },
       ],
     )
-    // One "gigantic breasts" survives — the raven's; the blonde's is unearned.
-    expect(prompt.match(/gigantic breasts/g)).toHaveLength(1)
     expect(prompt).toBe(
-      '2girls, yuri, hugging, breasts covering stomach, gigantic breasts, ' +
-        'blonde hair, golden eyes, fair skin, black hair, red eyes, pale skin, bedroom',
+      '2girls, yuri, hugging, huge breasts, hyper breasts, breasts wider than her hips, ' +
+        '1girl, blonde hair, golden eyes, fair skin, black hair, red eyes, pale skin, bedroom',
     )
   })
 
-  it('falls back to the largest subject for a run no sanction claims', () => {
-    // Two runs, one tagged subject: the blonde claims hers by bank, and the
-    // unnamed background girl is sanctioned scene-wide rather than filtered
-    // against a body state that is not hers.
-    const withBystander: Partial<BooruSceneSections> = {
-      countTags: '2girls',
-      characters: [
-        '1girl, blonde hair, golden eyes, fair skin, gigantic breasts',
-        'red hair, green eyes, gigantic breasts',
-      ],
-      scene: 'bedroom',
-    }
-    expect(composeBooruScenePrompt(withBystander, [], blondeAt(45))).toContain('gigantic breasts')
-    expect(composeBooruScenePrompt(withBystander, [], blondeAt(24))).not.toContain(
-      'gigantic breasts',
+  it('leaves a run no sanction claims untouched — a smaller girl keeps her band', () => {
+    // Two runs, one tagged subject: the blonde claims hers by bank; the unnamed
+    // background girl is someone the engine holds nothing for, so her honest
+    // "medium breasts" survives instead of being collateral damage.
+    const prompt = composeBooruScenePrompt(
+      {
+        countTags: '2girls',
+        characters: [
+          '1girl, blonde hair, golden eyes, fair skin, gigantic breasts',
+          'red hair, green eyes, medium breasts',
+        ],
+        scene: 'bedroom',
+      },
+      [],
+      blondeAt(24),
+    )
+    expect(prompt).toBe(
+      '2girls, huge breasts, medium breasts, ' +
+        '1girl, blonde hair, golden eyes, fair skin, red hair, green eyes, bedroom',
+    )
+  })
+
+  it('states a sanction the writer never depicted rather than losing it', () => {
+    const prompt = composeBooruScenePrompt(
+      { countTags: '1girl, solo', action: 'standing', characters: [], scene: 'bedroom' },
+      [],
+      blondeAt(30),
+    )
+    expect(prompt).toBe(
+      '1girl, solo, standing, gigantic breasts, breasts bigger than head, bedroom',
     )
   })
 
   it('filters nothing when the engine holds no state (non-BE story)', () => {
-    expect(composeBooruScenePrompt(overClaimed)).toContain('breasts covering stomach')
+    expect(composeBooruScenePrompt(liveFailure)).toContain('breast spill')
   })
 })
 
@@ -806,8 +860,11 @@ describe('writeBooruScenePrompt', () => {
     const result = await writeBooruScenePrompt(
       baseInput({ presentCharacters: [cora], tagCharacterNames: ['Cora'], beMode: true }),
     )
+    // The engine's band word is stated even though the writer omitted it —
+    // injection does not depend on the writer having written any size at all.
     expect(result).toBe(
-      '1girl, solo, black hair, red eyes, nude, blush, half-closed eyes, open mouth, smile, bedroom',
+      '1girl, solo, large breasts, black hair, red eyes, nude, ' +
+        'blush, half-closed eyes, open mouth, smile, bedroom',
     )
   })
 

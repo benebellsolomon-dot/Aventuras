@@ -23,7 +23,12 @@
  * booru dialect only; the prose dialect keeps the engine's phrasing verbatim.
  */
 
-import { BAND_WORD_THRESHOLDS, IMAGE_SIZE_ANCHOR_PHRASES, imageSizeAnchor } from '$lib/services/be'
+import {
+  BAND_WORD_THRESHOLDS,
+  IMAGE_SIZE_ANCHOR_PHRASES,
+  bandWord,
+  imageSizeAnchor,
+} from '$lib/services/be'
 
 /** Split a tag run into trimmed, non-empty tags (parenthesized globs flattened). */
 export function toTags(text: string | null | undefined): string[] {
@@ -96,45 +101,46 @@ export function compressStateCues(cues: ReadonlyArray<string>): string[] {
 }
 
 // ============================================================================
-// Engine-sanctioned size vocabulary
+// Engine-owned breast size: whitelist the writer, inject the engine
 // ============================================================================
 
 /**
  * The engine is the single owner of body state, and the prompt writer must not
  * be able to out-vote it.
  *
- * MEASURED FAILURE: the narration described massive growth that never happened
- * in the engine, and the writer faithfully tagged the NARRATIVE — "breast
- * expansion, breasts covering stomach, breasts reaching waist, breasts spilling
- * over bed, unable to move" — for a subject the engine had at tier 24 ("huge
- * breasts"; body-relative anchors do not start until tier 30). The image model
- * received three contradictory size signals (giant freeform tags, the engine's
- * band word, and the below-band negative) and rendered the bust SMALLER than the
- * previous, correct round.
+ * FAILURE 1 (blacklist round): the narration described growth that never
+ * happened in the engine, and the writer faithfully tagged the NARRATIVE —
+ * "breast expansion, breasts covering stomach, breasts reaching waist" — for a
+ * subject the engine held at tier 24. A pattern-stripping sanitizer was added.
  *
- * So size vocabulary is filtered against the engine's tier here, wherever it
- * appears. Three classes, all keyed off the ladder's own tables so they cannot
- * drift from it:
+ * FAILURE 2 (one round later): the writer rephrased the same invention as
+ * "breast spill, pinned, immobile, trapped", which matched none of the
+ * sanitizer's `breasts …ing` / `…than` patterns and sailed through. A blacklist
+ * of phrasings loses this race by construction: there is always another way to
+ * say "enormous", and the writer is a language model.
  *
- * 1. BAND words (`gigantic breasts` at tier 24) — `BAND_WORD_THRESHOLDS`.
- * 2. ANCHOR phrases (`breasts bigger than her torso` below tier 80) — derived
- *    from `imageSizeAnchor` so the thresholds stay the ladder's.
- * 3. MAGNITUDE freeform — what the writer invents from prose: breasts
- *    covering/reaching/spilling/filling something, or compared to a body part,
- *    plus immobility-from-size phrasing. Sanctioned only from the tier where the
- *    engine itself starts making body-relative claims.
+ * So the polarity is inverted here. A tag that NAMES BREASTS AT ALL is deleted
+ * unless it is on a curated whitelist of Danbooru ACT / CONTACT tags and
+ * anatomy-neutral detail — vocabulary that describes what is happening rather
+ * than how big anything is. No magnitude regexes, no phrasing arms race.
  *
- * Deliberately NOT filtered:
- * - Band words BELOW the subject's band. In a multi-subject scene an action or
- *   scene tag is sanctioned against the LARGEST subject present, so a smaller
- *   girl's honest "medium breasts" would be collateral damage.
- * - Act tags that merely mention breasts (`paizuri`, `breast squeezing`) — they
- *   describe what is happening, not how big anything is.
+ * The size the image actually gets is then INJECTED from the engine
+ * (`engineSizeTags`) at a position the composer owns. That closes the second
+ * half of failure 2: the old code HOISTED whatever size vocabulary the writer
+ * had written, so when the writer wrote none, nothing was hoisted, and the only
+ * band word in the finished prompt was the one `groundImagePromptSize` appends
+ * at the very TAIL — past CLIP's ~75-token attention window, rendering tiny.
+ * Injection cannot fail that way: the engine's block is always present, always
+ * in the same slot, and never derived from writer output.
+ *
+ * Deliberately NOT filtered: a subject the engine holds no body state for. The
+ * engine has said nothing about her, so it enforces nothing — her writer tags
+ * (band word included) pass through untouched.
  */
 export interface SizeSanction {
   /** The engine's (apparent) tier for the subject these tags describe. */
   tier: number
-  /** True when the engine recorded growth on THIS turn — gates the growth tags. */
+  /** True when the engine recorded growth on THIS turn — gates the growth tag. */
   grewThisTurn: boolean
 }
 
@@ -159,7 +165,7 @@ const BAND_WORD_MIN_TIER: ReadonlyMap<string, number> = new Map(
  * Anchor phrase → the tier that earns it. The ladder exports the phrases but not
  * their thresholds, so they are recovered by walking `imageSizeAnchor` upward:
  * the first tier that yields a phrase is that phrase's floor. Derived rather
- * than copied so a re-keyed anchor table cannot silently desync this filter.
+ * than copied so a re-keyed anchor table cannot silently desync this module.
  */
 const ANCHOR_MIN_TIER: ReadonlyMap<string, number> = (() => {
   const map = new Map<string, number>()
@@ -170,120 +176,184 @@ const ANCHOR_MIN_TIER: ReadonlyMap<string, number> = (() => {
   return map
 })()
 
-/** Lowest tier at which the engine itself makes a body-relative size claim. */
-const ANCHOR_FLOOR_TIER = Math.min(...ANCHOR_MIN_TIER.values())
-
-/** The open-ended top band — where scale genuinely stops being describable. */
-const TOP_BAND_TIER = BAND_WORD_THRESHOLDS[BAND_WORD_THRESHOLDS.length - 1].minTier
+/**
+ * Immobility ("pinned", "trapped", "unable to move") claims the breasts outscale
+ * the BODY, not the head — so it needs the ladder's SECOND body-relative rung
+ * ("breasts wider than her hips", tier 40), not its first ("breasts bigger than
+ * head", tier 30). Derived from the anchor thresholds above so a re-keyed ladder
+ * moves this floor with it.
+ */
+const ANCHOR_TIERS: ReadonlyArray<number> = [...ANCHOR_MIN_TIER.values()].sort((a, b) => a - b)
+const IMMOBILITY_MIN_TIER: number = ANCHOR_TIERS[1] ?? ANCHOR_TIERS[0] ?? Infinity
 
 /**
- * Freeform magnitude claims, matched against the whole normalized tag. Each
- * needs the subject's tier to reach its floor; conservative by construction, so
- * a tag has to name breasts AND a magnitude relation to qualify.
+ * Any tag text that makes a claim about breasts. Broad on purpose — this is the
+ * strip TRIGGER, and the whitelist below is what earns a tag its life.
  */
-const MAGNITUDE_PATTERNS: ReadonlyArray<{ readonly minTier: number; readonly pattern: RegExp }> = [
-  {
-    minTier: ANCHOR_FLOOR_TIER,
-    pattern:
-      /\bbreasts?\b.*\b(?:covering|reaching|spilling|filling|engulfing|smothering|swallowing|dwarfing|obscuring|draped over|resting on|hanging (?:to|past|below|over))\b/,
-  },
-  {
-    minTier: ANCHOR_FLOOR_TIER,
-    pattern: /\bbreasts?\b.*\b(?:larger|bigger|wider|heavier|longer|huger)\s+than\b/,
-  },
-  {
-    minTier: ANCHOR_FLOOR_TIER,
-    pattern: /\bbreasts?\b.*\b(?:the size of|as (?:large|big|wide|heavy) as)\b/,
-  },
-  { minTier: TOP_BAND_TIER, pattern: /\b(?:room|building|house|bed|car)[- ]?fill(?:ing|ed)\b/ },
-  {
-    minTier: TOP_BAND_TIER,
-    pattern: /\b(?:immobili[sz]ed|pinned|trapped|weighed down|crushed)\b.*\bbreasts?\b/,
-  },
-  {
-    minTier: TOP_BAND_TIER,
-    pattern: /\bbreasts?\b.*\b(?:immobili[sz]ing|pinning|trapping|crushing|weighing down)\b/,
-  },
+const BREAST_MENTION =
+  /\b(?:breasts?|boobs?|booba|oppai|tits?|titty|titties|titflesh|bust|busty|bosom|cleavage|underboob|sideboob|nipples?|areolae?|rack|melons?|knockers?|udders?|mammaries|chest)\b/i
+
+/**
+ * Curated Danbooru ACT / CONTACT tags and anatomy-neutral detail: they name
+ * breasts without claiming a size, so they survive. Everything else that names
+ * breasts is a size claim the engine did not make, and dies.
+ *
+ * Exact-match by design. It is what separates "covering breasts" (a real pose
+ * tag — hands over her chest) from "breasts covering stomach" (the narration's
+ * invented magnitude), which no amount of pattern work reliably did.
+ */
+const BREAST_TAG_WHITELIST: ReadonlySet<string> = new Set([
+  // Acts — what is happening between someone and a breast.
+  'paizuri',
+  'paizuri under clothes',
+  'perpendicular paizuri',
+  'naizuri',
+  'penis between breasts',
+  'breast squeeze',
+  'breast squeezing',
+  'breasts squeezed together',
+  'breast grab',
+  'breast grabbing',
+  "grabbing another's breast",
+  'grabbing own breast',
+  'breast sucking',
+  'breast suck',
+  'nipple sucking',
+  'breast press',
+  'breast pressing',
+  'breasts on glass',
+  'breast rest',
+  'breast smother',
+  'breast smothering',
+  'motorboating',
+  'breast lift',
+  'breast hold',
+  'breast poke',
+  'breast bondage',
+  'breastfeeding',
+  'breast feeding',
+  'breast licking',
+  'breast biting',
+  'breast kiss',
+  'breast slap',
+  'bouncing breasts',
+  'between breasts',
+  'head between breasts',
+  'face between breasts',
+  'hand between breasts',
+  'arm under breasts',
+  'arms under breasts',
+  'hand on own breast',
+  'hands on own breasts',
+  'covering breasts',
+  'covering own breasts',
+  'breasts apart',
+  'breast slip',
+  'breasts out',
+  'nipple slip',
+  // Anatomy-neutral detail the model needs and the engine does not own.
+  'nipple',
+  'nipples',
+  'puffy nipples',
+  'inverted nipples',
+  'dark nipples',
+  'pink nipples',
+  'areola',
+  'areolae',
+  'large areolae',
+  'puffy areolae',
+  'cleavage',
+  'cleavage cutout',
+  'breast cutout',
+  'underboob',
+  'sideboob',
+  'downblouse',
+  'bare breasts',
+])
+
+/** Productive whitelist families — the same acts in whatever form the writer reached for. */
+const BREAST_TAG_WHITELIST_PATTERNS: ReadonlyArray<RegExp> = [
+  /^(?:nipple|areola)e?s? (?:play|licking|lick|tweak|tweaking|pinch|pinching|rub|rubbing|sucking|stimulation|torture|piercing|clamps?)$/,
+  /^(?:licking|sucking|pinching|tweaking|rubbing|touching|biting) (?:own |another's )?nipples?$/,
+  // "chest" and "rack" also name furniture, props and armour — not anatomy.
+  /^chest (?:tattoo|harness|jewel|guard|armou?r|belt|strap|sarashi|plate)$/,
+  /^hands? on (?:own |another's )?chest$/,
+  /^(?:weapon|spice|wine|coat|dish|luggage|treasure) (?:rack|chest)$/,
+  /^chest of drawers$/,
 ]
 
 /**
- * Immobility phrasings that carry no size word of their own. They are a size
+ * Immobility phrasings that carry no breast word of their own. They are a size
  * claim only next to breast tags ("unable to move" in a bondage scene is not),
- * so they are filtered only when the same run mentions breasts.
+ * so they are filtered only when the same block mentions breasts — and only
+ * below the tier at which the engine itself would make that claim.
  */
 const IMMOBILITY_PATTERNS: ReadonlyArray<RegExp> = [
-  /^unable to (?:move|stand|stand up|get up|rise|walk)$/,
-  /^(?:cannot|can not|can't|cant) move$/,
-  /^(?:completely )?immobili[sz]ed$/,
+  /^unable to (?:move|stand|stand up|get up|rise|walk|sit up)$/,
+  /^(?:cannot|can not|can't|cant) (?:move|stand|get up)$/,
+  /^(?:completely |totally )?immobili[sz]ed$/,
+  /^immobile$/,
+  /^(?:pinned|pinned down|trapped|trapped under|stuck|weighed down|crushed|buried|smothered)$/,
 ]
 
-/** A tag that names breasts at all — the context immobility phrasings need. */
-const BREAST_CONTEXT = /\bbreasts?\b|\bbust\b|\bcleavage\b/
+/** The growth EVENT tag — the one the engine's own cue table maps its growth cue to. */
+const GROWTH_EVENT_TAG = 'breast expansion'
 
-/**
- * Growth-EVENT tags. `breast expansion` is the correct tag for an in-progress
- * growth beat, so it is not a magnitude claim — but it is a claim about an event
- * the engine either did or did not run this turn, and the live failure invented
- * one. Kept when the engine actually grew her this turn (`lastGrowth`, the same
- * signal that puts the cue in the dossier), stripped otherwise.
- */
-const GROWTH_EVENT_PATTERNS: ReadonlyArray<RegExp> = [
-  /^breast (?:expansion|inflation|growth)$/,
-  /\bbreasts? (?:rapidly |slowly )?(?:expanding|swelling larger|growing larger|inflating)\b/,
-  /\bexpanding breasts\b/,
-  /\bskin stretching taut\b/,
-]
+/** True when the tag names breasts in any of the vocabularies the writer reaches for. */
+const mentionsBreasts = (tag: string): boolean => BREAST_MENTION.test(tag)
 
-type SizeTagClass =
-  | { readonly kind: 'band' | 'anchor' | 'magnitude'; readonly minTier: number }
-  | { readonly kind: 'growth' }
-  | null
+/** True for the curated act / contact / neutral-anatomy tags that survive a strip. */
+const isWhitelistedBreastTag = (key: string): boolean =>
+  BREAST_TAG_WHITELIST.has(key) || BREAST_TAG_WHITELIST_PATTERNS.some((p) => p.test(key))
 
-function classifySizeTag(tag: string, hasBreastContext: boolean): SizeTagClass {
-  const key = sizeKey(tag)
-  const band = BAND_WORD_MIN_TIER.get(key)
-  if (band !== undefined) return { kind: 'band', minTier: band }
-  const anchor = ANCHOR_MIN_TIER.get(key)
-  if (anchor !== undefined) return { kind: 'anchor', minTier: anchor }
-  if (GROWTH_EVENT_PATTERNS.some((pattern) => pattern.test(key))) return { kind: 'growth' }
-  const magnitude = MAGNITUDE_PATTERNS.find((row) => row.pattern.test(key))
-  if (magnitude) return { kind: 'magnitude', minTier: magnitude.minTier }
-  if (hasBreastContext && IMMOBILITY_PATTERNS.some((pattern) => pattern.test(key))) {
-    return { kind: 'magnitude', minTier: TOP_BAND_TIER }
-  }
-  return null
-}
-
-/** Band words and relative-size anchors — the vocabulary hoisted out of a run. */
+/** Band words and relative-size anchors — the vocabulary hoisted out of an unsanctioned run. */
 export function isSizeVocabularyTag(tag: string): boolean {
   const key = sizeKey(tag)
   return BAND_WORD_MIN_TIER.has(key) || ANCHOR_MIN_TIER.has(key)
 }
 
 /**
- * Drop the size claims this subject's engine tier does not sanction, keeping
- * everything else in order. A `null` sanction (no BE state for the subject, or
- * no subject to attribute the run to) filters nothing — the engine has said
- * nothing to enforce.
+ * Delete every breast claim the writer made for a sanctioned subject, keeping
+ * the curated act/anatomy vocabulary and everything that never mentions breasts.
+ *
+ * A `null` sanction (no BE state for the subject, or no subject to attribute the
+ * block to) filters nothing — the engine has said nothing to enforce.
+ *
+ * `tags` is one BLOCK: the action run, the scene run, or one character's run.
+ * Blocks matter for the immobility rule, which needs a breast mention as context
+ * and reads it from the block as the writer wrote it (before any stripping), so
+ * the very tags that trigger the rule cannot erase their own evidence.
  */
-export function sanitizeSizeTags(
+export function sanitizeBreastTags(
   tags: ReadonlyArray<string>,
   sanction: SizeSanction | null | undefined,
 ): { kept: string[]; stripped: string[] } {
   if (!sanction) return { kept: [...tags], stripped: [] }
-  const hasBreastContext = tags.some((tag) => BREAST_CONTEXT.test(tag.toLowerCase()))
+  const hasBreastContext = tags.some(mentionsBreasts)
+  const stripsImmobility = hasBreastContext && sanction.tier < IMMOBILITY_MIN_TIER
   const kept: string[] = []
   const stripped: string[] = []
   for (const tag of tags) {
-    const verdict = classifySizeTag(tag, hasBreastContext)
-    const sanctioned =
-      verdict === null
-        ? true
-        : verdict.kind === 'growth'
-          ? sanction.grewThisTurn
-          : sanction.tier >= verdict.minTier
-    if (sanctioned) kept.push(tag)
-    else stripped.push(tag)
+    const key = sizeKey(tag)
+    const doomed = mentionsBreasts(tag)
+      ? !isWhitelistedBreastTag(key)
+      : stripsImmobility && IMMOBILITY_PATTERNS.some((pattern) => pattern.test(key))
+    if (doomed) stripped.push(tag)
+    else kept.push(tag)
   }
   return { kept, stripped }
+}
+
+/**
+ * The engine's canonical size block for one subject — band word, the anchor its
+ * tier has earned, and the growth-event tag only on a turn the engine actually
+ * grew her. This is the ONLY size source in a sanctioned prompt: the writer's
+ * copy was stripped above, and the composer places this block itself.
+ */
+export function engineSizeTags(sanction: SizeSanction): string[] {
+  const tags = [bandWord(sanction.tier)]
+  const anchor = imageSizeAnchor(sanction.tier)
+  if (anchor) tags.push(anchor)
+  if (sanction.grewThisTurn) tags.push(GROWTH_EVENT_TAG)
+  return tags
 }

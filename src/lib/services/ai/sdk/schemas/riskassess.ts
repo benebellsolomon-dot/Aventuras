@@ -46,7 +46,7 @@ export const riskAssessResultSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      "True only when the action's explicit purpose is to grow or transform the target's body (channeling essence into her, a transformation working, feeding her a growth potion). Requires targetCharacter.",
+      "True only when the action's explicit purpose is to grow or transform the target's body (channeling essence into her, a transformation working, feeding her a growth potion). Set targetCharacter alongside it whenever you can name her; never withhold this flag for lack of a name.",
     ),
   rationale: z.string().optional().describe('One short sentence of reasoning'),
 })

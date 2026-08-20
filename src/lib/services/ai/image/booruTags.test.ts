@@ -6,9 +6,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   compressStateCues,
+  engineSizeTags,
   flattenTagGroups,
   isSizeVocabularyTag,
-  sanitizeSizeTags,
+  sanitizeBreastTags,
   toTags,
 } from './booruTags'
 import { defaultBodyState, imageStateCues } from '$lib/services/be'
@@ -102,91 +103,138 @@ describe('compressStateCues', () => {
   })
 })
 
-describe('sanitizeSizeTags', () => {
+describe('sanitizeBreastTags', () => {
   /** Tier 24 = the "huge breasts" band; body-relative anchors start at 30. */
   const huge = { tier: 24, grewThisTurn: false }
-  const strip = (tags: string[], sanction = huge) => sanitizeSizeTags(tags, sanction).stripped
+  const strip = (tags: string[], sanction = huge) => sanitizeBreastTags(tags, sanction).stripped
 
-  it('strips a band word above the subject band, keeps her own and lower ones', () => {
-    const result = sanitizeSizeTags(
-      ['gigantic breasts', 'hyper breasts', 'huge breasts', 'large breasts'],
+  it('strips the live failure: a size invention no magnitude regex would catch', () => {
+    // The writer dodged the previous blacklist by phrasing the same over-claim
+    // as a noun ("breast spill") and three bare immobility words.
+    const result = sanitizeBreastTags(
+      ['lying on back', 'breast spill', 'pinned', 'immobile', 'trapped'],
       huge,
     )
-    expect(result.kept).toEqual(['huge breasts', 'large breasts'])
-    expect(result.stripped).toEqual(['gigantic breasts', 'hyper breasts'])
+    expect(result.kept).toEqual(['lying on back'])
+    expect(result.stripped).toEqual(['breast spill', 'pinned', 'immobile', 'trapped'])
   })
 
-  it('strips an anchor phrase the tier has not earned, keeps the one it has', () => {
-    const atForty = { tier: 40, grewThisTurn: false }
-    const result = sanitizeSizeTags(
-      ['breasts wider than hips', 'breasts bigger than torso', 'breasts bigger than head'],
-      atForty,
+  it('strips EVERY band word — the engine states the band itself', () => {
+    const result = sanitizeBreastTags(
+      ['gigantic breasts', 'hyper breasts', 'huge breasts', 'large breasts', 'flat chest'],
+      huge,
     )
-    expect(result.kept).toEqual(['breasts wider than hips', 'breasts bigger than head'])
-    expect(result.stripped).toEqual(['breasts bigger than torso'])
+    expect(result.kept).toEqual([])
   })
 
-  it('matches an anchor phrase whether or not the writer kept the possessive', () => {
-    expect(strip(['breasts bigger than her head'])).toEqual(['breasts bigger than her head'])
-    expect(
-      sanitizeSizeTags(['breasts bigger than her head'], { tier: 30, grewThisTurn: false }),
-    ).toEqual({ kept: ['breasts bigger than her head'], stripped: [] })
-  })
-
-  it('strips freeform magnitude the narration invented below the anchor floor', () => {
+  it('strips anchor phrases with or without the possessive', () => {
     expect(
       strip([
-        'breasts covering stomach',
-        'breasts reaching waist',
-        'breasts spilling over bed',
-        'breasts larger than her head',
-        'breasts as big as beach balls',
-        'room-filling breasts',
+        'breasts wider than hips',
+        'breasts bigger than her torso',
+        'breasts bigger than head',
       ]),
     ).toEqual([
+      'breasts wider than hips',
+      'breasts bigger than her torso',
+      'breasts bigger than head',
+    ])
+  })
+
+  it('strips freeform magnitude at ANY tier — invention is not the engine speaking', () => {
+    const invented = [
       'breasts covering stomach',
       'breasts reaching waist',
       'breasts spilling over bed',
       'breasts larger than her head',
       'breasts as big as beach balls',
       'room-filling breasts',
+      'massive tits',
+      'enormous bust',
+      'oppai',
+    ]
+    expect(strip(invented)).toEqual(invented)
+    expect(strip(invented, { tier: 45, grewThisTurn: false })).toEqual(invented)
+  })
+
+  it('strips immobility only next to breast tags, and only below the hips anchor', () => {
+    expect(strip(['huge breasts', 'lying on back', 'unable to move'])).toEqual([
+      'huge breasts',
+      'unable to move',
     ])
+    // No breast mention in the block — a bondage scene keeps its own vocabulary.
+    expect(strip(['bound wrists', 'rope', 'unable to move', 'pinned'])).toEqual([])
+    // Tier 40 is where the ladder itself claims breasts outscale her hips.
+    expect(strip(['paizuri', 'pinned', 'immobile'], { tier: 40, grewThisTurn: false })).toEqual([])
   })
 
-  it('keeps freeform magnitude a hyper-band subject has actually earned', () => {
-    const hyper = { tier: 45, grewThisTurn: false }
-    expect(
-      sanitizeSizeTags(['breasts covering stomach', 'breasts reaching waist'], hyper).stripped,
-    ).toEqual([])
-  })
-
-  it('strips immobility phrasing only next to breast tags', () => {
-    expect(strip(['huge breasts', 'lying on back', 'unable to move'])).toEqual(['unable to move'])
-    expect(strip(['bound wrists', 'rope', 'unable to move'])).toEqual([])
-  })
-
-  it('keeps act tags that merely mention breasts', () => {
+  it('keeps the curated act and contact tags', () => {
     expect(
       strip([
         'paizuri',
         'breast squeezing',
         'breast grab',
+        "grabbing another's breast",
+        'breast sucking',
+        'breast press',
+        'breasts on glass',
+        'breast rest',
+        'breast smother',
         'breasts squeezed together',
+        'penis between breasts',
+        'nipple play',
+        'nipple licking',
+        'nipple tweak',
         'cleavage',
       ]),
     ).toEqual([])
   })
 
-  it('gates the growth-event tags on the engine having grown her this turn', () => {
-    const growth = ['breast expansion', 'breasts rapidly expanding', 'skin stretching taut']
+  it('keeps anatomy-neutral detail the engine does not own', () => {
+    expect(strip(['nipples', 'areolae', 'puffy nipples', 'large areolae', 'underboob'])).toEqual([])
+  })
+
+  it('tells a pose tag from the magnitude claim that reuses its words', () => {
+    const result = sanitizeBreastTags(['covering breasts', 'breasts covering stomach'], huge)
+    expect(result.kept).toEqual(['covering breasts'])
+    expect(result.stripped).toEqual(['breasts covering stomach'])
+  })
+
+  it('leaves tags that never mention breasts alone', () => {
+    const tags = ['lying on back', 'lactation', 'blush', 'wide hips', 'chest of drawers']
+    expect(sanitizeBreastTags(tags, huge)).toEqual({ kept: tags, stripped: [] })
+  })
+
+  it('strips the growth event too — injection decides whether it happened', () => {
+    const growth = ['breast expansion', 'breasts rapidly expanding', 'expanding breasts']
     expect(strip(growth)).toEqual(growth)
-    expect(strip(growth, { tier: 24, grewThisTurn: true })).toEqual([])
+    expect(strip(growth, { tier: 24, grewThisTurn: true })).toEqual(growth)
   })
 
   it('filters nothing when the engine holds no state for the subject', () => {
     const tags = ['hyper breasts', 'breasts covering stomach', 'breast expansion']
-    expect(sanitizeSizeTags(tags, null)).toEqual({ kept: tags, stripped: [] })
-    expect(sanitizeSizeTags(tags, undefined).kept).toEqual(tags)
+    expect(sanitizeBreastTags(tags, null)).toEqual({ kept: tags, stripped: [] })
+    expect(sanitizeBreastTags(tags, undefined).kept).toEqual(tags)
+  })
+})
+
+describe('engineSizeTags', () => {
+  it('states the band word alone below the anchor floor', () => {
+    expect(engineSizeTags({ tier: 24, grewThisTurn: false })).toEqual(['huge breasts'])
+  })
+
+  it('adds the body-relative anchor the tier has earned', () => {
+    expect(engineSizeTags({ tier: 40, grewThisTurn: false })).toEqual([
+      'hyper breasts',
+      'breasts wider than her hips',
+    ])
+  })
+
+  it('adds the growth event only on the turn the engine grew her', () => {
+    expect(engineSizeTags({ tier: 24, grewThisTurn: true })).toEqual([
+      'huge breasts',
+      'breast expansion',
+    ])
   })
 })
 

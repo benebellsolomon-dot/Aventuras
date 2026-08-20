@@ -97,6 +97,14 @@ export interface CheckRecord {
    * girls where matching by `target` name would collide. Optional so legacy
    * records (name-only) still resolve via the name fallback. */
   targetId?: string
+  /**
+   * Provenance: `target`/`targetId` were INFERRED by the store's sole-candidate
+   * fallback, not tagged by the check-tagger (which is an LLM and drops the tag
+   * intermittently). Set only on growth-intent turns where exactly one
+   * scene-present, body-state-bearing girl could have been the subject. Drift and
+   * debug tooling read it to tell a tagged target from an inferred one; nothing
+   * mechanical keys on it. */
+  targetInferred?: boolean
   /** Spell lorebook Entry id when this check was a cast (Phase 4). Drives effect
    * application in the store and marks the turn log / drift as a cast. */
   spellId?: string
@@ -104,9 +112,11 @@ export interface CheckRecord {
    * The action deliberately tried to grow/transform the target's body without
    * being a formal spell cast (free-text essence channeling, a growth potion).
    *
-   * Set by CheckPhase only when a target girl actually resolved, so the flag can
-   * never claim an effect that had no subject. On a non-fail band the store
-   * promotes the target's growth to the same guaranteed channel a cast uses; on
+   * Carried whenever the tagger (or risk-assess verdict) claimed growth intent,
+   * targeted or not: the store resolves the subject, filling an untagged target
+   * from the scene when exactly one girl could have been it (`targetInferred`)
+   * and applying nothing at all when zero or several could. On a non-fail band
+   * the store promotes the target's growth to the guaranteed channel a cast uses; on
    * a fail band it suppresses the classifier's mirrored growth for her, so
    * narration and engine cannot diverge in either direction.
    */

@@ -762,4 +762,195 @@ describe('store harness — check-backed growth (growthIntent)', () => {
     expect(tierOf('Amelia')).toBe(ameliaBefore + 1)
     expect(tierOf('Brielle')).toBe(brielleControlTier)
   })
+
+  describe('untagged target — the sole-candidate fallback', () => {
+    /**
+     * The second live failure: the tagger emitted `growthIntent` but no
+     * `targetCharacter` on a crit, so the record reached the store with no
+     * subject and the channel did nothing at all.
+     */
+    const untargeted = (overrides: Record<string, unknown> = {}) =>
+      channelRecord({ growthIntent: true, target: undefined, targetId: undefined, ...overrides })
+
+    /** The persisted checkLog row — the honest record of who was affected. */
+    const checkLogRows = (): Array<Record<string, unknown>> => {
+      const call = db.calls.find((c) => c.method === 'updateStoryEntry')
+      const delta = (
+        call?.args[1] as { worldStateDelta?: { checkLog?: Array<Record<string, unknown>> } }
+      )?.worldStateDelta
+      return delta?.checkLog ?? []
+    }
+
+    it('one present girl: the untagged growth check resolves to her and grows her', async () => {
+      // Same seed as the live-failure test — `s1:entry-4:char-amelia:0` rolls a 1,
+      // so only the promotion can produce growth here.
+      const ENTRY_ID = 'entry-4'
+      settingsMock.experimentalFeatures.stateTracking = true
+      story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+      const girl = makeGirlWithBodyState('Amelia')
+      story.characters = [makeProtagonist('Rowan'), girl] as never
+      const tierBefore = readBodyState(girl.metadata as Record<string, unknown>)?.tier ?? 0
+
+      await story.applyClassificationResult(
+        makeClassificationResult({
+          beEvents: [{ character: 'Amelia', kind: 'attempt', intensity: 2 }],
+          scene: { presentCharacterNames: ['Amelia'] },
+        }) as never,
+        ENTRY_ID,
+        untargeted() as never,
+      )
+
+      expect(tierOf('Amelia')).toBe(tierBefore + 1)
+      // The log names her, and marks that the ENGINE picked her, not the tagger.
+      expect(checkLogRows()).toHaveLength(1)
+      expect(checkLogRows()[0]).toMatchObject({
+        target: 'Amelia',
+        targetId: 'char-amelia',
+        targetInferred: true,
+      })
+    })
+
+    it('an unreadable presence list still resolves the only tracked girl in the story', async () => {
+      // The classifier intermittently returns an empty presence list; falling back
+      // to the whole tracked cast (be/presence.ts bias) keeps the channel working.
+      settingsMock.experimentalFeatures.stateTracking = false
+      story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+      const girl = makeGirlWithBodyState('Amelia')
+      story.characters = [makeProtagonist('Rowan'), girl] as never
+      const tierBefore = readBodyState(girl.metadata as Record<string, unknown>)?.tier ?? 0
+
+      await story.applyClassificationResult(
+        makeClassificationResult({ scene: { presentCharacterNames: [] } }) as never,
+        'entry-4',
+        untargeted() as never,
+      )
+
+      expect(tierOf('Amelia')).toBe(tierBefore + 1)
+    })
+
+    it('two present girls: nothing is promoted — ambiguous targeting must not guess', async () => {
+      const ENTRY_ID = 'entry-4'
+      settingsMock.experimentalFeatures.stateTracking = true
+      story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+      const amelia = makeGirlWithBodyState('Amelia')
+      const brielle = makeGirlWithBodyState('Brielle')
+      story.characters = [makeProtagonist('Rowan'), amelia, brielle] as never
+      const ameliaBefore = readBodyState(amelia.metadata as Record<string, unknown>)?.tier ?? 0
+      const brielleBefore = readBodyState(brielle.metadata as Record<string, unknown>)?.tier ?? 0
+
+      await story.applyClassificationResult(
+        makeClassificationResult({
+          beEvents: [{ character: 'Amelia', kind: 'attempt', intensity: 2 }],
+          scene: { presentCharacterNames: ['Amelia', 'Brielle'] },
+        }) as never,
+        ENTRY_ID,
+        untargeted() as never,
+      )
+
+      expect(tierOf('Amelia')).toBe(ameliaBefore)
+      expect(tierOf('Brielle')).toBe(brielleBefore)
+      // The record stays honestly targetless rather than naming a guess.
+      expect(checkLogRows()[0].target).toBeUndefined()
+      expect(checkLogRows()[0].targetInferred).toBeUndefined()
+    })
+
+    it('two tracked girls but only one in the scene: presence picks her out', async () => {
+      settingsMock.experimentalFeatures.stateTracking = false
+      story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+      const amelia = makeGirlWithBodyState('Amelia')
+      const brielle = makeGirlWithBodyState('Brielle')
+      story.characters = [makeProtagonist('Rowan'), amelia, brielle] as never
+      const ameliaBefore = readBodyState(amelia.metadata as Record<string, unknown>)?.tier ?? 0
+      const brielleBefore = readBodyState(brielle.metadata as Record<string, unknown>)?.tier ?? 0
+
+      await story.applyClassificationResult(
+        makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+        'entry-4',
+        untargeted() as never,
+      )
+
+      expect(tierOf('Amelia')).toBe(ameliaBefore + 1)
+      expect(tierOf('Brielle')).toBe(brielleBefore)
+    })
+
+    it('a FAILED untagged growth action suppresses the sole girl’s classifier growth', async () => {
+      // `s1:entry-0:char-amelia:0` rolls 13, so the ambient catalyst genuinely
+      // lands without the suppression — same control the tagged-target test uses.
+      const ENTRY_ID = 'entry-0'
+      settingsMock.experimentalFeatures.stateTracking = false
+      story.currentStory = makeStory({ settings: { beMode: true } }) as never
+      const scene = () =>
+        makeClassificationResult({
+          beEvents: [{ character: 'Amelia', kind: 'catalyst', intensity: 2 }],
+          scene: { presentCharacterNames: ['Amelia'] },
+        })
+      const failed = { band: 'fail', total: 9, margin: -5 }
+
+      const control = makeGirlWithBodyState('Amelia')
+      story.characters = [makeProtagonist('Rowan'), control] as never
+      const tierBefore = readBodyState(control.metadata as Record<string, unknown>)?.tier ?? 0
+      await story.applyClassificationResult(
+        scene() as never,
+        ENTRY_ID,
+        channelRecord(failed) as never,
+      )
+      expect(tierOf('Amelia')).toBe(tierBefore + 1)
+
+      const suppressed = makeGirlWithBodyState('Amelia')
+      story.characters = [makeProtagonist('Rowan'), suppressed] as never
+      await story.applyClassificationResult(scene() as never, ENTRY_ID, untargeted(failed) as never)
+      expect(tierOf('Amelia')).toBe(tierBefore)
+    })
+
+    it('a tagged target is never re-resolved or marked inferred', async () => {
+      settingsMock.experimentalFeatures.stateTracking = true
+      story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+      story.characters = [
+        makeProtagonist('Rowan'),
+        makeGirlWithBodyState('Amelia'),
+        makeGirlWithBodyState('Brielle'),
+      ] as never
+
+      await story.applyClassificationResult(
+        makeClassificationResult({
+          scene: { presentCharacterNames: ['Amelia', 'Brielle'] },
+        }) as never,
+        'entry-4',
+        channelRecord({ growthIntent: true }) as never,
+      )
+
+      expect(checkLogRows()[0]).toMatchObject({ target: 'Amelia', targetId: 'char-amelia' })
+      expect(checkLogRows()[0].targetInferred).toBeUndefined()
+    })
+
+    it('an untargeted CAST is untouched: no inference, no growth', async () => {
+      // Casts require their own tagged target (research/50 R10) — the fallback
+      // must not hand one to a narrative-only cast through the back door.
+      settingsMock.experimentalFeatures.stateTracking = true
+      story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+      story.characters = [
+        makeProtagonist('Rowan', {
+          metadata: { rpgSheet: { ...defaultRpgSheet(), knownSpells: [SPELL_ID] } },
+        }),
+        makeGirlWithBodyState('Amelia'),
+      ] as never
+      story.lorebookEntries = [growthSpellEntry()] as never
+      const tierBefore = tierOf('Amelia')
+
+      await story.applyClassificationResult(
+        makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+        'entry-4',
+        {
+          ...castCheckRecord('char-amelia'),
+          target: undefined,
+          targetId: undefined,
+          growthIntent: true,
+        } as never,
+      )
+
+      expect(tierOf('Amelia')).toBe(tierBefore)
+      expect(checkLogRows()[0].targetInferred).toBeUndefined()
+      expect(checkLogRows()[0].target).toBeUndefined()
+    })
+  })
 })

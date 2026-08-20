@@ -54,9 +54,10 @@ import { generateStructured } from '../sdk/generate'
 import { detectPromptDialect } from './dialect'
 import {
   compressStateCues,
+  engineSizeTags,
   isSizeVocabularyTag,
   joinTags,
-  sanitizeSizeTags,
+  sanitizeBreastTags,
   toTags,
   type SizeSanction,
 } from './booruTags'
@@ -138,7 +139,7 @@ const booruScenePromptSchema = z.object({
 
 export type BooruSceneSections = z.infer<typeof booruScenePromptSchema>
 
-/** Band words + relative-size anchors, the vocabulary hoisted out of a run. */
+/** Band words + anchors — hoisted out of a run the engine holds no state for. */
 const isSizeTag = isSizeVocabularyTag
 
 // ============================================================================
@@ -314,13 +315,20 @@ function trimExpressionRuns(runs: ReadonlyArray<PreparedRun>, count: number): Pr
  * and pushed the sex-act/pose and setting tags past CLIP's ~75-token attention
  * window — the model then rendered identity only and invented its own scene.
  *
- * The size band words (and any relative-size anchor) are HOISTED out of the
- * character runs to sit immediately after the action block, in count-tag order.
- * They previously sat mid-run behind ~10 identity tags, and a live tier-24
- * subject prompted "huge breasts" under-rendered as "large". CLIP attention
- * falls off across the window and the backend parses no prompt weighting
- * (nanogpt — measured, see providerCapabilities.ts), so position is the only
- * emphasis lever left. Multi-subject runs keep their own bands, in order.
+ * The SIZE block sits immediately after the action block, in count-tag order,
+ * and the composer OWNS that position. Size previously sat mid-run behind ~10
+ * identity tags, and a live tier-24 subject prompted "huge breasts"
+ * under-rendered as "large". CLIP attention falls off across the window and the
+ * backend parses no prompt weighting (nanogpt — measured, see
+ * providerCapabilities.ts), so position is the only emphasis lever left.
+ *
+ * For a subject the engine holds body state for, that block is INJECTED from the
+ * engine (`engineSizeTags`) and her own written size vocabulary is deleted
+ * upstream — one canonical placement, stated once. It is not repeated inside her
+ * character run: the run copy would cost tokens inside the same attention window
+ * for no new signal, and the global dedupe was already discarding it in favour of
+ * the early copy. For a subject the engine holds nothing for, the writer's own
+ * size vocabulary is hoisted into the same slot instead.
  *
  * EXPRESSION (this layer) stays INSIDE each character's run, at its tail —
  * after that person's identity and clothing, because it describes HER and must
@@ -330,7 +338,7 @@ function trimExpressionRuns(runs: ReadonlyArray<PreparedRun>, count: number): Pr
  *
  * Tags are de-duplicated globally (the count tag routinely reappears inside a
  * character's own run) keeping the FIRST occurrence — which is what makes the
- * hoisted size copy the surviving one and drops the in-run duplicate. Expression
+ * early size copy the surviving one and drops any in-run duplicate. Expression
  * tags are the one deliberate exception: they dedupe only within their own run,
  * because two girls sharing a mood must BOTH render it and a global dedupe would
  * silently blank the second one's face.
@@ -339,11 +347,12 @@ function trimExpressionRuns(runs: ReadonlyArray<PreparedRun>, count: number): Pr
  * interaction; identity, size, rating, camera and count are never trimmed, and
  * each floor (3 setting, 1 expression per character, 2 interaction) holds.
  *
- * SIZE SANCTION runs before any of that: every block is filtered against the
- * engine's tier for the subject it describes (`sanitizeSizeTags`), so a writer
- * following a narration that over-claims growth cannot out-vote the engine's
- * body state — the failure this pass exists to stop. Filtering precedes the
- * hoist, so an unsanctioned band word never reaches the front of the prompt.
+ * SIZE SANCTION runs before any of that: for every subject the engine holds body
+ * state for, each block (action, setting, her own run) loses every breast claim
+ * that is not curated act/anatomy vocabulary (`sanitizeBreastTags`), and the
+ * engine's own size block is injected in its place. A writer following a
+ * narration that over-claims growth therefore cannot out-vote the engine's body
+ * state in ANY phrasing — the failure this pass exists to stop.
  */
 export function composeBooruScenePrompt(
   sections: Partial<BooruSceneSections>,
@@ -352,7 +361,7 @@ export function composeBooruScenePrompt(
 ): string {
   const stripped: string[] = []
   const sanitize = (tags: ReadonlyArray<string>, sanction: SizeSanction | undefined): string[] => {
-    const result = sanitizeSizeTags(tags, sanction)
+    const result = sanitizeBreastTags(tags, sanction)
     stripped.push(...result.stripped)
     return result.kept
   }
@@ -376,13 +385,22 @@ export function composeBooruScenePrompt(
   const camera = dedupe(toTags(sections.camera))
   const count = dedupe(toTags(sections.countTags))
   const action = dedupe(sanitize(toTags(sections.action), sceneSanction))
-  // Size first, so the global dedupe keeps the hoisted copy and the in-run
-  // duplicate falls away. Each run is sanctioned by ITS OWN subject where she
-  // could be identified, and by the largest subject present otherwise.
-  const characterRuns = writtenRuns.map((run, index) =>
-    sanitize(run, sanctionByRun[index] ?? sceneSanction),
-  )
-  const size = dedupe(characterRuns.flatMap((run) => run.filter(isSizeTag)))
+  // Each run is filtered by ITS OWN subject's engine state. A run no sanction
+  // claims is an unnamed bystander the engine holds nothing for, so it passes
+  // through untouched — filtering her against the largest subject present would
+  // delete a smaller girl's honest band word as collateral.
+  const characterRuns = writtenRuns.map((run, index) => sanitize(run, sanctionByRun[index]))
+  // Size, resolved before the runs so the global dedupe keeps THIS copy: the
+  // engine's block for a sanctioned subject, the writer's own hoisted vocabulary
+  // for anyone the engine holds nothing for. A sanction whose subject the writer
+  // never depicted still gets stated rather than silently lost.
+  const size = dedupe([
+    ...writtenRuns.flatMap((_, index) => {
+      const sanction = sanctionByRun[index]
+      return sanction ? engineSizeTags(sanction) : characterRuns[index].filter(isSizeTag)
+    }),
+    ...sizeSanctions.filter((s) => !sanctionByRun.includes(s)).flatMap(engineSizeTags),
+  ])
   const engineByRun = assignEngineExpressions(characterRuns, engineExpressions)
   const runs: PreparedRun[] = characterRuns.map((run, index) => ({
     base: dedupe(run.filter((tag) => !isExpressionTag(tag))),
@@ -397,8 +415,9 @@ export function composeBooruScenePrompt(
   if (stripped.length > 0) {
     // Prompt archaeology: a later "why is she rendering small" investigation
     // should see that the writer over-claimed and that this pass acted.
-    log('stripped size tags the engine does not sanction', {
+    log('stripped breast claims the engine does not sanction', {
       stripped,
+      sizeBlock: size,
       sanctioned: sizeSanctions.map((s) => ({ tier: s.tier, grewThisTurn: s.grewThisTurn })),
     })
   }
@@ -645,8 +664,9 @@ export function buildExpressionCues(
 
 /**
  * The engine's size truth for the tagged subjects, in tag order — handed to
- * `composeBooruScenePrompt` so the writer's size vocabulary is filtered against
- * the tier the engine actually holds, not the one the narration described.
+ * `composeBooruScenePrompt`, which deletes the writer's breast claims for these
+ * subjects and states the engine's own size in their place, so the rendered body
+ * follows the tier the engine holds rather than the one the narration described.
  *
  * Uses the APPARENT tier for the same reason `bodyStatePhrase` does: it is what
  * the dossier tells the writer and what the downstream grounding pass uses, so
