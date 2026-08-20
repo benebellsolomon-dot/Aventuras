@@ -35,10 +35,20 @@ export const BOORU_DEFAULT_NEGATIVE =
  * Size-aware negative: SD models constantly pull large sizes back toward
  * defaults — suppressing the smaller band words is the standard counter.
  * Derived from the band vocabulary already in the prompt (no tier plumbing
- * needed): find the LARGEST band present, suppress every band two or more
- * steps below it that is not itself in the prompt (multi-character scenes
- * keep each character's own band renderable). Empty for small sizes or
+ * needed): find the LARGEST band present and suppress EVERY band strictly
+ * below it that is not itself in the prompt. Empty for small sizes or
  * band-less prompts.
+ *
+ * The immediately-lower band used to be left renderable, and that is exactly
+ * where the model escaped to: a live tier-24 subject prompted "huge breasts"
+ * rendered as "large breasts" because "large breasts" was the one band word
+ * NOT negated. On a backend with no prompt weighting (nanogpt — measured, see
+ * providerCapabilities.ts) the negative is the ONLY size-enforcement channel
+ * available, so leaving the neighbour band open defeats the whole mechanism.
+ *
+ * The "not itself in the prompt" filter is what keeps multi-character scenes
+ * safe: two girls at "medium breasts" and "huge breasts" still negate only the
+ * bands neither of them occupies.
  */
 export function sizeNegativeForPrompt(prompt: string): string {
   const words = BAND_WORD_THRESHOLDS.map((row) => row.word)
@@ -48,7 +58,7 @@ export function sizeNegativeForPrompt(prompt: string): string {
   const largest = present.lastIndexOf(true)
   if (largest < 2) return ''
   return words
-    .slice(0, largest - 1)
+    .slice(0, largest)
     .filter((_, i) => !present[i])
     .join(', ')
 }

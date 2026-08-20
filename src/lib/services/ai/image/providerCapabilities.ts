@@ -11,7 +11,17 @@
 
 import type { ImageProviderType } from '$lib/types'
 
-/** Providers whose backend parses A1111 `(tag:weight)` emphasis syntax. */
+/**
+ * Providers whose backend parses A1111 `(tag:weight)` emphasis syntax.
+ *
+ * nanogpt is excluded DELIBERATELY, and this is measured rather than assumed:
+ * on 2026-08-20 a down-weight discriminator — `(blue hair:0.2)` in an otherwise
+ * normal prompt — rendered blue-dominant hair, exactly as an unparsed literal
+ * would. Its endpoint hands the string to a hosted model with no weighting
+ * parser, so weighting is NOT an available emphasis lever there; tag ORDER and
+ * the negative prompt are (see booruPromptWriter's size hoist and dialect.ts's
+ * sizeNegativeForPrompt). Do not add nanogpt here without re-running that test.
+ */
 const WEIGHTING_CAPABLE_PROVIDERS: ReadonlySet<ImageProviderType> = new Set([
   'si-bridge',
   'a1111',

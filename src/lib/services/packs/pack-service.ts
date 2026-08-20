@@ -18,7 +18,10 @@ import type { PresetPack, FullPack } from './types'
 //     flat tag runs, ~60-tag budget) — fixes SDXL 77-token truncation dropping
 //     the whole scene block (live failure: bed paizuri rendered as hallway
 //     shirt-lift). Template must reach every pack.
-const SERVICE_TEMPLATE_SYNC_VERSION = 3
+// 4 — 2026-08-20: booru writer takes the faceless protagonist-POV form for a
+//     "you" male (bad male anatomy in two-person explicit scenes) and identity
+//     extraction now REQUIRES hair length + style (live banks omitted them).
+const SERVICE_TEMPLATE_SYNC_VERSION = 4
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

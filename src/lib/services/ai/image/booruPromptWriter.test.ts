@@ -256,17 +256,56 @@ describe('composeBooruScenePrompt', () => {
       'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field',
   }
 
-  it('orders action ahead of the per-character identity runs', () => {
+  it('orders action ahead of the per-character identity runs, with size hoisted between', () => {
     const prompt = composeBooruScenePrompt(bedScene)
     expect(prompt).toBe(
       'explicit, uncensored, detailed anatomy, cowboy shot, 1boy, 1girl, ' +
         'hetero, paizuri, breast squeezing, penis between breasts, lying on back, ' +
+        'huge breasts, ' +
         'on the right, muscular, completely nude, ' +
-        'on the left, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, huge breasts, open mouth, ' +
+        'on the left, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, open mouth, ' +
         'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field',
     )
     expect(prompt.indexOf('paizuri')).toBeLessThan(prompt.indexOf('blonde hair'))
     expect(prompt.indexOf('lying on back')).toBeLessThan(prompt.indexOf('muscular'))
+  })
+
+  it('hoists the size band ahead of the character runs, keeping the early copy', () => {
+    const prompt = composeBooruScenePrompt(bedScene)
+    expect(prompt.match(/huge breasts/g)).toHaveLength(1)
+    expect(prompt.indexOf('huge breasts')).toBeLessThan(prompt.indexOf('on the right'))
+    expect(prompt.indexOf('lying on back')).toBeLessThan(prompt.indexOf('huge breasts'))
+  })
+
+  it('hoists a relative-size anchor alongside the band word', () => {
+    const prompt = composeBooruScenePrompt({
+      countTags: '1girl, solo',
+      action: 'standing',
+      characters: [
+        'blonde hair, blue eyes, nude, gigantic breasts, breasts bigger than head, blush',
+      ],
+      scene: 'bedroom',
+    })
+    expect(prompt).toBe(
+      '1girl, solo, standing, gigantic breasts, breasts bigger than head, ' +
+        'blonde hair, blue eyes, nude, blush, bedroom',
+    )
+  })
+
+  it('hoists each subject size in count-tag order for a multi-subject scene', () => {
+    const prompt = composeBooruScenePrompt({
+      countTags: '2girls',
+      action: 'kissing',
+      characters: [
+        'blonde hair, blue eyes, medium breasts, nude',
+        'black hair, red eyes, huge breasts, nude',
+      ],
+      scene: 'bedroom',
+    })
+    expect(prompt).toBe(
+      '2girls, kissing, medium breasts, huge breasts, ' +
+        'blonde hair, blue eyes, nude, black hair, red eyes, bedroom',
+    )
   })
 
   it('flattens pseudo-regional parentheses — booru models have no regional prompter', () => {

@@ -362,7 +362,7 @@ Return three things:
 
 1. identityTags — a locked booru identity bank: 12-20 PLAIN, atomic danbooru tags (lowercase, comma-atomic, NO "(tag:1.2)" weighting) covering STABLE physical identity ONLY, in this EXACT dossier order:
    - anchor: 1girl / 1boy / 1other (exactly one, first)
-   - hair: length, then style, then color as SEPARATE atomic tags (e.g. "long hair", "wavy hair", "blonde hair" — NOT "long wavy blonde hair")
+   - hair: LENGTH first, then STYLE, then COLOR, as SEPARATE atomic tags (e.g. "long hair", "wavy hair", "blonde hair" — NOT "long wavy blonde hair"). Length and style are MANDATORY, never optional: a bank with a hair color but no length renders a random haircut that changes every image. Length is one of "very short hair" / "short hair" / "medium hair" / "long hair" / "very long hair" / "absurdly long hair"; style/texture is the visible shape ("straight hair", "wavy hair", "curly hair", "twintails", "ponytail", "braid", "hair bun", "messy hair", "hime cut", "bangs", "sidelocks"). If the prose never states a length, INFER the most plausible one from the description and emit it anyway — omitting it is not an option.
    - eyes: color, then notable shape (e.g. "blue eyes", "tsurime")
    - skin tone (e.g. "dark skin", "pale skin", "fair skin")
    - body: height + build as a frame only (e.g. "tall", "athletic") — NEVER a size/breast tag
@@ -370,6 +370,16 @@ Return three things:
    - distinguishing marks LAST: scars, freckles, moles, tattoos, birthmarks, heterochromia — AND for monster girls the species markers, which are IDENTITY and MUST survive here (a holstaur → "cow ears", "cow horns", "cow tail"; an elf → "pointy ears")
    Use real Danbooru vocabulary; only include tags the source supports — never invent marks or features.
    EXCLUDE: any size/breast tag (the engine owns size — never emit "large breasts", "huge breasts", "cleavage", etc.), any clothing, and any transient state (expression, blush, sweat, arousal, pose, fluids).
+
+   REQUIRED ATTRIBUTE CHECKLIST — before you return, confirm identityTags contains a tag for EVERY one of these. A bank missing any of them is incomplete and the character will drift between images:
+     [ ] anchor (1girl / 1boy / 1other)
+     [ ] hair COLOR
+     [ ] hair LENGTH
+     [ ] hair STYLE or texture
+     [ ] eye COLOR
+     [ ] SKIN tone
+     [ ] BUILD / frame
+   (Age appearance and distinguishing marks stay required as described above; the checklist is the floor, not the ceiling.)
 
 2. cleanBaseline — the stable identity expressed as descriptor fields:
    - face: permanent facial features, skin tone, age indicators ONLY. Strip expression and any "post-X" scene state.
@@ -393,7 +403,7 @@ Worked example (monster girl — a holstaur named Lucy):
   identityTags: ["1girl", "long hair", "wavy hair", "chestnut hair", "brown eyes", "fair skin", "tall", "wide hips", "mature female", "cow ears", "cow horns", "cow tail"]
   cleanBaseline: { face: "soft round face", hair: "long wavy chestnut hair", eyes: "gentle brown eyes", build: "tall, wide hips, curvy frame", distinguishing: "cow ears, small curved horns, cow tail, cow-print markings" }
   currentState: { face: "warm smile, flushed cheeks, semen on chin", clothing: "torn milkmaid dress pulled down, apron" }
-  (note: dossier order — 1girl anchor first, species markers LAST under distinguishing; "huge breasts" was DROPPED from every field — the engine owns size.)
+  (note: dossier order — 1girl anchor first, species markers LAST under distinguishing; "huge breasts" was DROPPED from every field — the engine owns size. The checklist is satisfied: hair length "long hair" + style "wavy hair" + color "chestnut hair", eye color, skin, build.)
 
 Respond ONLY with the structured object.`,
   userContent: `{% if characterName != '' %}Character name: {{ characterName }}
@@ -431,7 +441,7 @@ You do NOT write one finished string. Fill the FIELDS below; the pipeline joins 
 
 FIELD "rating": exactly one content rating — "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content). Match the scene.
 
-FIELD "camera": shot-type tag — wide shot / cowboy shot / medium shot / upper body / close-up / portrait — plus an angle tag when it helps (from below, from above, from behind, from side, dutch angle, pov). Pick a shot WIDE enough to show everyone AND the setting: any scene with two or more people, or any full-body action (sex, embracing, fighting, dancing), uses medium shot / cowboy shot / wide shot — NOT close-up or portrait. Reserve close-up / portrait for a genuine single-face moment with no one else in frame.
+FIELD "camera": shot-type tag — wide shot / cowboy shot / medium shot / upper body / close-up / portrait — plus an angle tag when it helps (from below, from above, from behind, from side, dutch angle, pov). Pick a shot WIDE enough to show everyone AND the setting: any scene with two or more people, or any full-body action (sex, embracing, fighting, dancing), uses medium shot / cowboy shot / wide shot — NOT close-up or portrait. Reserve close-up / portrait for a genuine single-face moment with no one else in frame. Add "pov" here whenever the PROTAGONIST-POV rule below applies.
 
 FIELD "countTags": count EVERY person visible in the scene, INCLUDING people who are NOT in the "Named subjects" list below — a partner, the protagonist / "you", an unnamed man or woman the scene text describes. Set the booru count tags to the TRUE TOTAL: "1boy, 1girl", "2girls", "2boys, 1girl", "3girls". This tag CONTROLS how many people render — never omit it. Use "solo" ONLY when exactly one person is truly alone in frame — NEVER in a scene involving touching, sex, an embrace, or any second person. If the scene text mentions "a man", "his hands", "the protagonist", another person's body, etc., that person MUST be counted and depicted.
 
@@ -441,6 +451,8 @@ FIELD "characters": an ARRAY — one entry per person, in the SAME order as the 
   - A person in the "Named subjects" list: copy their LOCKED IDENTITY TAGS VERBATIM (do not alter, reorder, or drop them). If they have no locked tags but an APPEARANCE line, convert that prose into atomic booru tags (e.g. "long hair, wavy hair, blonde hair, blue eyes, fair skin"). Then add their current clothing + state, their body line from the dossier, and their expression.
   - A person NOT in the list (unnamed partner / protagonist): generic booru tags drawn from the scene — e.g. "muscular, short dark hair, nude" for an unnamed man. Keep these SHORT; the named subjects carry the identity load.
   - Keep every trait inside its owner's entry — never merge two people into one run. With THREE OR MORE people, and only then, start each run with a spatial-anchor tag ("on the left", "behind her", "in the background") as a plain tag, still without parentheses; with one or two people the interaction tags in "action" already fix the arrangement.
+
+PROTAGONIST-POV MALE: when the male participant IS the story's protagonist — the scene text addresses him as "you" / "your hands" / "your chest", i.e. the reader is that man — his run is "pov, male pov, faceless male" plus AT MOST one body tag ("muscular"). Nothing else: no face, no hair, no eyes, no expression. Also put "pov" in the camera field. This is the standard booru technique: anime tag models render male anatomy and male faces badly, and a fully-described 1boy in a two-person explicit scene is where they fail hardest — the faceless first-person form both dodges that failure and matches the reader's own viewpoint. Still count him in the count tags ("1boy, 1girl"); he is in frame, just not a described character. A male who is NOT the protagonist (a third party the narration describes from outside) keeps his normal full 1boy description.
 
 FIELD "scene": concrete, specific setting tags from the scene and the narrative beat — the actual place, architecture, furniture and objects the prose describes, not a generic room word (e.g. "ornate manor bedroom, four-poster bed, velvet drapes, tall arched windows, candelabra" — NOT merely "bedroom"). Then time of day (day, night, sunset, dawn), the named light source (sunlight, golden hour, volumetric lighting, rim lighting, backlighting, dramatic shadow, moonlight through window, firelight, candlelight, neon lights) and atmosphere (rain, mist, dust particles, embers, depth of field). 4-8 concrete environment tags — never leave the background blank or generic.
 
@@ -452,13 +464,14 @@ RULES:
 - Do NOT add art-style or quality tags (masterpiece, best quality, anime style, realistic, 4k) — those are prepended automatically and duplicates hurt the result.
 - BUDGET: about 60 tags TOTAL across all fields (roughly 30-40 for a single subject). If the scene needs more, cut setting detail first, then interaction detail — never identity tags. Anything past the budget is trimmed automatically, setting first.
 
-Worked example — a nude couple on a bed at night, the woman on her back:
+Worked example — the protagonist ("you") on a bed at night with a named woman on her back; he is the viewer, so he takes the faceless POV form:
   rating: "explicit, uncensored, detailed anatomy"
-  camera: "cowboy shot"
+  camera: "cowboy shot, pov"
   countTags: "1boy, 1girl"
   action: "hetero, paizuri, breast squeezing, penis between breasts, lying on back"
-  characters: ["blonde hair, golden eyes, fair skin, slim, wide hips, young adult, completely nude, huge breasts, lactation, open mouth, blush", "muscular, short dark hair, completely nude"]
-  scene: "ornate manor bedroom, king-sized bed, dark silk bedsheets, mahogany bedframe, velvet curtains, moonlight through window, night, dramatic shadow"`,
+  characters: ["pov, male pov, faceless male, muscular", "blonde hair, golden eyes, fair skin, slim, wide hips, young adult, completely nude, huge breasts, lactation, open mouth, blush"]
+  scene: "ornate manor bedroom, king-sized bed, dark silk bedsheets, mahogany bedframe, velvet curtains, moonlight through window, night, dramatic shadow"
+  (had the man been a third party the narration describes from outside, his run would instead be a normal "muscular, short dark hair, completely nude" and the camera would carry no "pov".)`,
   userContent: `## Scene to illustrate
 This is the narration's intended moment. Extract WHO is present (INCLUDING unnamed people and the protagonist), the POSE / ACTION, the FRAMING, and the SETTING from it — then re-express everything as booru tags. Do NOT copy its prose sentences, and do NOT copy any character names, into your tags.
 {{ sceneIntent }}

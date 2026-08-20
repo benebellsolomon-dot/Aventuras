@@ -14,12 +14,14 @@ describe('detectPromptDialect', () => {
 })
 
 describe('sizeNegativeForPrompt', () => {
-  it('suppresses bands two or more steps below the largest present', () => {
+  it('suppresses every band strictly below the largest present', () => {
+    // The neighbour band is the escape hatch the live failure used (a tier-24
+    // "huge breasts" prompt rendered "large breasts"), so it is negated too.
     expect(sizeNegativeForPrompt('1girl, huge breasts, garden')).toBe(
-      'flat chest, small breasts, medium breasts',
+      'flat chest, small breasts, medium breasts, large breasts',
     )
     expect(sizeNegativeForPrompt('1girl, hyper breasts')).toBe(
-      'flat chest, small breasts, medium breasts, large breasts, huge breasts',
+      'flat chest, small breasts, medium breasts, large breasts, huge breasts, gigantic breasts',
     )
   })
 
@@ -27,6 +29,12 @@ describe('sizeNegativeForPrompt', () => {
     const negative = sizeNegativeForPrompt('2girls, huge breasts, small breasts')
     expect(negative).not.toContain('small breasts')
     expect(negative).toContain('flat chest')
+  })
+
+  it('never negates a neighbouring band that a second character actually occupies', () => {
+    const negative = sizeNegativeForPrompt('2girls, medium breasts, huge breasts')
+    expect(negative).not.toContain('medium breasts')
+    expect(negative).toBe('flat chest, small breasts, large breasts')
   })
 
   it('empty for small sizes or band-less prompts', () => {

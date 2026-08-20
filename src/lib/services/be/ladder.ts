@@ -67,6 +67,15 @@ const IMAGE_SIZE_ANCHORS: ReadonlyArray<readonly [number, string]> = [
   [30, 'breasts bigger than head'],
 ]
 
+/**
+ * The anchor vocabulary as a flat list — lets the image layer RECOGNIZE an
+ * anchor phrase inside a written tag run (it hoists size tags to the front of
+ * booru prompts) without duplicating the phrases and drifting from this table.
+ */
+export const IMAGE_SIZE_ANCHOR_PHRASES: ReadonlyArray<string> = IMAGE_SIZE_ANCHORS.map(
+  ([, anchor]) => anchor,
+)
+
 export function imageSizeAnchor(tier: number): string | null {
   const t = clampTier(tier)
   for (const [minTier, anchor] of IMAGE_SIZE_ANCHORS) {

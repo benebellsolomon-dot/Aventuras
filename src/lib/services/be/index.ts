@@ -45,6 +45,7 @@ export {
 } from './constants'
 export { buildBeGenreRules, type BeGenreRuleOptions } from './genre-rules'
 export {
+  IMAGE_SIZE_ANCHOR_PHRASES,
   bandIndex,
   bandPosition,
   bandWord,

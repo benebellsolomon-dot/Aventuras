@@ -16,7 +16,7 @@
  * can actually follow.
  *
  * ORDER (research/56): the call returns SECTIONS, and `composeBooruScenePrompt`
- * joins them — rating, camera, count, ACTION, characters, scene. Asking the LLM
+ * joins them — rating, camera, count, ACTION, SIZE, characters, scene. Asking the LLM
  * for one finished string put the two per-character identity clauses ahead of
  * the pose and setting tags, which then sat past CLIP's ~75-token attention
  * window; the model rendered the identities and invented its own scene (a bed
@@ -39,6 +39,8 @@ import { createLogger } from '$lib/log'
 import { ContextBuilder } from '$lib/services/context'
 import { database } from '$lib/services/database'
 import {
+  BAND_WORD_THRESHOLDS,
+  IMAGE_SIZE_ANCHOR_PHRASES,
   apparentTier,
   bandWord,
   imageSizeAnchor,
@@ -102,7 +104,7 @@ const booruScenePromptSchema = z.object({
   characters: z
     .array(z.string())
     .describe(
-      'One FLAT comma-separated tag run per person, in the same order as the count tags: locked identity tags copied verbatim, then clothing, breast-size band, expression. No parentheses.',
+      'One FLAT comma-separated tag run per person, in the same order as the count tags: locked identity tags copied verbatim, then clothing, breast-size band, expression. No parentheses. A male who is the story protagonist (the scene addresses him as "you") gets "pov, male pov, faceless male" plus at most "muscular" instead of a described 1boy.',
     ),
   scene: z
     .string()
@@ -113,18 +115,36 @@ const booruScenePromptSchema = z.object({
 
 export type BooruSceneSections = z.infer<typeof booruScenePromptSchema>
 
+/** Band words + relative-size anchors, the vocabulary hoisted out of a run. */
+const SIZE_TAG_VOCABULARY: ReadonlySet<string> = new Set([
+  ...BAND_WORD_THRESHOLDS.map((row) => row.word.toLowerCase()),
+  ...IMAGE_SIZE_ANCHOR_PHRASES.map((phrase) => phrase.toLowerCase()),
+])
+
+const isSizeTag = (tag: string): boolean => SIZE_TAG_VOCABULARY.has(tag.trim().toLowerCase())
+
 /**
  * Compose the writer's sections into the final booru tag order.
  *
- * Order is the fix (research/56): rating → camera → count → ACTION → characters
- * → scene. The action block moved AHEAD of the per-character identity runs
- * because with two characters the identity blocks are ~20 tags and pushed the
- * sex-act/pose and setting tags past CLIP's ~75-token attention window — the
- * model then rendered identity only and invented its own scene.
+ * Order is the fix (research/56): rating → camera → count → ACTION → SIZE →
+ * characters → scene. The action block moved AHEAD of the per-character
+ * identity runs because with two characters the identity blocks are ~20 tags
+ * and pushed the sex-act/pose and setting tags past CLIP's ~75-token attention
+ * window — the model then rendered identity only and invented its own scene.
+ *
+ * The size band words (and any relative-size anchor) are HOISTED out of the
+ * character runs to sit immediately after the action block, in count-tag order.
+ * They previously sat mid-run behind ~10 identity tags, and a live tier-24
+ * subject prompted "huge breasts" under-rendered as "large". CLIP attention
+ * falls off across the window and the backend parses no prompt weighting
+ * (nanogpt — measured, see providerCapabilities.ts), so position is the only
+ * emphasis lever left. Multi-subject runs keep their own bands, in order.
  *
  * Tags are de-duplicated globally (the count tag routinely reappears inside a
- * character's own run) and the total is capped at `BOORU_MAX_TAGS`, trimming
- * setting detail first and interaction second — identity is never trimmed.
+ * character's own run) keeping the FIRST occurrence — which is what makes the
+ * hoisted size copy the surviving one and drops the in-run duplicate. The total
+ * is capped at `BOORU_MAX_TAGS`, trimming setting detail first and interaction
+ * second — identity and size are never trimmed.
  */
 export function composeBooruScenePrompt(sections: Partial<BooruSceneSections>): string {
   const seen = new Set<string>()
@@ -143,10 +163,14 @@ export function composeBooruScenePrompt(sections: Partial<BooruSceneSections>): 
   const camera = dedupe(toTags(sections.camera))
   const count = dedupe(toTags(sections.countTags))
   const action = dedupe(toTags(sections.action))
-  const characters = (sections.characters ?? []).flatMap((run) => dedupe(toTags(run)))
+  // Size first, so the global dedupe keeps the hoisted copy and the in-run
+  // duplicate falls away.
+  const characterRuns = (sections.characters ?? []).map((run) => toTags(run))
+  const size = dedupe(characterRuns.flatMap((run) => run.filter(isSizeTag)))
+  const characters = characterRuns.flatMap((run) => dedupe(run))
   const scene = dedupe(toTags(sections.scene))
 
-  const fixed = rating.length + camera.length + count.length + characters.length
+  const fixed = rating.length + camera.length + count.length + size.length + characters.length
   const overBy = (sceneLength: number, actionLength: number): number =>
     fixed + sceneLength + actionLength - BOORU_MAX_TAGS
 
@@ -162,6 +186,7 @@ export function composeBooruScenePrompt(sections: Partial<BooruSceneSections>): 
     ...camera,
     ...count,
     ...trimmedAction,
+    ...size,
     ...characters,
     ...trimmedScene,
   ])
