@@ -52,6 +52,9 @@ const TEMPLATE_GROUP_MAP: Record<string, string> = {
   // Identity extraction (stable tag bank + baseline vs. transient current
   // state) — rendered by extractIdentity via ContextBuilder (research/55 A).
   'image-tag-bank-generation': 'Image',
+  // Dedicated booru scene-prompt writer — rendered by booruPromptWriter via
+  // ContextBuilder; converts a scene into one Danbooru-tag image prompt.
+  'image-booru-scene-prompt': 'Image',
 
   // Translation
   'translate-narration': 'Translation',

@@ -248,6 +248,11 @@
     await settings.updateExperimentalFeatures({ notificationPreview: checked })
   }
 
+  function handleBooruPromptWriterToggle(checked: boolean) {
+    settings.systemServicesSettings.imageGeneration.dedicatedBooruPromptWriter = checked
+    settings.saveSystemServicesSettings()
+  }
+
   async function handleResetAll() {
     await settings.resetExperimentalFeatures()
     stateTrackingChecked = settings.experimentalFeatures.stateTracking
@@ -339,6 +344,23 @@
       <Sparkles class="h-4 w-4" />
       Backfill Identity Tags
     </Button>
+
+    <div class="flex flex-row items-center justify-between pt-1">
+      <div class="space-y-0.5 pr-4">
+        <Label>Dedicated booru prompt writer</Label>
+        <p class="text-muted-foreground text-xs">
+          For booru anime image models (Illustrious, Pony, NoobAI, …), a focused AI call rewrites
+          each scene into proper Danbooru tags — copying locked identity tags and current
+          clothing/size — instead of relying on the story model to author tags. Improves pose,
+          framing, and character accuracy. Uses the Image Gen agent profile; falls back to the
+          story-written prompt if it fails.
+        </p>
+      </div>
+      <Switch
+        checked={settings.systemServicesSettings.imageGeneration.dedicatedBooruPromptWriter}
+        onCheckedChange={handleBooruPromptWriterToggle}
+      />
+    </div>
   </div>
 
   <Separator />

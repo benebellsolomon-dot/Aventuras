@@ -22,6 +22,7 @@ import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/s
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { assembleInlineImage } from './inlineAssembly'
+import { resolveBooruScenePrompt } from './booruPromptWriter'
 import { pickImageSize } from './aspectRatio'
 import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
@@ -167,14 +168,28 @@ export class InlineImageGenerationService {
       return
     }
 
+    // Dedicated booru prompt writer (research/55 follow-up): for booru image
+    // models the narration model's prose <pic> prompt is rewritten into proper
+    // Danbooru tags (copying locked identity banks) by a focused LLM call.
+    // Best-effort — returns tag.prompt unchanged when off / non-booru / on failure.
+    const activeProviderType = settings.getImageProfile(profileId)?.providerType
+    const tagPrompt = await resolveBooruScenePrompt({
+      presentCharacters: context.presentCharacters,
+      tagCharacterNames: tag.characters,
+      scenePrompt: tag.prompt,
+      narrativeText: context.narrativeContent,
+      beMode: context.beMode,
+      storyId: context.storyId,
+      model: modelToUse,
+    })
+
     // Assemble the request (BE grounding + cues + per-character LoRA/trigger
     // words + style + si-bridge spec) via the shared helper, so this post-hoc
     // path and the streaming tracker cannot drift.
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
-    const activeProviderType = settings.getImageProfile(profileId)?.providerType
     const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters: context.presentCharacters,
-      tagPrompt: tag.prompt,
+      tagPrompt,
       tagCharacters: tag.characters,
       beMode: context.beMode,
       stylePrompt,

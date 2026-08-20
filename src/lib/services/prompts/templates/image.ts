@@ -402,6 +402,65 @@ Respond ONLY with the structured object.`,
 {{ visualDescriptorsBlock }}`,
 }
 
+// The dedicated booru scene-prompt writer (research/55 follow-up). Ben's
+// narration model (deepseek-v4-pro) writes PROSE inside <pic prompt="..."> even
+// with booru instructions in front of it, and a booru image model (wai-
+// illustrious) cannot follow prose → wrong pose/scene/anatomy. This template
+// backs a SINGLE-PURPOSE LLM call whose ONLY job is to emit one booru TAG
+// prompt for the scene — so it complies. It copies each present character's
+// locked `imageTags` bank verbatim (or converts their descriptor prose to tags
+// when they have no bank yet), states current clothing + body-size band, and
+// closes on current-location scene tags. Rendered via ContextBuilder; the zod
+// schema in booruPromptWriter.ts enforces the output SHAPE regardless of edits
+// here — a user edit can degrade quality but never break the caller's contract.
+const imageBooruScenePromptTemplate: PromptTemplate = {
+  id: 'image-booru-scene-prompt',
+  name: 'Booru Scene Prompt Writer',
+  category: 'service',
+  description:
+    'Converts one scene into a single Danbooru-tag image prompt for booru anime models (copies locked identity tags verbatim, sets count/shot/clothing/scene tags)',
+  content: `You are a booru image-prompt specialist. Convert the scene below into ONE image prompt made of comma-separated Danbooru-style tags for an anime tag model (Illustrious / Pony / NoobAI / …). These models follow booru tags far more reliably than prose sentences: the count tag controls how many characters render, and tag order controls emphasis. Output the tag prompt ONLY — no prose, no explanation, no preamble.
+
+Build the prompt in this EXACT section order — do NOT rearrange or skip sections:
+
+SECTION 1 — Rating: begin with one content rating: "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content). Match the scene.
+
+SECTION 2 — Camera: shot-type tags — wide shot / cowboy shot / medium shot / upper body / close-up / portrait — plus an angle tag when it helps (from below, from above, from behind, from side, dutch angle, pov). Pick a shot WIDE enough to show everyone AND the setting: any scene with two or more people, or any full-body action (sex, embracing, fighting, dancing), uses medium shot / cowboy shot / wide shot — NOT close-up or portrait. Reserve close-up / portrait for a genuine single-face moment with no one else in frame.
+
+SECTION 3 — Character count: count EVERY person visible in the scene, INCLUDING people who are NOT in the "Named subjects" list below — a partner, the protagonist / "you", an unnamed man or woman the scene text describes. Set the booru count tag to the TRUE TOTAL: "1boy, 1girl", "2girls", "2boys, 1girl", "3girls", etc. This tag CONTROLS how many people render — never omit it. Use "solo" ONLY when exactly one person is truly alone in frame — NEVER in a scene involving touching, sex, an embrace, or any second person. If the scene text mentions "a man", "his hands", "the protagonist", another person's body, etc., that person MUST be counted and depicted.
+
+SECTION 4 — Characters (feature-bleeding is where multi-person images fail): give EACH person their OWN short clause with a spatial anchor ("on the left, …", "on top of her, …", "behind her, …", "straddling him, …").
+  - A person in the "Named subjects" list: copy their LOCKED IDENTITY TAGS VERBATIM (do not alter, reorder, or drop them). If they have no locked tags but an APPEARANCE line, convert that prose into atomic booru tags (e.g. "long hair, wavy hair, blonde hair, blue eyes, fair skin"). Then add their current clothing + state, breast-size band, facial expression, pose/action, held items from the dossier.
+  - A person NOT in the list (unnamed partner / protagonist): describe them with generic booru tags drawn from the scene — e.g. "1boy, muscular, short dark hair, nude" for an unnamed man. Give them a spatial-anchored clause too.
+  Keep every trait inside its owner's clause — never merge two people into one description.
+
+SECTION 4b — Interaction (multi-person scenes): add booru tags for what the people are DOING TOGETHER so the model renders them interacting rather than side by side — e.g. hetero, yuri, yaoi, sex, vaginal, paizuri, cowgirl position, hug, kiss, grabbing, holding, and the body-contact tags the scene implies. Position the bodies relative to each other.
+
+SECTION 5 — Scene tags (always last): location tags (indoors, outdoors, bedroom, forest, castle interior, night city…), time-of-day (day, night, sunset, dawn), lighting (sunlight, golden hour, volumetric lighting, rim lighting, backlighting, dramatic shadow, moonlight, firelight, neon lights), and atmosphere (rain, mist, dust particles, embers, depth of field, bokeh). ALWAYS include the setting — reflect the CURRENT LOCATION below; never drop the environment down to a blank background.
+
+RULES:
+- NEVER put a character's NAME in the prompt ("Amelia", "Hana", …) — booru models do not know names; identity comes from the tags. Drop any name that appears in the scene text or subject data.
+- Copy each named subject's LOCKED IDENTITY TAGS exactly — they are the character's canonical look and keep them consistent across images.
+- Use the dossier's CURRENT CLOTHING and BODY STATE verbatim where given — never re-invent an outfit or a body size.
+- For every female subject, state a breast-size band matching the dossier: flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts. Match clothing to the size — at large sizes clothes strain, gape, or fail.
+- English only. Comma-separated tags only (plus the per-person clauses in multi-person scenes).
+- Do NOT add art-style or quality tags (masterpiece, best quality, anime style, realistic, 4k) — those are prepended automatically and duplicates hurt the result.
+- Density: 30-45 tags for one person, more for several. Output ONLY the final prompt string.`,
+  userContent: `## Scene to illustrate
+This is the narration's intended moment. Extract WHO is present (INCLUDING unnamed people and the protagonist), the POSE / ACTION, the FRAMING, and the SETTING from it — then re-express everything as booru tags. Do NOT copy its prose sentences, and do NOT copy any character names, into your tags.
+{{ sceneIntent }}
+
+## Narrative beat (extra context)
+{{ narrativeBeat }}
+
+## Named subjects with locked identity ({{ subjectCount }})
+These are the characters we hold identity tags for. The scene may contain MORE people than these — count and depict EVERYONE the scene describes, and give unnamed people generic booru tags.
+{{ subjectDossier }}
+
+{{ locationBlock }}
+Produce the single booru tag prompt now — tags only, in the section order above.`,
+}
+
 export const imageTemplates: PromptTemplate[] = [
   classicAnimeStyleTemplate,
   softAnimeStyleTemplate,
@@ -413,4 +472,5 @@ export const imageTemplates: PromptTemplate[] = [
   imagePortraitGenerationTemplate,
   backgroundImagePromptAnalysisTemplate,
   imageTagBankGenerationTemplate,
+  imageBooruScenePromptTemplate,
 ]

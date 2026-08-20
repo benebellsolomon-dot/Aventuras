@@ -68,6 +68,7 @@ import {
 import type { InlineImageContext, ImageAnalysisContext } from './image'
 import { generateImage as registryGenerateImage } from './image/providers/registry'
 import { assembleInlineImage } from './image/inlineAssembly'
+import { resolveBooruScenePrompt } from './image/booruPromptWriter'
 import { type ResolvedLora } from './image/loraBinding'
 import type { StructuredImageSpecInput } from './image/providers/types'
 import { EntryInjector, MemoryService, NarrativeService } from './generation'
@@ -136,6 +137,14 @@ export interface ImageGenerationServiceSettings {
   promptMaxTokens: number
   reasoningEffort: ReasoningEffort
   manualBody: string
+
+  // Dedicated booru scene-prompt writer (research/55 follow-up). When on and
+  // the image model is a booru model, a focused LLM call rewrites the <pic>/
+  // scene prompt into proper Danbooru tags (copying locked identity banks)
+  // instead of trusting the narration model to author booru tags. Kill-switch;
+  // rides the 'imageGeneration' service preset. Best-effort — falls back to the
+  // original prompt on any failure, so turning it off is never worse than before.
+  dedicatedBooruPromptWriter: boolean
 
   // Background image settings
   backgroundProfileId: string | null // API profile for background image generation
@@ -1084,6 +1093,23 @@ class AIService {
       return
     }
 
+    // Dedicated booru prompt writer (research/55 follow-up): for booru image
+    // models the analyzed scene prompt is rewritten into proper Danbooru tags
+    // (copying locked identity banks) by a focused LLM call. Best-effort —
+    // returns scene.prompt unchanged when off / non-booru / on failure. Skipped
+    // for portrait generation, which has its own full-body/plain-bg format.
+    const tagPrompt = scene.generatePortrait
+      ? scene.prompt
+      : await resolveBooruScenePrompt({
+          presentCharacters,
+          tagCharacterNames: scene.characters,
+          scenePrompt: scene.prompt,
+          narrativeText: scene.sourceText ?? '',
+          beMode,
+          storyId,
+          model: modelToUse,
+        })
+
     // Build the request via the shared inline-image assembly (BE grounding +
     // cues + per-character LoRA trigger words + tier-scaled LoRA file + marker +
     // style + si-bridge spec) so the analyzed path matches the two inline paths
@@ -1091,7 +1117,7 @@ class AIService {
     const stylePrompt = await this.getStylePrompt(styleId)
     const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters,
-      tagPrompt: scene.prompt,
+      tagPrompt,
       tagCharacters: scene.characters,
       beMode,
       stylePrompt,

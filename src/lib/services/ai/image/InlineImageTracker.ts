@@ -24,6 +24,7 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { assembleInlineImage } from './inlineAssembly'
+import { resolveBooruScenePrompt } from './booruPromptWriter'
 import { pickImageSize } from './aspectRatio'
 import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
@@ -51,6 +52,14 @@ export class InlineImageTracker {
   private processedTags = new Set<string>()
   /** Pending image generations (results stored in memory until flushed) */
   private pendingImages: PendingImage[] = []
+  /**
+   * In-flight `startGeneration` calls. Each resolves once its tag has been
+   * assembled and pushed into `pendingImages`. Awaited before a flush so a slow
+   * step inside startGeneration (the dedicated booru prompt-writer LLM call) can
+   * never let an end-of-narrative tag's push race — and be dropped by — the
+   * flush fired at phase_complete.
+   */
+  private startPromises: Promise<void>[] = []
 
   constructor(
     private storyId: string,
@@ -81,12 +90,17 @@ export class InlineImageTracker {
         characters: tag.characters,
       })
 
-      // Fire-and-forget: style prompt fetch + generation start is async.
-      // accumulatedContent (the narrative streamed so far) is the context
-      // signal for the si-bridge spec's intimacy inference.
-      this.startGeneration(tag, referenceMode, accumulatedContent).catch((error) => {
-        log('startGeneration failed', { error })
-      })
+      // Async start (style-prompt fetch + dedicated-writer LLM call + generation
+      // kickoff). accumulatedContent (the narrative streamed so far) is the
+      // context signal for the si-bridge spec's intimacy inference. The promise
+      // is TRACKED (not fire-and-forget) so flushToDatabase can settle it first —
+      // otherwise a slow writer would drop an end-of-narrative image.
+      const startPromise = this.startGeneration(tag, referenceMode, accumulatedContent).catch(
+        (error) => {
+          log('startGeneration failed', { error })
+        },
+      )
+      this.startPromises.push(startPromise)
     }
   }
 
@@ -138,13 +152,27 @@ export class InlineImageTracker {
     if (!profile) return
     if (!supportsImageGeneration(profile.providerType)) return
 
+    // Dedicated booru prompt writer (research/55 follow-up): for booru image
+    // models the narration model's prose <pic> prompt is rewritten into proper
+    // Danbooru tags (copying locked identity banks) by a focused LLM call.
+    // Best-effort — returns tag.prompt unchanged when off / non-booru / on failure.
+    const tagPrompt = await resolveBooruScenePrompt({
+      presentCharacters: this.getCharacters(),
+      tagCharacterNames: tag.characters,
+      scenePrompt: tag.prompt,
+      narrativeText: narrativeSoFar,
+      beMode: this.getBeMode(),
+      storyId: this.storyId,
+      model: modelToUse,
+    })
+
     // Assemble the request via the shared helper — this streaming tracker is the
     // LIVE inline path, so it must produce the same grounding + per-character
     // LoRA/trigger words + spec as the post-hoc InlineImageService.
     const stylePrompt = await this.getStylePrompt(imageSettings.styleId)
     const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters: this.getCharacters(),
-      tagPrompt: tag.prompt,
+      tagPrompt,
       tagCharacters: tag.characters,
       beMode: this.getBeMode(),
       stylePrompt,
@@ -281,6 +309,17 @@ export class InlineImageTracker {
    * Call this AFTER the story entry has been created.
    */
   async flushToDatabase(): Promise<void> {
+    // Settle every in-flight startGeneration first: a <pic> tag near the end of
+    // the narrative may still be resolving its dedicated-writer LLM call when the
+    // caller flushes at phase_complete, and its pendingImages push races the
+    // flush. Awaiting the tracked start promises guarantees all pushes have
+    // landed before we read pendingImages. allSettled never rejects (each start
+    // is already .catch-wrapped), so a failed start just contributes no image.
+    if (this.startPromises.length > 0) {
+      await Promise.allSettled(this.startPromises)
+      this.startPromises = []
+    }
+
     if (this.pendingImages.length === 0) {
       log('No pending images to flush')
       return

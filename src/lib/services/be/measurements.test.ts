@@ -225,6 +225,26 @@ describe('image state cues', () => {
     expect(aroused.join(' ')).toContain('aroused')
   })
 
+  test('emits a breast-expansion cue on the turn growth landed (lastGrowth set)', () => {
+    // No growth marker → no expansion cue.
+    expect(imageStateCues(at({})).join(' ')).not.toContain('breast expansion')
+
+    // Single-increment land → gentle expansion cue.
+    const small = imageStateCues(at({ lastGrowth: { delta: 1, tierBefore: 29 } }))
+    expect(small[0]).toContain('breast expansion')
+    expect(small[0]).toContain('growing larger')
+
+    // Multi-increment surge → rapid expansion cue, and it LEADS the cue list.
+    const surge = imageStateCues(
+      at({
+        lastGrowth: { delta: 3, tierBefore: 27 },
+        arousal: 85,
+      }),
+    )
+    expect(surge[0]).toContain('rapidly expanding')
+    expect(surge.join(' ')).toContain('aroused') // still stacks with other cues
+  })
+
   // research/49 R6: apparent swell is PRESENTATION — it rides the cue text and
   // never the tape (measurements() is untouched by it).
   test('engorged cues carry the apparent-swell magnitude; calm ones do not', () => {

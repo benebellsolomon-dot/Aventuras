@@ -573,6 +573,7 @@ export function getDefaultImageGenerationSettings(): ImageGenerationServiceSetti
     promptMaxTokens: 16384,
     reasoningEffort: 'high',
     manualBody: '',
+    dedicatedBooruPromptWriter: true, // On by default; booru-gated + best-effort
     backgroundProfileId: null,
     backgroundSize: '1280x720',
     backgroundBlur: 2, // Default blur for atmosphere

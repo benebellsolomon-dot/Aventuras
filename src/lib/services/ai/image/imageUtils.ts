@@ -9,6 +9,7 @@ import { sizeBandMarker, tierMarker } from './sizeBandMarker'
 import { bridgeIdentityAnchor, buildPortraitSpec, type BridgeSpecSubject } from './bridgeSpec'
 import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
 import { assembleInlineImage } from './inlineAssembly'
+import { resolveBooruScenePrompt } from './booruPromptWriter'
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants'
 import { readBodyState } from '$lib/services/be'
 import { database } from '$lib/services/database'
@@ -179,13 +180,32 @@ async function assembleInlineRetry(
   const sourceText = image.sourceText ?? ''
   if (image.generationMode !== 'inline' || !sourceText.startsWith('<pic')) return null
 
-  const tagPrompt = context.promptOverride?.trim() || matchAttribute(sourceText, 'prompt')
-  if (!tagPrompt) return null
+  const override = context.promptOverride?.trim()
+  const rawPrompt = override || matchAttribute(sourceText, 'prompt')
+  if (!rawPrompt) return null
+
+  const tagCharacters = tagCharacterNames(sourceText)
+
+  // Dedicated booru prompt writer (research/55 follow-up): a plain retry
+  // re-extracts the ORIGINAL narration prose from the stored <pic> tag, so for
+  // booru models it would regress to prose on every regenerate. Rewrite it into
+  // Danbooru tags here too — but honor an explicit user prompt override verbatim
+  // (that is deliberate user intent, not the narration model's prose).
+  const tagPrompt = override
+    ? rawPrompt
+    : await resolveBooruScenePrompt({
+        presentCharacters: context.presentCharacters,
+        tagCharacterNames: tagCharacters,
+        scenePrompt: rawPrompt,
+        narrativeText: context.narrativeText,
+        beMode: context.beMode,
+        model,
+      })
 
   return assembleInlineImage({
     presentCharacters: context.presentCharacters,
     tagPrompt,
-    tagCharacters: tagCharacterNames(sourceText),
+    tagCharacters,
     beMode: context.beMode,
     stylePrompt: await resolveStylePrompt(styleId),
     narrativeText: context.narrativeText,

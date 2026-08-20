@@ -46,6 +46,14 @@ vi.mock('$lib/services/events', () => ({
   emitImageAnalysisFailed: vi.fn(),
 }))
 
+// The dedicated booru writer runs a real structured LLM call; these tests
+// exercise the retry ASSEMBLY, not the writer. Mock it as a passthrough (the
+// best-effort fallback behavior) so the request is assembled from the stored
+// <pic> prompt exactly as before, without pulling in the AI-SDK import chain.
+vi.mock('./booruPromptWriter', () => ({
+  resolveBooruScenePrompt: vi.fn(async (input: { scenePrompt: string }) => input.scenePrompt),
+}))
+
 import { retryImageGeneration } from './imageUtils'
 import { defaultBodyState, writeBodyState } from '$lib/services/be'
 import type { Character } from '$lib/types'

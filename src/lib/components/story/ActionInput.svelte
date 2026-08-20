@@ -650,7 +650,11 @@
           )
           ui.endStreaming()
           emitNarrativeResponse(narrationEntry.id, fullResponse)
-          if (inlineImageTracker?.hasPendingImages) await inlineImageTracker.flushToDatabase()
+          // Flush unconditionally: flushToDatabase settles any in-flight <pic>
+          // starts first (a slow dedicated-writer call may not have pushed yet),
+          // then no-ops when there is genuinely nothing to persist. Gating on
+          // hasPendingImages here would race a still-resolving end-of-narrative tag.
+          if (inlineImageTracker) await inlineImageTracker.flushToDatabase()
         }
 
         if (event.type === 'classification_complete' && narrationEntry) {

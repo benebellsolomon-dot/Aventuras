@@ -215,6 +215,20 @@ export function measurements(state: BodyState): BodyMeasurements {
  */
 export function imageStateCues(state: BodyState): string[] {
   const cues: string[] = []
+  // Growth just landed this scene (context.ts N→N+1 render window): the reducer
+  // sets lastGrowth ONLY on the turn that renders the outcome and clears it the
+  // next turn, so this fires exactly once — the "she just grew" image. Her NEW
+  // size already rides the band word the cue is appended to; this leading cue
+  // makes the expansion ITSELF visible ("breast expansion" is a real booru tag),
+  // instead of the image reading as a static larger bust with no transformation.
+  const grew = state.lastGrowth?.delta ?? 0
+  if (grew > 0) {
+    cues.push(
+      grew >= 2
+        ? 'breast expansion, breasts rapidly expanding, skin stretching taut'
+        : 'breast expansion, breasts growing larger, filling out',
+    )
+  }
   const fill = state.fluids.fillPercent
   // Apparent swell (research/49 R6): PRESENTATION magnitude only — it rides the
   // cue text and the render tier, never the tape above.
