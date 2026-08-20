@@ -41,6 +41,7 @@ vi.mock('$lib/services/database', () => ({
 
 import {
   BOORU_MAX_TAGS,
+  buildExpressionCues,
   buildLocationBlock,
   buildSubjectDossier,
   composeBooruScenePrompt,
@@ -106,6 +107,7 @@ function sections(overrides: Partial<BooruSceneSections> = {}): BooruSceneSectio
     countTags: '1girl, solo',
     action: '',
     characters: [],
+    expressions: [],
     scene: 'bedroom',
     ...overrides,
   }
@@ -189,6 +191,27 @@ describe('buildSubjectDossier', () => {
     expect(dossier).toContain('breast expansion')
   })
 
+  it('states the engine expression as booru tags in BE mode', () => {
+    const aroused = makeChar({
+      name: 'Cora',
+      imageTags: '1girl, black hair',
+      metadata: writeBodyState(null, { ...defaultBodyState(20), arousal: 90 }),
+    })
+    expect(buildSubjectDossier([aroused], ['Cora'], true)).toContain(
+      'expression (engine state — copy VERBATIM into her expression run, then add what the beat shows): blush, half-closed eyes, open mouth',
+    )
+    expect(buildSubjectDossier([aroused], ['Cora'], false)).not.toContain('expression (engine')
+  })
+
+  it('omits the expression line when the engine evidences no emotional state', () => {
+    const calm = makeChar({
+      name: 'Cora',
+      imageTags: '1girl, black hair',
+      metadata: writeBodyState(null, defaultBodyState(20)),
+    })
+    expect(buildSubjectDossier([calm], ['Cora'], true)).not.toContain('expression (engine')
+  })
+
   it('returns a placeholder when no named subject resolves', () => {
     const dossier = buildSubjectDossier([amelia], ['Nonexistent'], false)
     expect(dossier).toContain('no named subjects')
@@ -198,6 +221,43 @@ describe('buildSubjectDossier', () => {
     const dossier = buildSubjectDossier([amelia, bella], ['bella', 'Amelia', 'BELLA'], false)
     expect(dossier.indexOf('- Bella:')).toBeLessThan(dossier.indexOf('- Amelia:'))
     expect(dossier.match(/- Bella:/g)).toHaveLength(1)
+  })
+})
+
+describe('buildExpressionCues', () => {
+  const cora = makeChar({
+    name: 'Cora',
+    imageTags: '1girl, black hair, red eyes',
+    metadata: writeBodyState(null, { ...defaultBodyState(20), arousal: 90 }),
+  })
+  const resentful = makeChar({
+    name: 'Dana',
+    imageTags: '1girl, red hair',
+    metadata: writeBodyState(null, { ...defaultBodyState(12), attitude: 'resentful' }),
+  })
+
+  it('reads the engine soft state of each tagged subject, in tag order', () => {
+    const cues = buildExpressionCues([cora, resentful], ['Dana', 'Cora'], true)
+    expect(cues).toEqual([
+      { identityTags: ['1girl', 'red hair'], expressionTags: ['scowl'] },
+      {
+        identityTags: ['1girl', 'black hair', 'red eyes'],
+        expressionTags: ['blush', 'half-closed eyes', 'open mouth'],
+      },
+    ])
+  })
+
+  it('is empty outside BE mode — the reducer is the only writer of that state', () => {
+    expect(buildExpressionCues([cora], ['Cora'], false)).toEqual([])
+  })
+
+  it('skips a subject with no body state and one the engine reads as neutral', () => {
+    const neutral = makeChar({
+      name: 'Eve',
+      imageTags: '1girl, brown hair',
+      metadata: writeBodyState(null, defaultBodyState(10)),
+    })
+    expect(buildExpressionCues([amelia, neutral], ['Amelia', 'Eve'], true)).toEqual([])
   })
 })
 
@@ -252,6 +312,7 @@ describe('composeBooruScenePrompt', () => {
       '(on the right, 1boy, muscular, completely nude)',
       '(on the left, 1girl, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, completely nude, huge breasts, open mouth)',
     ],
+    expressions: ['', 'blush'],
     scene:
       'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field',
   }
@@ -263,7 +324,7 @@ describe('composeBooruScenePrompt', () => {
         'hetero, paizuri, breast squeezing, penis between breasts, lying on back, ' +
         'huge breasts, ' +
         'on the right, muscular, completely nude, ' +
-        'on the left, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, open mouth, ' +
+        'on the left, blonde hair, golden eyes, fair skin, slim, wide hips, young adult, blush, open mouth, ' +
         'dark silk bedsheets, ornate manor bedroom, king-sized bed, moonlight through window, night, depth of field',
     )
     expect(prompt.indexOf('paizuri')).toBeLessThan(prompt.indexOf('blonde hair'))
@@ -370,6 +431,151 @@ describe('composeBooruScenePrompt', () => {
   })
 })
 
+describe('composeBooruScenePrompt — expression layer', () => {
+  const blondeBank = ['1girl', 'blonde hair', 'golden eyes', 'fair skin']
+  const ravenBank = ['1girl', 'black hair', 'red eyes', 'pale skin']
+
+  const twoGirls = {
+    countTags: '2girls',
+    action: 'hugging',
+    characters: [
+      'blonde hair, golden eyes, fair skin, sundress, medium breasts',
+      'black hair, red eyes, pale skin, black dress, huge breasts',
+    ],
+    expressions: ['smile', 'scowl'],
+    scene: 'garden, daylight',
+  }
+
+  it('keeps each expression inside its own run, after that person’s identity', () => {
+    const prompt = composeBooruScenePrompt(twoGirls)
+    expect(prompt).toBe(
+      '2girls, hugging, medium breasts, huge breasts, ' +
+        'blonde hair, golden eyes, fair skin, sundress, smile, ' +
+        'black hair, red eyes, pale skin, black dress, scowl, ' +
+        'garden, daylight',
+    )
+    expect(prompt.indexOf('fair skin')).toBeLessThan(prompt.indexOf('smile'))
+    expect(prompt.indexOf('smile')).toBeLessThan(prompt.indexOf('black hair'))
+  })
+
+  it('gives two characters their own moods rather than a shared one', () => {
+    const prompt = composeBooruScenePrompt({
+      ...twoGirls,
+      expressions: ['crying, tears', 'crying'],
+    })
+    // A GLOBAL dedupe would blank the second girl's face; expressions dedupe
+    // only within their own run.
+    expect(prompt.match(/crying/g)).toHaveLength(2)
+  })
+
+  it('merges the engine cue into the run whose identity bank matches', () => {
+    const prompt = composeBooruScenePrompt(twoGirls, [
+      { identityTags: ravenBank, expressionTags: ['blush', 'half-closed eyes'] },
+    ])
+    expect(prompt).toContain('pale skin, black dress, blush, half-closed eyes, scowl')
+    // The blonde keeps only what the writer gave her.
+    expect(prompt).toContain('fair skin, sundress, smile,')
+  })
+
+  it('places engine tags ahead of the writer’s and dedupes the overlap', () => {
+    const prompt = composeBooruScenePrompt(
+      {
+        countTags: '1girl, solo',
+        characters: ['blonde hair, golden eyes, fair skin, nude'],
+        expressions: ['half-closed eyes, seductive smile'],
+        scene: 'bedroom',
+      },
+      [{ identityTags: blondeBank, expressionTags: ['blush', 'half-closed eyes'] }],
+    )
+    expect(prompt).toBe(
+      '1girl, solo, blonde hair, golden eyes, fair skin, nude, ' +
+        'blush, half-closed eyes, seductive smile, bedroom',
+    )
+    expect(prompt.match(/half-closed eyes/g)).toHaveLength(1)
+  })
+
+  it('lifts an expression the writer inlined in the run to the run’s tail', () => {
+    const prompt = composeBooruScenePrompt({
+      countTags: '1girl, solo',
+      characters: ['blonde hair, blush, golden eyes, nude'],
+      expressions: [''],
+      scene: 'bedroom',
+    })
+    expect(prompt).toBe('1girl, solo, blonde hair, golden eyes, nude, blush, bedroom')
+  })
+
+  it('skips the faceless protagonist run when matching positionally', () => {
+    const prompt = composeBooruScenePrompt(
+      {
+        countTags: '1boy, 1girl',
+        action: 'hetero, hug',
+        // No locked bank for her — her run is converted prose, so it shares no
+        // verbatim tag and the cue falls back to the first described run.
+        characters: ['pov, male pov, faceless male, muscular', 'red hair, green eyes, nude'],
+        expressions: ['', ''],
+        scene: 'bedroom',
+      },
+      [{ identityTags: [], expressionTags: ['blush', 'open mouth'] }],
+    )
+    expect(prompt).toContain('red hair, green eyes, nude, blush, open mouth')
+    expect(prompt.indexOf('faceless male')).toBeLessThan(prompt.indexOf('blush'))
+    expect(prompt).not.toContain('faceless male, muscular, blush')
+  })
+
+  it('leaves the expressions alone while setting detail can still absorb the overrun', () => {
+    const identity = Array.from({ length: 40 }, (_, i) => `identity${i}`)
+    const scene = Array.from({ length: 20 }, (_, i) => `scenery${i}`)
+    const tags = composeBooruScenePrompt({
+      countTags: '1girl',
+      action: 'action0, action1, action2, action3, action4, action5',
+      characters: [identity.join(', ')],
+      expressions: ['blush, half-closed eyes, open mouth'],
+      scene: scene.join(', '),
+    }).split(', ')
+    expect(tags).toHaveLength(BOORU_MAX_TAGS)
+    for (const tag of ['blush', 'half-closed eyes', 'open mouth']) expect(tags).toContain(tag)
+    expect(tags.filter((t) => t.startsWith('scenery'))).toHaveLength(10)
+  })
+
+  it('trims spare expression tags only after the setting has hit its floor', () => {
+    const identity = Array.from({ length: 49 }, (_, i) => `identity${i}`)
+    const tags = composeBooruScenePrompt({
+      countTags: '1girl',
+      action: 'action0, action1, action2, action3, action4, action5',
+      characters: [identity.join(', ')],
+      expressions: ['blush, half-closed eyes, open mouth, seductive smile'],
+      scene: 'scenery0, scenery1, scenery2, scenery3, scenery4',
+    }).split(', ')
+    expect(tags).toHaveLength(BOORU_MAX_TAGS)
+    // Setting is down to its floor, interaction is untouched, and the FIRST
+    // expression tag (the engine's, when there is one) is the survivor.
+    expect(tags.filter((t) => t.startsWith('scenery'))).toHaveLength(3)
+    expect(tags.filter((t) => t.startsWith('action'))).toHaveLength(6)
+    expect(tags).toContain('blush')
+    for (const dropped of ['half-closed eyes', 'open mouth', 'seductive smile']) {
+      expect(tags).not.toContain(dropped)
+    }
+  })
+
+  it('never drops a character’s last expression tag while setting tags survive', () => {
+    const run = (prefix: string) => Array.from({ length: 25 }, (_, i) => `${prefix}${i}`).join(', ')
+    const tags = composeBooruScenePrompt({
+      countTags: '2girls',
+      action: 'action0, action1, action2, action3',
+      characters: [run('left'), run('right')],
+      expressions: ['blush, half-closed eyes, open mouth', 'scowl, glaring, clenched teeth'],
+      scene: 'scenery0, scenery1, scenery2, scenery3, scenery4, scenery5',
+    }).split(', ')
+    expect(tags).toHaveLength(BOORU_MAX_TAGS)
+    expect(tags.filter((t) => t.startsWith('scenery'))).toHaveLength(3)
+    // One tag each — neither face is blanked.
+    expect(tags).toContain('blush')
+    expect(tags).toContain('scowl')
+    expect(tags).not.toContain('half-closed eyes')
+    expect(tags).not.toContain('glaring')
+  })
+})
+
 describe('writeBooruScenePrompt', () => {
   it('returns null (best-effort) when no preset is assigned', async () => {
     mocks.getServicePresetId.mockReturnValue('')
@@ -401,6 +607,28 @@ describe('writeBooruScenePrompt', () => {
     )
     const result = await writeBooruScenePrompt(baseInput())
     expect(result).toBe('1girl, solo, blonde hair, bedroom')
+  })
+
+  it('lands the engine expression inside the matching character run', async () => {
+    const cora = makeChar({
+      name: 'Cora',
+      imageTags: '1girl, black hair, red eyes',
+      metadata: writeBodyState(null, { ...defaultBodyState(20), arousal: 90 }),
+    })
+    mocks.generateStructured.mockResolvedValue(
+      sections({
+        rating: '',
+        countTags: '1girl, solo',
+        characters: ['1girl, black hair, red eyes, nude'],
+        expressions: ['smile'],
+      }),
+    )
+    const result = await writeBooruScenePrompt(
+      baseInput({ presentCharacters: [cora], tagCharacterNames: ['Cora'], beMode: true }),
+    )
+    expect(result).toBe(
+      '1girl, solo, black hair, red eyes, nude, blush, half-closed eyes, open mouth, smile, bedroom',
+    )
   })
 
   it('includes the current location block when a location is current', async () => {

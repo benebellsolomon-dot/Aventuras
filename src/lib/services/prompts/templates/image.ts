@@ -67,7 +67,7 @@ Analyze the narrative and identify up to {{ maxImages }} key visual moments (0 =
 
 ## Prompt Structure (follow this EXACT section order — do not rearrange)
 1. **Camera & framing** - establish shot type FIRST: wide shot / medium shot / close-up / over-the-shoulder, plus an angle when it strengthens the moment (low angle = imposing, high angle = vulnerable, dutch angle = tension, bird's-eye = overview). Match camera to emotional tone.
-2. **Character appearance** - cover ALL of: age bracket, race/species if not human, skin tone, eye color, hair (color, length, style), build, facial expression
+2. **Character appearance** - cover ALL of: age bracket, race/species if not human, skin tone, eye color, hair (color, length, style), build, facial expression. Name the expression from the character's OWN emotional state in this beat (delighted, grieving, furious, terrified, embarrassed and blushing, aroused, coolly composed) — never a generic "neutral expression", and never the same face on two different characters.
 3. **Clothing/accessories** - what they're wearing AND its current state, distinctive items, held objects
 4. **Action/pose** - what they're doing, body position, gaze direction
 5. **Setting/environment (always present, always near the end)** - where they are, time of day, then NAME the light source and its quality (golden hour sunlight, volumetric light through windows, rim lighting, dramatic shadows, backlighting, warm firelight, cold moonlight, neon glow), plus atmosphere details (dust motes, rain, mist, depth of field)
@@ -437,7 +437,7 @@ const imageBooruScenePromptTemplate: PromptTemplate = {
     'Converts one scene into a single Danbooru-tag image prompt for booru anime models (copies locked identity tags verbatim, sets count/shot/clothing/scene tags)',
   content: `You are a booru image-prompt specialist. Convert the scene below into booru tags for an anime tag model (Illustrious / Pony / NoobAI / …). These models follow Danbooru tags far more reliably than prose sentences: the count tag controls how many people render, and tag ORDER controls what actually gets rendered — the text encoder attends most strongly to the first ~75 tokens, so anything past that is decoration.
 
-You do NOT write one finished string. Fill the FIELDS below; the pipeline joins them in the order that renders correctly (rating → camera → count → action → characters → scene) and prepends the quality tags. Every field is comma-separated Danbooru tags, English only, lowercase, NO prose sentences and NO explanation.
+You do NOT write one finished string. Fill the FIELDS below; the pipeline joins them in the order that renders correctly (rating → camera → count → action → characters, each run closing on that person's expression → scene) and prepends the quality tags. Every field is comma-separated Danbooru tags, English only, lowercase, NO prose sentences and NO explanation.
 
 FIELD "rating": exactly one content rating — "general" (everyday scenes), "sensitive" (suggestive — cleavage, underwear, lingerie), or "explicit, uncensored, detailed anatomy" (nudity or sexual content). Match the scene.
 
@@ -447,10 +447,22 @@ FIELD "countTags": count EVERY person visible in the scene, INCLUDING people who
 
 FIELD "action": what the people are DOING — the single most important field, because it is what the failed images leave out. Tag the act, the contact, and the body positions: hetero / yuri / yaoi, sex, vaginal, paizuri, cowgirl position, missionary, hug, kiss, grabbing, breast squeezing, penis between breasts, straddling, lying, on back, on side, sitting, kneeling, standing, arms up, holding hands, and the object interactions the beat describes. For a quiet scene this is still the pose (sitting, lying on bed, reading, walking). 4-10 tags.
 
-FIELD "characters": an ARRAY — one entry per person, in the SAME order as the count tags, each a FLAT comma-separated tag run. Never wrap a run in parentheses: booru models have no regional prompter, so parentheses are only emphasis and a long parenthesized clause pushes the rest of the prompt out of the attention window. Order inside a run: identity tags → clothing → breast-size band → expression.
+FIELD "characters": an ARRAY — one entry per person, in the SAME order as the count tags, each a FLAT comma-separated tag run. Never wrap a run in parentheses: booru models have no regional prompter, so parentheses are only emphasis and a long parenthesized clause pushes the rest of the prompt out of the attention window. Order inside a run: identity tags → clothing → breast-size band.
   - A person in the "Named subjects" list: copy their LOCKED IDENTITY TAGS VERBATIM (do not alter, reorder, or drop them). If they have no locked tags but an APPEARANCE line, convert that prose into atomic booru tags (e.g. "long hair, wavy hair, blonde hair, blue eyes, fair skin"). Then add their current clothing + state, their body line from the dossier, and their expression.
   - A person NOT in the list (unnamed partner / protagonist): generic booru tags drawn from the scene — e.g. "muscular, short dark hair, nude" for an unnamed man. Keep these SHORT; the named subjects carry the identity load.
   - Keep every trait inside its owner's entry — never merge two people into one run. With THREE OR MORE people, and only then, start each run with a spatial-anchor tag ("on the left", "behind her", "in the background") as a plain tag, still without parentheses; with one or two people the interaction tags in "action" already fix the arrangement.
+
+FIELD "expressions": REQUIRED, an ARRAY the SAME length and order as "characters" — each entry is that ONE person's 1-3 expression tags for THIS beat. A face is never optional: an untagged character renders blank-faced, which reads as a different person from beat to beat. Read the narrative beat and give each person the emotion SHE is feeling right now — never a single shared mood copied across the array. Two people in the same room routinely need opposite faces (one "grin", the other "scowl, clenched teeth").
+  Use REAL danbooru expression tags. The vocabulary, by emotion family:
+  - joy: smile, grin, happy, laughing, light smile, :d
+  - sadness: sad, frown, crying, tears, teary eyes, crying with eyes open
+  - anger: angry, scowl, clenched teeth, glaring, annoyed, pout, v-shaped eyebrows
+  - fear / shock: scared, surprised, wide-eyed, trembling, nervous, shaking, sweatdrop
+  - embarrassment: embarrassed, blush, nose blush, full-face blush, averted eyes, looking away, covering face, flying sweatdrops
+  - affection / seduction: loving gaze, seductive smile, naughty face, bedroom eyes, heart, heart-shaped pupils
+  - arousal, as a LADDER: mild → "blush, half-closed eyes"; strong → "heavy breathing, open mouth, moaning"; overwhelmed → "rolling eyes, tongue out, ahegao, drooling, torogao". The overwhelmed rung is ONLY for an unmistakably explicit beat — one you also rated "explicit, uncensored, detailed anatomy". Never on a "general" or "sensitive" scene.
+  - composure: expressionless, smug, serious, closed eyes
+  If a subject's dossier carries an "expression (engine state)" line, copy those tags FIRST — they are the tracked state of that character — then add at most one more tag for what the beat itself shows. For the faceless protagonist-POV male below, use an empty string: he has no face to render.
 
 PROTAGONIST-POV MALE: when the male participant IS the story's protagonist — the scene text addresses him as "you" / "your hands" / "your chest", i.e. the reader is that man — his run is "pov, male pov, faceless male" plus AT MOST one body tag ("muscular"). Nothing else: no face, no hair, no eyes, no expression. Also put "pov" in the camera field. This is the standard booru technique: anime tag models render male anatomy and male faces badly, and a fully-described 1boy in a two-person explicit scene is where they fail hardest — the faceless first-person form both dodges that failure and matches the reader's own viewpoint. Still count him in the count tags ("1boy, 1girl"); he is in frame, just not a described character. A male who is NOT the protagonist (a third party the narration describes from outside) keeps his normal full 1boy description.
 
@@ -462,14 +474,15 @@ RULES:
 - Use the dossier's CURRENT CLOTHING and BODY line verbatim where given — never re-invent an outfit or a body size. The body line is already in tag form; copy it, do not paraphrase it into prose.
 - For every female subject, state a breast-size band matching the dossier: flat chest / small breasts / medium breasts / large breasts / huge breasts / gigantic breasts / hyper breasts. Match clothing to the size — at large sizes clothes strain, gape, or fail.
 - Do NOT add art-style or quality tags (masterpiece, best quality, anime style, realistic, 4k) — those are prepended automatically and duplicates hurt the result.
-- BUDGET: about 60 tags TOTAL across all fields (roughly 30-40 for a single subject). If the scene needs more, cut setting detail first, then interaction detail — never identity tags. Anything past the budget is trimmed automatically, setting first.
+- BUDGET: about 60 tags TOTAL across all fields (roughly 30-40 for a single subject). If the scene needs more, cut setting detail first, then a person's SPARE expression tags, then interaction detail — never identity tags, never a person's last expression tag. Anything past the budget is trimmed automatically in that same order.
 
 Worked example — the protagonist ("you") on a bed at night with a named woman on her back; he is the viewer, so he takes the faceless POV form:
   rating: "explicit, uncensored, detailed anatomy"
   camera: "cowboy shot, pov"
   countTags: "1boy, 1girl"
   action: "hetero, paizuri, breast squeezing, penis between breasts, lying on back"
-  characters: ["pov, male pov, faceless male, muscular", "blonde hair, golden eyes, fair skin, slim, wide hips, young adult, completely nude, huge breasts, lactation, open mouth, blush"]
+  characters: ["pov, male pov, faceless male, muscular", "blonde hair, golden eyes, fair skin, slim, wide hips, young adult, completely nude, huge breasts, lactation"]
+  expressions: ["", "blush, half-closed eyes, open mouth"]
   scene: "ornate manor bedroom, king-sized bed, dark silk bedsheets, mahogany bedframe, velvet curtains, moonlight through window, night, dramatic shadow"
   (had the man been a third party the narration describes from outside, his run would instead be a normal "muscular, short dark hair, completely nude" and the camera would carry no "pov".)`,
   userContent: `## Scene to illustrate

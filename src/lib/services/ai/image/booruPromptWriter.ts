@@ -22,6 +22,11 @@
  * window; the model rendered the identities and invented its own scene (a bed
  * scene came back as a standing hallway shot). Order is deterministic here.
  *
+ * EXPRESSION: each character's run ends in her own 1-3 expression tags, merged
+ * from the writer's read of the narrative beat and the engine's deterministic
+ * soft state (see expressionTags.ts). Per-character by construction — a shared
+ * mood block would put the same face on everyone in frame.
+ *
  * Best-effort by contract, exactly like `extractIdentity`: if the setting is
  * off, the model is not a booru model, no preset is assigned, or the AI call
  * throws, the caller keeps the original story-written prompt. It never throws.
@@ -50,6 +55,7 @@ import {
 import { generateStructured } from '../sdk/generate'
 import { detectPromptDialect } from './dialect'
 import { compressStateCues, joinTags, toTags } from './booruTags'
+import { engineExpressionTags, isExpressionTag } from './expressionTags'
 import type { Character, Location, VisualDescriptors } from '$lib/types'
 
 const log = createLogger('BooruPromptWriter')
@@ -70,9 +76,16 @@ const NARRATIVE_CONTEXT_CHARS = 1200
  */
 export const BOORU_MAX_TAGS = 60
 
-/** Floors for the two trimmable blocks — a scene still needs a place and a beat. */
+/** Floors for the trimmable blocks — a scene still needs a place and a beat. */
 const MIN_SCENE_TAGS = 3
 const MIN_ACTION_TAGS = 2
+
+/**
+ * A face never loses its LAST expression tag: an expressionless character is the
+ * exact failure this layer exists to fix, and setting detail has already been cut
+ * to its own floor before expressions are touched at all.
+ */
+const MIN_EXPRESSION_TAGS = 1
 
 /**
  * The writer emits SECTIONS, not one pre-ordered string: the final tag order is
@@ -104,7 +117,12 @@ const booruScenePromptSchema = z.object({
   characters: z
     .array(z.string())
     .describe(
-      'One FLAT comma-separated tag run per person, in the same order as the count tags: locked identity tags copied verbatim, then clothing, breast-size band, expression. No parentheses. A male who is the story protagonist (the scene addresses him as "you") gets "pov, male pov, faceless male" plus at most "muscular" instead of a described 1boy.',
+      'One FLAT comma-separated tag run per person, in the same order as the count tags: locked identity tags copied verbatim, then clothing, breast-size band. No parentheses. A male who is the story protagonist (the scene addresses him as "you") gets "pov, male pov, faceless male" plus at most "muscular" instead of a described 1boy.',
+    ),
+  expressions: z
+    .array(z.string())
+    .describe(
+      'REQUIRED. One 1-3 tag expression run per person, SAME length and order as "characters": that person\'s own emotional state in THIS beat, as real danbooru expression tags (e.g. "blush, averted eyes"). Never a shared mood. Empty string only for a faceless protagonist-POV male.',
     ),
   scene: z
     .string()
@@ -123,6 +141,126 @@ const SIZE_TAG_VOCABULARY: ReadonlySet<string> = new Set([
 
 const isSizeTag = (tag: string): boolean => SIZE_TAG_VOCABULARY.has(tag.trim().toLowerCase())
 
+// ============================================================================
+// Engine-derived expression cues
+// ============================================================================
+
+/**
+ * One girl's deterministic expression block plus the identity tags that let the
+ * assembly find HER run among the writer's flat runs.
+ */
+export interface CharacterExpressionCue {
+  /** Her locked identity bank, split into tags — the run-matching key. */
+  identityTags: string[]
+  /** Engine-derived expression tags, strongest signal first. */
+  expressionTags: string[]
+}
+
+/** Identity tags a run must share with a cue before it counts as that subject. */
+const MIN_IDENTITY_MATCH = 2
+
+/** The faceless protagonist-POV run carries no expression — he has no face. */
+const POV_RUN_TAGS: ReadonlySet<string> = new Set(['faceless male', 'male pov', 'pov'])
+
+const isProtagonistRun = (run: ReadonlyArray<string>): boolean =>
+  run.some((tag) => POV_RUN_TAGS.has(tag.trim().toLowerCase()))
+
+/** Case-insensitive dedupe within a single list, keeping the first occurrence. */
+function dedupeTags(tags: ReadonlyArray<string>): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const tag of tags) {
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(tag)
+  }
+  return out
+}
+
+/**
+ * Attach each engine cue to the writer run that depicts that girl.
+ *
+ * The writer returns FLAT runs with no owner label, so the join is made on the
+ * locked identity bank the template tells it to copy verbatim: the run sharing
+ * the most bank tags (at least `MIN_IDENTITY_MATCH`, so a lone shared "1girl"
+ * cannot claim a run) wins her cue. A subject with no bank yet has her prose
+ * converted to tags and shares nothing verbatim, so unmatched cues fall back to
+ * filling the remaining described runs in order — skipping the faceless POV run.
+ *
+ * Best-effort by design: a cue that finds no run simply contributes nothing, and
+ * the writer's own beat-driven expressions still stand.
+ */
+export function assignEngineExpressions(
+  runs: ReadonlyArray<ReadonlyArray<string>>,
+  cues: ReadonlyArray<CharacterExpressionCue>,
+): string[][] {
+  const assigned: string[][] = runs.map(() => [])
+  const runSets = runs.map((run) => new Set(run.map((tag) => tag.toLowerCase())))
+  const claimed = new Set<number>()
+  const unmatched: CharacterExpressionCue[] = []
+
+  for (const cue of cues) {
+    if (cue.expressionTags.length === 0) continue
+    let best = -1
+    let bestScore = 0
+    for (let i = 0; i < runs.length; i++) {
+      if (claimed.has(i)) continue
+      const score = cue.identityTags.filter((tag) => runSets[i].has(tag.toLowerCase())).length
+      if (score > bestScore) {
+        bestScore = score
+        best = i
+      }
+    }
+    if (best >= 0 && bestScore >= MIN_IDENTITY_MATCH) {
+      claimed.add(best)
+      assigned[best] = [...cue.expressionTags]
+    } else {
+      unmatched.push(cue)
+    }
+  }
+
+  const open = runs
+    .map((_, index) => index)
+    .filter((index) => !claimed.has(index) && !isProtagonistRun(runs[index]))
+  unmatched.forEach((cue, slot) => {
+    const index = open[slot]
+    if (index === undefined) return
+    assigned[index] = [...cue.expressionTags]
+  })
+
+  return assigned
+}
+
+/** One character's run, split so expressions can be placed and budgeted apart. */
+interface PreparedRun {
+  /** Identity + clothing tags, in the writer's order. */
+  base: string[]
+  /** Her expression tags: engine-derived first, then the writer's. */
+  expression: string[]
+}
+
+/**
+ * Drop `count` expression tags from the tails of the longest runs first, never
+ * taking a run below `MIN_EXPRESSION_TAGS`. Tail-first means the writer's
+ * beat-driven extras go before the engine's — the engine owns the arousal axis.
+ */
+function trimExpressionRuns(runs: ReadonlyArray<PreparedRun>, count: number): PreparedRun[] {
+  const lengths = runs.map((run) => run.expression.length)
+  let remaining = count
+  while (remaining > 0) {
+    let target = -1
+    for (let i = 0; i < lengths.length; i++) {
+      if (lengths[i] <= MIN_EXPRESSION_TAGS) continue
+      if (target === -1 || lengths[i] > lengths[target]) target = i
+    }
+    if (target === -1) break
+    lengths[target] -= 1
+    remaining -= 1
+  }
+  return runs.map((run, i) => ({ base: run.base, expression: run.expression.slice(0, lengths[i]) }))
+}
+
 /**
  * Compose the writer's sections into the final booru tag order.
  *
@@ -140,13 +278,27 @@ const isSizeTag = (tag: string): boolean => SIZE_TAG_VOCABULARY.has(tag.trim().t
  * (nanogpt — measured, see providerCapabilities.ts), so position is the only
  * emphasis lever left. Multi-subject runs keep their own bands, in order.
  *
+ * EXPRESSION (this layer) stays INSIDE each character's run, at its tail —
+ * after that person's identity and clothing, because it describes HER and must
+ * not bleed onto the other subject. Each run's expressions are the engine's
+ * deterministic tags first (ground truth for the arousal axis) and the writer's
+ * beat-driven ones after.
+ *
  * Tags are de-duplicated globally (the count tag routinely reappears inside a
  * character's own run) keeping the FIRST occurrence — which is what makes the
- * hoisted size copy the surviving one and drops the in-run duplicate. The total
- * is capped at `BOORU_MAX_TAGS`, trimming setting detail first and interaction
- * second — identity and size are never trimmed.
+ * hoisted size copy the surviving one and drops the in-run duplicate. Expression
+ * tags are the one deliberate exception: they dedupe only within their own run,
+ * because two girls sharing a mood must BOTH render it and a global dedupe would
+ * silently blank the second one's face.
+ *
+ * The total is capped at `BOORU_MAX_TAGS`. Drop order is setting → expression →
+ * interaction; identity, size, rating, camera and count are never trimmed, and
+ * each floor (3 setting, 1 expression per character, 2 interaction) holds.
  */
-export function composeBooruScenePrompt(sections: Partial<BooruSceneSections>): string {
+export function composeBooruScenePrompt(
+  sections: Partial<BooruSceneSections>,
+  engineExpressions: ReadonlyArray<CharacterExpressionCue> = [],
+): string {
   const seen = new Set<string>()
   const dedupe = (tags: ReadonlyArray<string>): string[] => {
     const out: string[] = []
@@ -167,17 +319,30 @@ export function composeBooruScenePrompt(sections: Partial<BooruSceneSections>): 
   // duplicate falls away.
   const characterRuns = (sections.characters ?? []).map((run) => toTags(run))
   const size = dedupe(characterRuns.flatMap((run) => run.filter(isSizeTag)))
-  const characters = characterRuns.flatMap((run) => dedupe(run))
+  const engineByRun = assignEngineExpressions(characterRuns, engineExpressions)
+  const runs: PreparedRun[] = characterRuns.map((run, index) => ({
+    base: dedupe(run.filter((tag) => !isExpressionTag(tag))),
+    expression: dedupeTags([
+      ...engineByRun[index],
+      ...toTags(sections.expressions?.[index]),
+      ...run.filter(isExpressionTag),
+    ]),
+  }))
   const scene = dedupe(toTags(sections.scene))
 
-  const fixed = rating.length + camera.length + count.length + size.length + characters.length
-  const overBy = (sceneLength: number, actionLength: number): number =>
-    fixed + sceneLength + actionLength - BOORU_MAX_TAGS
+  const baseTotal = runs.reduce((total, run) => total + run.base.length, 0)
+  const expressionTotal = (prepared: ReadonlyArray<PreparedRun>): number =>
+    prepared.reduce((total, run) => total + run.expression.length, 0)
+  const fixed = rating.length + camera.length + count.length + size.length + baseTotal
+  const overBy = (sceneLength: number, expressionLength: number, actionLength: number): number =>
+    fixed + sceneLength + expressionLength + actionLength - BOORU_MAX_TAGS
 
-  const sceneOver = overBy(scene.length, action.length)
+  const sceneOver = overBy(scene.length, expressionTotal(runs), action.length)
   const trimmedScene =
     sceneOver > 0 ? scene.slice(0, Math.max(MIN_SCENE_TAGS, scene.length - sceneOver)) : scene
-  const actionOver = overBy(trimmedScene.length, action.length)
+  const expressionOver = overBy(trimmedScene.length, expressionTotal(runs), action.length)
+  const trimmedRuns = expressionOver > 0 ? trimExpressionRuns(runs, expressionOver) : runs
+  const actionOver = overBy(trimmedScene.length, expressionTotal(trimmedRuns), action.length)
   const trimmedAction =
     actionOver > 0 ? action.slice(0, Math.max(MIN_ACTION_TAGS, action.length - actionOver)) : action
 
@@ -187,7 +352,7 @@ export function composeBooruScenePrompt(sections: Partial<BooruSceneSections>): 
     ...count,
     ...trimmedAction,
     ...size,
-    ...characters,
+    ...trimmedRuns.flatMap((run) => [...run.base, ...run.expression]),
     ...trimmedScene,
   ])
 }
@@ -296,6 +461,20 @@ function bodyStatePhrase(metadata: Character['metadata']): string | null {
   return joinTags(parts)
 }
 
+/**
+ * Image-facing expression phrase for a subject — the engine's deterministic
+ * emotional read (arousal band, a growth that just landed, transformation
+ * attitude, a bond extreme) already in booru tag form. Shown in the dossier so
+ * the writer can copy it, AND merged deterministically at compose time so the
+ * face survives even when the writer ignores it.
+ */
+function expressionPhrase(metadata: Character['metadata']): string | null {
+  const state = readBodyState(metadata)
+  if (!state) return null
+  const tags = engineExpressionTags(state)
+  return tags.length > 0 ? joinTags(tags) : null
+}
+
 /** Resolve the tagged subjects in tag order (skips names with no present match). */
 function resolveSubjects(present: Character[], tagNames: string[]): Character[] {
   const byName = new Map(present.map((c) => [c.name.toLowerCase(), c]))
@@ -350,12 +529,45 @@ export function buildSubjectDossier(
     if (beMode) {
       const body = bodyStatePhrase(c.metadata)
       if (body) lines.push(`  body: ${body}`)
+      const expression = expressionPhrase(c.metadata)
+      if (expression) {
+        lines.push(
+          `  expression (engine state — copy VERBATIM into her expression run, then add what the beat shows): ${expression}`,
+        )
+      }
     }
 
     return lines.join('\n')
   })
 
   return blocks.join('\n')
+}
+
+/**
+ * Engine expression cues for the tagged subjects, in tag order — the
+ * deterministic half of the expression layer, handed to
+ * `composeBooruScenePrompt` so it lands in each girl's own run regardless of
+ * what the writer did with the dossier line.
+ *
+ * BE-mode gated for the same reason the body line is: the BE reducer is the only
+ * writer of this state, so outside a BE story there is nothing to read and the
+ * writer's beat-driven expressions stand alone.
+ */
+export function buildExpressionCues(
+  presentCharacters: Character[],
+  tagCharacterNames: string[],
+  beMode: boolean,
+): CharacterExpressionCue[] {
+  if (!beMode) return []
+  const cues: CharacterExpressionCue[] = []
+  for (const character of resolveSubjects(presentCharacters, tagCharacterNames)) {
+    const state = readBodyState(character.metadata)
+    if (!state) continue
+    const expressionTags = engineExpressionTags(state)
+    if (expressionTags.length === 0) continue
+    cues.push({ identityTags: toTags(normalizeBank(character.imageTags)), expressionTags })
+  }
+  return cues
 }
 
 /** Current-location scene block (name + description), or empty when unknown. */
@@ -436,8 +648,12 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
 
     // Order is imposed here, not asked of the model: the sections come back
     // labelled, so the attention-critical action-before-identity ordering and
-    // the tag budget are deterministic.
-    const rawWritten = composeBooruScenePrompt(raw)
+    // the tag budget are deterministic. The engine's expression cues merge into
+    // the matching character run at the same time.
+    const rawWritten = composeBooruScenePrompt(
+      raw,
+      buildExpressionCues(input.presentCharacters, input.tagCharacterNames, input.beMode),
+    )
     if (!rawWritten) {
       log('booru prompt writer returned empty — falling back')
       return null
