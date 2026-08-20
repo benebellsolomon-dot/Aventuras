@@ -952,5 +952,127 @@ describe('store harness — check-backed growth (growthIntent)', () => {
       expect(checkLogRows()[0].targetInferred).toBeUndefined()
       expect(checkLogRows()[0].target).toBeUndefined()
     })
+
+    /**
+     * The third live failure: the scene classifier returned
+     * `presentCharacterNames: []` on a turn whose own beEvents named Amelia. The
+     * raw presence read meant BOTH consumers degraded at once — the reducer
+     * processed nobody (no events, no ticks, empty beLog) and the target fallback
+     * saw the whole tracked cast (two candidates) and refused to infer. One
+     * hiccup, entire engine off. `effectivePresence` unions the referenced names
+     * back in, so the same turn resolves to exactly Amelia.
+     */
+    describe('effective presence — the empty presence list', () => {
+      /** Every reducer outcome row on the delta, not just the growth ones. */
+      const beLogRows = (): Array<Record<string, unknown>> => {
+        const call = db.calls.find((c) => c.method === 'updateStoryEntry')
+        const delta = (
+          call?.args[1] as { worldStateDelta?: { beLog?: Array<Record<string, unknown>> } }
+        )?.worldStateDelta
+        return delta?.beLog ?? []
+      }
+
+      const bodyWritesFor = (characterId: string): number =>
+        db.calls.filter((c) => c.method === 'updateCharacter' && c.args[0] === characterId).length
+
+      /** The live cast: a big girl and a small one, both engine-tracked. */
+      const twoGirls = () => {
+        story.currentStory = makeStory({ settings: CATALYST_ONLY }) as never
+        story.characters = [
+          makeProtagonist('Rowan'),
+          makeGirlWithBodyState('Amelia', {}, 24),
+          makeGirlWithBodyState('Elara', {}, 6),
+        ] as never
+      }
+
+      it('an empty presence list with beEvents naming one girl: she ticks, the check resolves to her, the other is untouched', async () => {
+        settingsMock.experimentalFeatures.stateTracking = true
+        twoGirls()
+
+        await story.applyClassificationResult(
+          makeClassificationResult({
+            // `attempt` is not growth-eligible in this story, so the tier move can
+            // only come from the promoted (guaranteed) catalyst.
+            beEvents: [{ character: 'Amelia', kind: 'attempt', intensity: 2 }],
+            scene: { presentCharacterNames: [] },
+          }) as never,
+          'entry-4',
+          untargeted() as never,
+        )
+
+        // The engine did not sit the turn out.
+        expect(beLogRows().length).toBeGreaterThan(0)
+        expect(
+          beLogRows().some((row) => row.character === 'Amelia' && row.kind === 'catalyst'),
+        ).toBe(true)
+        expect(tierOf('Amelia')).toBe(25)
+        // …and it picked her by name rather than guessing between two girls.
+        expect(checkLogRows()[0]).toMatchObject({
+          target: 'Amelia',
+          targetId: 'char-amelia',
+          targetInferred: true,
+        })
+        // Elara was never referenced: no growth, no rows, no write.
+        expect(tierOf('Elara')).toBe(6)
+        expect(beLogRows().every((row) => row.character !== 'Elara')).toBe(true)
+        expect(bodyWritesFor('char-elara')).toBe(0)
+      })
+
+      it('control — BOTH girls referenced: two candidates, so nothing is inferred, but both still tick', async () => {
+        settingsMock.experimentalFeatures.stateTracking = true
+        twoGirls()
+
+        await story.applyClassificationResult(
+          makeClassificationResult({
+            beEvents: [{ character: 'Amelia', kind: 'attempt', intensity: 2 }],
+            bondEvents: [{ character: 'Elara', direction: 'warm', intensity: 1 }],
+            scene: { presentCharacterNames: [] },
+          }) as never,
+          'entry-4',
+          untargeted() as never,
+        )
+
+        // Ambiguous targeting still refuses to guess — no promotion for either.
+        expect(tierOf('Amelia')).toBe(24)
+        expect(tierOf('Elara')).toBe(6)
+        expect(checkLogRows()[0].target).toBeUndefined()
+        expect(checkLogRows()[0].targetInferred).toBeUndefined()
+        // The engine still ran for both: a refused inference is not a dead turn.
+        expect(bodyWritesFor('char-amelia')).toBe(1)
+        expect(bodyWritesFor('char-elara')).toBe(1)
+      })
+
+      it('nothing named at all: the whole tracked cast ticks rather than nobody', async () => {
+        settingsMock.experimentalFeatures.stateTracking = false
+        twoGirls()
+
+        await story.applyClassificationResult(
+          makeClassificationResult({ scene: { presentCharacterNames: [] } }) as never,
+          'entry-4',
+        )
+
+        expect(bodyWritesFor('char-amelia')).toBe(1)
+        expect(bodyWritesFor('char-elara')).toBe(1)
+        // A passive tick moves fill/mood, never size.
+        expect(tierOf('Amelia')).toBe(24)
+        expect(tierOf('Elara')).toBe(6)
+      })
+
+      it('an explicit presence list still narrows: the absent girl neither ticks nor competes', async () => {
+        settingsMock.experimentalFeatures.stateTracking = true
+        twoGirls()
+
+        await story.applyClassificationResult(
+          makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+          'entry-4',
+          untargeted() as never,
+        )
+
+        expect(checkLogRows()[0]).toMatchObject({ target: 'Amelia', targetInferred: true })
+        expect(tierOf('Amelia')).toBe(25)
+        expect(tierOf('Elara')).toBe(6)
+        expect(bodyWritesFor('char-elara')).toBe(0)
+      })
+    })
   })
 })

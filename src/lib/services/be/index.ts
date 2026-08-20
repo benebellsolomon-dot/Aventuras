@@ -125,8 +125,12 @@ export {
 } from './context'
 export {
   PRESENCE_LOOKBACK,
+  effectivePresence,
+  normalizePresenceName,
   readScenePresence,
+  referencedCharacterNames,
   selectScenePresent,
+  type EffectivePresenceInput,
   type PresenceEntrySource,
 } from './presence'
 export {

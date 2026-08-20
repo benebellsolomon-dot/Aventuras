@@ -39,11 +39,13 @@ import {
   defaultBodyState,
   exposureEventsFromResult,
   detectDrift,
+  effectivePresence,
   findMilkItem,
   lactationOf,
   measurements,
   milkItemMetadata,
   milkItemName,
+  normalizePresenceName,
   qualityFromBand,
   parseGrowthEligibleKinds,
   promoteGrowthIntent,
@@ -3241,13 +3243,16 @@ class StoryStore {
    * `targetCharacter` on a live crit, which used to mean no target, no promotion,
    * essence spent and zero growth. Requiring TWO tags to land together is the
    * fragility; a scene with exactly one possible subject does not need the second
-   * one. Candidates use the notion the reducer loop already uses one level down —
-   * a non-protagonist who is scene-present (this turn's classifier presence list)
-   * and already carries body state. Presence that reads as unknown (the
-   * classifier intermittently returns an empty list, or names only untracked
-   * extras) degrades to the whole tracked cast, matching be/presence.ts's
-   * include-when-in-doubt bias; that only ever widens the candidate set, so it
-   * can turn an inference OFF, never on.
+   * one. Candidates use the notion the reducer loop uses one level down — the
+   * SAME `effectivePresence` derivation, so the two consumers can never disagree
+   * about who is in the scene: a non-protagonist who is effectively present and
+   * already carries body state. That derivation unions the explicit presence list
+   * with everyone this turn's classifier arrays named, which is what fixes the
+   * live failure: presence came back empty while beEvents named her outright.
+   * Presence that still reads as unknown (nothing named anyone) or that names
+   * only untracked extras degrades to the whole tracked cast, matching
+   * be/presence.ts's include-when-in-doubt bias; that only ever widens the
+   * candidate set, so it can turn an inference OFF, never on.
    *
    * Zero or several candidates → untouched, so nothing is promoted and nothing is
    * suppressed: ambiguous targeting must not guess between girls. Cast turns are
@@ -3267,10 +3272,14 @@ class StoryStore {
     const tracked = this.characters.filter(
       (c) => c.relationship !== 'self' && readBodyState(c.metadata) !== null,
     )
-    const presentNames = new Set(
-      (result.scene?.presentCharacterNames ?? []).map((name) => name.trim().toLowerCase()),
-    )
-    const present = tracked.filter((c) => presentNames.has(c.name.trim().toLowerCase()))
+    // No checkTargetName here by construction: this method only runs for a record
+    // that carries no target at all.
+    const presentNames = effectivePresence({
+      presentCharacterNames: result.scene?.presentCharacterNames,
+      classification: result as unknown as Record<string, unknown>,
+      trackedNames: tracked.map((c) => c.name),
+    })
+    const present = tracked.filter((c) => presentNames.has(normalizePresenceName(c.name)))
     const candidates = present.length > 0 ? present : tracked
     if (candidates.length !== 1) return checkRecord
 
@@ -3537,10 +3546,23 @@ class StoryStore {
     }
 
     // Present-only tick gating (Spec 1 Task 9 ruling): the passive fill/pressure
-    // tick runs for characters the classifier placed in the scene.
-    const presentNames = new Set(
-      (result.scene?.presentCharacterNames ?? []).map((name) => name.trim().toLowerCase()),
-    )
+    // tick runs for characters the classifier placed in the scene — through the
+    // shared derivation (be/presence.ts), NOT the raw presence field. That field
+    // intermittently comes back empty, and reading it raw meant a turn where the
+    // classifier still named girls in its beEvents processed literally nobody:
+    // no events, no ticks, empty beLog. The union pulls those girls back in, and
+    // an all-empty read falls back to the whole tracked cast rather than
+    // switching the engine off for the turn.
+    const presentNames = effectivePresence({
+      presentCharacterNames: result.scene?.presentCharacterNames,
+      classification: result as unknown as Record<string, unknown>,
+      // The target is already resolved (tagged, or filled by
+      // withInferredGrowthTarget before this method was called).
+      checkTargetName: checkRecord ? (this.resolveCheckTarget(checkRecord)?.name ?? null) : null,
+      trackedNames: this.characters
+        .filter((c) => c.relationship !== 'self' && readBodyState(c.metadata) !== null)
+        .map((c) => c.name),
+    })
     // Finalized narrative for output-side drift detection (Spec 1 Task 6).
     const narrativeContent = this.entries.find((e) => e.id === entryId)?.content ?? ''
 
@@ -3568,7 +3590,7 @@ class StoryStore {
       const charBondEvents = bondEventsByCharacterId.get(character.id) ?? []
       const charExposureEvents = exposureEventsByCharacterId.get(character.id) ?? []
       const charSupplyDelta = supplyDeltaByCharacterId.get(character.id) ?? 0
-      const isPresent = presentNames.has(character.name.toLowerCase())
+      const isPresent = presentNames.has(normalizePresenceName(character.name))
       let state = readBodyState(character.metadata)
 
       // Auto-seed on a character's first event: tier sniffed from her own

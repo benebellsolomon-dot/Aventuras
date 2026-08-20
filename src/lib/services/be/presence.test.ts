@@ -1,7 +1,14 @@
 // ---- Scene presence scoping for the [BODY STATE] block ----
 import { describe, expect, it } from 'vitest'
 
-import { PRESENCE_LOOKBACK, readScenePresence, selectScenePresent } from './presence'
+import {
+  PRESENCE_LOOKBACK,
+  effectivePresence,
+  normalizePresenceName,
+  readScenePresence,
+  referencedCharacterNames,
+  selectScenePresent,
+} from './presence'
 import type { PresenceEntrySource } from './presence'
 
 const narration = (names?: string[]): PresenceEntrySource => ({
@@ -86,5 +93,102 @@ describe('selectScenePresent', () => {
 
   it('returns the input untouched when there is nothing to scope', () => {
     expect(selectScenePresent([], [narration(['Mira'])])).toEqual([])
+  })
+})
+
+describe('referencedCharacterNames', () => {
+  it('collects names from every character-scoped classifier array', () => {
+    const names = referencedCharacterNames({
+      beEvents: [{ character: 'Amelia', kind: 'catalyst', intensity: 2 }],
+      beStates: [{ character: 'Elara', arousal: 40 }],
+      beConditions: [{ character: 'Mira', label: 'aching fullness' }],
+      bondEvents: [{ character: 'Lucy', direction: 'warm', intensity: 1 }],
+      exposureEvents: [{ character: 'Sable', intensity: 2 }],
+    })
+    expect(names).toEqual(['Amelia', 'Elara', 'Mira', 'Lucy', 'Sable'])
+  })
+
+  it('tolerates absent, non-array and malformed entries', () => {
+    expect(referencedCharacterNames(null)).toEqual([])
+    expect(referencedCharacterNames({})).toEqual([])
+    expect(referencedCharacterNames({ beEvents: 'nope' })).toEqual([])
+    expect(
+      referencedCharacterNames({
+        beEvents: [null, 'Amelia', { kind: 'catalyst' }, { character: '   ' }, { character: 7 }],
+      }),
+    ).toEqual([])
+  })
+
+  it('ignores arrays that are not presence evidence', () => {
+    expect(referencedCharacterNames({ entryUpdates: [{ character: 'Ghost' }] })).toEqual([])
+  })
+})
+
+describe('effectivePresence', () => {
+  const tracked = ['Amelia', 'Elara']
+
+  it('respects an explicit presence list', () => {
+    expect(effectivePresence({ presentCharacterNames: ['Amelia'], trackedNames: tracked })).toEqual(
+      new Set(['amelia']),
+    )
+  })
+
+  it('drops blank and non-string entries from the explicit list', () => {
+    expect(effectivePresence({ presentCharacterNames: ['  Amelia  ', '   ', null, 3] })).toEqual(
+      new Set(['amelia']),
+    )
+  })
+
+  it('adds girls the turn referenced by name even when the presence list is empty', () => {
+    // The live failure: presence came back [], the classifier's own beEvents
+    // named Amelia. She is in the scene; Elara is not.
+    const present = effectivePresence({
+      presentCharacterNames: [],
+      classification: { beEvents: [{ character: 'Amelia', kind: 'catalyst', intensity: 2 }] },
+      trackedNames: tracked,
+    })
+    expect(present).toEqual(new Set(['amelia']))
+  })
+
+  it('unions the explicit list with event-referenced girls rather than replacing it', () => {
+    const present = effectivePresence({
+      presentCharacterNames: ['Elara'],
+      classification: { bondEvents: [{ character: 'Amelia', direction: 'warm', intensity: 1 }] },
+      trackedNames: tracked,
+    })
+    expect(present).toEqual(new Set(['elara', 'amelia']))
+  })
+
+  it('includes the resolved check target', () => {
+    expect(effectivePresence({ presentCharacterNames: [], checkTargetName: 'Amelia' })).toEqual(
+      new Set(['amelia']),
+    )
+  })
+
+  it('falls back to every tracked girl when nothing named anyone', () => {
+    // Include-when-in-doubt (module header): a classifier hiccup must not switch
+    // the engine off for the turn.
+    expect(effectivePresence({ presentCharacterNames: [], trackedNames: tracked })).toEqual(
+      new Set(['amelia', 'elara']),
+    )
+    expect(effectivePresence({})).toEqual(new Set())
+  })
+
+  it('does not fall back once anything at all was named', () => {
+    const present = effectivePresence({
+      presentCharacterNames: ['Some Guard'],
+      trackedNames: tracked,
+    })
+    expect(present).toEqual(new Set(['some guard']))
+  })
+
+  it('normalizes every source the same way the module matches names', () => {
+    const present = effectivePresence({
+      presentCharacterNames: ['  aMELIA '],
+      classification: { beEvents: [{ character: 'AMELIA', kind: 'contact', intensity: 1 }] },
+      checkTargetName: 'amelia  ',
+    })
+    expect(present).toEqual(new Set(['amelia']))
+    expect(present.has(normalizePresenceName(' Amelia '))).toBe(true)
   })
 })

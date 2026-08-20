@@ -26,6 +26,9 @@ interface ClassificationScene {
 
 const normalize = (name: string): string => name.trim().toLowerCase()
 
+/** The module's matching key for a character name — trimmed and lowercased. */
+export const normalizePresenceName = normalize
+
 /**
  * The most recent non-empty classifier presence list, normalized for matching.
  * `null` means presence is UNKNOWN (no narration entry in the lookback window
@@ -72,4 +75,86 @@ export function selectScenePresent<T extends { name: string }>(
     const name = normalize(c.name)
     return pinned.has(name) || present.has(name)
   })
+}
+
+/**
+ * Classifier arrays whose entries carry a `character` name. Every one of them
+ * describes something that HAPPENED to her in this response (a growth event, an
+ * observed attitude/arousal read, a condition the scene established, a bond
+ * beat, a catalyst dose) — none of which is possible off-screen. They are
+ * therefore presence evidence exactly as strong as the presence list itself.
+ */
+const PRESENCE_IMPLYING_ARRAYS = [
+  'beEvents',
+  'beStates',
+  'beConditions',
+  'bondEvents',
+  'exposureEvents',
+] as const
+
+/**
+ * Every character name this turn's classifier output referenced through a
+ * character-scoped array. Raw (un-normalized) names, duplicates included;
+ * malformed entries are skipped, matching the tolerant *FromResult coercions.
+ */
+export function referencedCharacterNames(
+  classification: Record<string, unknown> | null | undefined,
+): string[] {
+  if (!classification) return []
+  const names: string[] = []
+  for (const field of PRESENCE_IMPLYING_ARRAYS) {
+    const raw = classification[field]
+    if (!Array.isArray(raw)) continue
+    for (const item of raw) {
+      if (typeof item !== 'object' || item === null) continue
+      const name = (item as { character?: unknown }).character
+      if (typeof name === 'string' && name.trim().length > 0) names.push(name)
+    }
+  }
+  return names
+}
+
+export interface EffectivePresenceInput {
+  /** The classifier's explicit `scene.presentCharacterNames` (any shape — tolerated). */
+  presentCharacterNames?: unknown
+  /** The whole classification result, for its character-scoped event arrays. */
+  classification?: Record<string, unknown> | null
+  /** This turn's resolved check target (tagged or engine-inferred), when there is one. */
+  checkTargetName?: string | null
+  /** Every tracked body-state girl — the include-when-in-doubt fallback. */
+  trackedNames?: readonly string[]
+}
+
+/**
+ * The set of characters this turn's engine treats as on-scene, normalized for
+ * matching. ONE derivation, shared by every in-turn presence consumer, because
+ * the classifier's presence field is flaky and each consumer degrading on its
+ * own produced a turn where the engine silently sat out entirely.
+ *
+ * Precedence (union, then fallback):
+ *   1. the explicit presence list (trimmed, non-empty entries),
+ *   2. UNION every name referenced by this turn's character-scoped classifier
+ *      arrays (beEvents/beStates/beConditions/bondEvents/exposureEvents) plus the
+ *      resolved check target — a turn that acted on her by name places her in the
+ *      scene even when the presence field forgot her,
+ *   3. still empty → every tracked girl. Per this module's include-when-in-doubt
+ *      bias (see the header): one classifier hiccup must not switch the engine
+ *      off, and a passive fill/mood tick for a briefly-mislabeled scene is a far
+ *      smaller error than a turn where nobody is processed at all.
+ *
+ * Pure: no store, no I/O.
+ */
+export function effectivePresence(input: EffectivePresenceInput): Set<string> {
+  const present = new Set<string>()
+  const add = (name: unknown): void => {
+    if (typeof name === 'string' && name.trim().length > 0) present.add(normalize(name))
+  }
+
+  if (Array.isArray(input.presentCharacterNames)) input.presentCharacterNames.forEach(add)
+  referencedCharacterNames(input.classification).forEach(add)
+  add(input.checkTargetName)
+  if (present.size > 0) return present
+
+  for (const name of input.trackedNames ?? []) add(name)
+  return present
 }

@@ -141,10 +141,15 @@ export function makeProtagonist(name: string, overrides: AnyRecord = {}): AnyRec
 /**
  * A non-protagonist carrying a real BE body state in metadata, so a beMode turn
  * drives the reducer and an engine write for her (rather than only seeding).
+ * `tier` seeds her starting size when a test needs two girls at different sizes.
  */
-export function makeGirlWithBodyState(name: string, overrides: AnyRecord = {}): AnyRecord {
+export function makeGirlWithBodyState(
+  name: string,
+  overrides: AnyRecord = {},
+  tier?: number,
+): AnyRecord {
   return makeCharacter(name, {
-    metadata: writeBodyState(null, { ...defaultBodyState(), quirks: [] }),
+    metadata: writeBodyState(null, { ...defaultBodyState(tier), quirks: [] }),
     ...overrides,
   })
 }
