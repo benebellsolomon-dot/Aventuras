@@ -66,10 +66,16 @@ pub struct BatchStatement {
 /// `PRAGMA foreign_keys = ON` so FK enforcement matches the rest of the app.
 /// `busy_timeout` lets the flush wait out a transient writer lock (WAL) from the
 /// plugin pool instead of failing the turn with `SQLITE_BUSY`.
+/// `synchronous = FULL` (D-6): the JS side runs WAL + NORMAL for background
+/// writes, where losing one to an OS crash is tolerable — but the turn flush is
+/// the atomicity anchor (narration is written earlier on the plugin pool, so a
+/// lost-but-reported-committed turn recreates the orphan CR-1 exists to
+/// prevent). One fsync per turn is noise next to the LLM round-trip.
 pub async fn init_pool(db_path: &Path) -> Result<Pool<Sqlite>, sqlx::Error> {
     let options = SqliteConnectOptions::from_str(&format!("sqlite:{}", db_path.display()))?
         .foreign_keys(true)
         .busy_timeout(Duration::from_secs(5))
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Full)
         .create_if_missing(false);
 
     SqlitePoolOptions::new()

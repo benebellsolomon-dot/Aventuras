@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { defaultBodyState, writeBodyState } from '$lib/services/be'
 import { defaultRpgSheet } from './derive'
-import { RPG_SHEET_KEY, readRpgSheet, sheetOrDefault, writeRpgSheet } from './metadata'
+import {
+  RPG_SHEET_KEY,
+  hasStoredRpgSheet,
+  isStoredRpgSheetInvalid,
+  readRpgSheet,
+  sheetOrDefault,
+  writeRpgSheet,
+} from './metadata'
 
 describe('rpgSheet metadata round-trip', () => {
   it('write → read identity', () => {
@@ -79,5 +86,38 @@ describe('rpgSheet metadata round-trip', () => {
   it('unparseable sheet reads null rather than throwing', () => {
     expect(readRpgSheet({ [RPG_SHEET_KEY]: { level: 'three' } })).toBeNull()
     expect(readRpgSheet({ [RPG_SHEET_KEY]: 7 })).toBeNull()
+  })
+})
+
+describe('D-11: absent vs invalid vs valid stored sheet', () => {
+  const valid = writeRpgSheet(null, { ...defaultRpgSheet(), level: 4 })
+  const invalid = { [RPG_SHEET_KEY]: { level: 'three' } }
+
+  it('absent: no key at all — nothing stored, nothing to protect', () => {
+    for (const metadata of [null, {}, { bodyState: { tier: 5 } }, { [RPG_SHEET_KEY]: null }]) {
+      expect(hasStoredRpgSheet(metadata)).toBe(false)
+      expect(isStoredRpgSheetInvalid(metadata)).toBe(false)
+      expect(readRpgSheet(metadata)).toBeNull()
+    }
+  })
+
+  it('invalid: a sheet IS stored but does not parse — writers must refuse', () => {
+    for (const metadata of [invalid, { [RPG_SHEET_KEY]: 7 }, { [RPG_SHEET_KEY]: { level: -1 } }]) {
+      expect(hasStoredRpgSheet(metadata)).toBe(true)
+      expect(isStoredRpgSheetInvalid(metadata)).toBe(true)
+      // readRpgSheet's contract is unchanged: still null, still safe for readers.
+      expect(readRpgSheet(metadata)).toBeNull()
+    }
+  })
+
+  it('valid: stored and parseable — writers proceed as before', () => {
+    expect(hasStoredRpgSheet(valid)).toBe(true)
+    expect(isStoredRpgSheetInvalid(valid)).toBe(false)
+    expect(readRpgSheet(valid)?.level).toBe(4)
+  })
+
+  it('readers still resolve an invalid sheet to displayable defaults', () => {
+    // Rendering defaults is harmless — only persisting them would destroy data.
+    expect(sheetOrDefault(invalid).level).toBe(1)
   })
 })

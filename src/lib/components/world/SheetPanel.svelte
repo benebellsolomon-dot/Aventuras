@@ -4,12 +4,14 @@
   // pure helpers from $lib/services/rpg; this file is markup + dispatch.
   import { BedDouble } from 'lucide-svelte'
   import { story } from '$lib/stores/story.svelte'
+  import { ui } from '$lib/stores/ui.svelte'
   import {
     ATTRIBUTE_IDS,
     ATTRIBUTE_LABELS,
     attributeMod,
     checkBonus,
     essenceMax,
+    isStoredRpgSheetInvalid,
     sheetOrDefault,
     SKILLS,
     skillRanks,
@@ -35,6 +37,12 @@
   // engine owns turn-time writes; the panel owns deliberate player edits.
   async function persist(next: RpgSheet) {
     if (!protagonist) return
+    // D-11: the panel above is rendering DEFAULTS for an unparseable stored
+    // sheet — persisting them would overwrite the real (repairable) data.
+    if (isStoredRpgSheetInvalid(protagonist.metadata)) {
+      ui.showToast('RPG sheet data is invalid — change not saved', 'warning')
+      return
+    }
     await story.updateCharacter(protagonist.id, {
       metadata: writeRpgSheet(protagonist.metadata, next),
     })

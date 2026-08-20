@@ -151,6 +151,32 @@ Residuals noted by the refutation pass (accepted, documented):
 - Manual-image button dead path (pre-existing): `lastImageGenContext` only
   assigned when mode ≠ 'none' but the button requires mode == 'none'.
 
+## D-backlog session 3 (2026-08-20, same day): D-1/D-6/D-7/D-11 SHIPPED
+
+- **D-1** (conservative scope — instant-stop UX preserved): the retryService
+  cleanup (Stop AND retry-last-message paths) and new turn starts in
+  handleSubmit await `whenBatchIdle()`, so post-Stop writes can't race or join
+  a dying turn's batch and the double-begin error is unreachable.
+- **D-7**: `applyClassificationResult` returns a discriminated outcome
+  (`rolled_back`/`replay`/`no_story`); genuine rollback → actionable toast
+  (narration kept, use Retry); the whole post-turn tail (entry time end, TTS,
+  chapter/lore/style background tasks) is skipped when the world didn't
+  advance. pendingCheckRecord discard stays unconditional (a kept record would
+  flash into the next turn's streaming panel).
+- **D-6**: turn-tx pool runs `synchronous=FULL` — the flush is the atomicity
+  anchor; one fsync per turn. Background writes keep WAL+NORMAL.
+- **D-11**: unparseable stored rpgSheet is PRESERVED, never reset/re-granted:
+  `hasStoredRpgSheet`/`isStoredRpgSheetInvalid` guards on the three writers
+  (applyRpgTurn skips the RPG turn with a warn; learnSpell throws before
+  creating the entry; SheetPanel toasts). Readers still render defaults.
+  Bonus fix: SpellbookSection's research() had no catch — every learnSpell
+  rejection was an invisible unhandled rejection; now toasted.
+
+Suite 847. Remaining open: **D-2/D-2b (world-panel + story/branch-switch gating
+during turns — UX call, Ben decides), D-8 (two-pool contention, revisit if seen),
+D-9 (fabricated rowsAffected for buffered maintenance calls — deleteStaleSprites
+now direct, rest are cleanup paths), D-10 (bind divergence trap, documented).**
+
 ## DEFERRED — documented backlog, roughly ranked
 
 - **D-1 (MED): stop-generation ordering.** `handleStopGeneration` sets

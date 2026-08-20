@@ -46,6 +46,8 @@ export {
 } from './derive'
 export {
   RPG_SHEET_KEY,
+  hasStoredRpgSheet,
+  isStoredRpgSheetInvalid,
   readRpgSheet,
   rpgSheetSchema,
   sheetOrDefault,

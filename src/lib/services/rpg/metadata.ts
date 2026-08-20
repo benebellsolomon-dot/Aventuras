@@ -65,6 +65,27 @@ export function readRpgSheet(metadata: Record<string, unknown> | null): RpgSheet
 }
 
 /**
+ * True when the metadata carries an `rpgSheet` key at all — INCLUDING a blob
+ * that fails validation. `readRpgSheet` collapses "absent" and "invalid" into
+ * one null, which readers may safely treat alike (they render defaults); writers
+ * may not (D-11, research/56).
+ */
+export function hasStoredRpgSheet(metadata: Record<string, unknown> | null): boolean {
+  if (!metadata || typeof metadata !== 'object') return false
+  const raw = metadata[RPG_SHEET_KEY]
+  return raw !== undefined && raw !== null
+}
+
+/**
+ * The writer guard (D-11): a sheet IS stored but does not parse. Rebuilding from
+ * `defaultRpgSheet()` and persisting it would destroy the stored level, known
+ * spells, awarded milestones and spent points — so every writer refuses instead.
+ */
+export function isStoredRpgSheetInvalid(metadata: Record<string, unknown> | null): boolean {
+  return hasStoredRpgSheet(metadata) && readRpgSheet(metadata) === null
+}
+
+/**
  * Return a NEW metadata object with the sheet written, preserving every sibling
  * key (bodyState, runtimeVars, …). Deep copy — later mutation of the caller's
  * sheet cannot reach into the stored metadata.

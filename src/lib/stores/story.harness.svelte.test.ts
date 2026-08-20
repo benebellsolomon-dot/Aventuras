@@ -288,6 +288,43 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     expect(story.characters.find((c) => c.name === 'Mira')?.metadata).toEqual(girlMetadataBefore)
   })
 
+  it('D-11: an unparseable stored rpgSheet is left byte-identical — the RPG turn is skipped', async () => {
+    // The pre-D-11 shape: readRpgSheet returned null for this blob, so applyRpgTurn
+    // treated the protagonist as sheet-less and persisted defaults + the creation
+    // grant over it (level, knownSpells, awardedMilestones, spent points gone).
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.currentStory = makeStory({ settings: { beMode: true } }) as never
+    const corrupt = { rpgSheet: { level: 'three', knownSpells: ['verdant-swell'] } }
+    const protagonist = makeProtagonist('Rowan', { metadata: corrupt })
+    const girl = makeGirlWithBodyState('Mira')
+    story.characters = [protagonist, girl] as never
+    const corruptJson = JSON.stringify(corrupt)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const result = makeClassificationResult({
+      beEvents: [{ character: 'Mira', kind: 'catalyst', intensity: 2 }],
+      scene: { presentCharacterNames: ['Mira'] },
+    })
+
+    const applied = await story.applyClassificationResult(result as never, 'entry-1')
+
+    // The turn itself commits — only the protagonist's sheet write is skipped.
+    expect(applied).toEqual({ applied: true })
+    expect(db.methodsCalled()).toContain('commitWriteBatch')
+    // No character write touched the protagonist at all…
+    const protagonistWrites = db.calls.filter(
+      (c) => c.method === 'updateCharacter' && c.args[0] === protagonist.id,
+    )
+    expect(protagonistWrites).toEqual([])
+    // …and the stored blob is untouched, not replaced by a fresh granted sheet.
+    const rowan = story.characters.find((c) => c.name === 'Rowan')
+    expect(JSON.stringify(rowan?.metadata)).toBe(corruptJson)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Rowan'))
+    warn.mockRestore()
+    // The rest of the engine still ran: Mira's body state moved and was written.
+    expect(db.calls.some((c) => c.method === 'updateCharacter' && c.args[0] === girl.id)).toBe(true)
+  })
+
   it('replay guard: re-applying an entry that already has a delta is a no-op', async () => {
     settingsMock.experimentalFeatures.stateTracking = true
     story.characters = [makeCharacter('Aria')] as never

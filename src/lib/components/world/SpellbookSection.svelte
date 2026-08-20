@@ -64,6 +64,11 @@
       } else {
         fizzled = true
       }
+    } catch (err) {
+      // learnSpell rejects on a failed sheet write and (D-11) on a stored sheet
+      // that fails validation. Without this the rejection was unhandled and the
+      // player saw nothing at all.
+      ui.showToast(err instanceof Error ? err.message : 'Learning the spell failed', 'warning')
     } finally {
       researching = false
     }

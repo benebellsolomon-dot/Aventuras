@@ -70,6 +70,7 @@ import {
   defaultRpgSheet,
   detectRpgDrift,
   essenceMax,
+  isStoredRpgSheetInvalid,
   periodIndex,
   readRpgSheet,
   sheetOrDefault,
@@ -1907,6 +1908,11 @@ class StoryStore {
     if (!this.currentStory) throw new Error('No story loaded')
     const protagonist = this.characters.find((c) => c.relationship === 'self')
     if (!protagonist) throw new Error('No protagonist to learn the spell')
+    // D-11: refuse before creating the entry — sheetOrDefault would silently
+    // rebuild an unparseable stored sheet from defaults and persist it.
+    if (isStoredRpgSheetInvalid(protagonist.metadata)) {
+      throw new Error('RPG sheet data is invalid — spell not learned')
+    }
 
     const entry = await this.addLorebookEntry(buildSpellEntryData(gen))
     try {
@@ -3859,6 +3865,17 @@ class StoryStore {
     if (!this.currentStory || !entryId) return []
     const protagonist = this.characters.find((c) => c.relationship === 'self')
     if (!protagonist) return []
+    // D-11: a stored sheet that fails validation is NOT "no sheet yet". Falling
+    // through would rebuild from defaults + the creation grant and persist it,
+    // destroying the stored level, spells, milestones and spent points. Skip the
+    // whole RPG turn (same "nothing to do" result as the no-protagonist path)
+    // and leave the blob untouched for repair.
+    if (isStoredRpgSheetInvalid(protagonist.metadata)) {
+      console.warn(
+        `[StoryStore] RPG turn skipped for ${protagonist.name}: the stored rpgSheet failed validation and was left untouched`,
+      )
+      return []
+    }
 
     const storedSheet = readRpgSheet(protagonist.metadata)
     // Baseline for the change check is the STORED sheet (pre-grant), so applying
