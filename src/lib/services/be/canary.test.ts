@@ -295,6 +295,14 @@ describe('Phase 3 full-turn canary', () => {
 // girl. translateSpellEffects → reduceCharacterBody in one reduce: the growth
 // catalyst lands through the normal gates and the surge raises supply, all
 // deterministic off the seed. Pins the effect→reducer integration.
+//
+// GOLDEN UPDATED (resolve-then-narrate fix) — deliberately, not to make a
+// refactor pass. This fixture WAS the shipped bug in miniature: a success-band
+// cast whose catalyst then failed the reducer's own hidden d20 (`p4-canary:0`
+// rolls low), so the golden pinned outcome "fail" / tier unchanged while the
+// narrator had already been told the cast succeeded. Cast growth no longer
+// rolls, so the same success cast now lands: outcome "success", tier 15 → 16.
+// Ambient goldens (Phase 2 / Phase 3 above) are untouched and byte-identical.
 import { translateSpellEffects } from './effects'
 
 describe('Phase 4 full-cast canary', () => {
@@ -328,13 +336,14 @@ describe('Phase 4 full-cast canary', () => {
         "castEvents": [
           {
             "character": "Vale",
+            "guaranteed": true,
             "intensity": 2,
             "kind": "catalyst",
           },
         ],
         "castSupplyDelta": 1,
         "catalystOutcomes": [
-          "fail",
+          "success",
         ],
         "kinds": [
           "fill",
@@ -342,7 +351,7 @@ describe('Phase 4 full-cast canary', () => {
           "supply",
         ],
         "supplyTier": 2,
-        "tier": 15,
+        "tier": 16,
       }
     `)
   })

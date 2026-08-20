@@ -101,8 +101,11 @@ describe('translateSpellEffects — channel routing (Phase 4 Step 2)', () => {
     ]
     const out = translateSpellEffects(effects, 'success', T)
 
+    // The growth event carries `guaranteed` — a successful cast's growth does not
+    // re-roll in the reducer (the RPG check was the dice). Induction never rolled
+    // to begin with, so it carries no marker.
     expect(out.events).toEqual([
-      { character: T, kind: 'catalyst', intensity: 2 },
+      { character: T, kind: 'catalyst', intensity: 2, guaranteed: true },
       { character: T, kind: 'induction', intensity: 1 },
     ])
     expect(out.bondEvents).toEqual([{ character: T, direction: 'warm', intensity: 2 }])
@@ -147,6 +150,24 @@ describe('translateSpellEffects — channel routing (Phase 4 Step 2)', () => {
     // crit caps at 3
     const g3: EffectTag[] = [{ kind: 'growth', intensity: 3 }]
     expect(translateSpellEffects(g3, 'crit', T).events[0].intensity).toBe(3)
+  })
+
+  it('every non-fail band marks its growth event guaranteed; other kinds never are', () => {
+    // The check already rolled and the narrator already saw the band, so growth
+    // from ANY landing band skips the reducer's own d20 — a partial-band cast
+    // lands its reduced intensity just as deterministically as a crit.
+    const g: EffectTag[] = [{ kind: 'growth', intensity: 2 }]
+    for (const band of ['crit', 'success', 'partial'] as const) {
+      expect(translateSpellEffects(g, band, T).events[0].guaranteed).toBe(true)
+    }
+    // Induction and milking resolve without a growth roll to begin with — no
+    // marker, so the flag can never leak onto a path that does not read it.
+    const others = translateSpellEffects(
+      [{ kind: 'induction' }, { kind: 'fill', fillMode: 'drain', intensity: 1 }],
+      'success',
+      T,
+    )
+    for (const event of others.events) expect(event.guaranteed).toBeUndefined()
   })
 
   it('fill: drain → milking event, set → absolute softState', () => {

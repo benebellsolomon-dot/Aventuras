@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { DEFAULT_BE_STORY_CONFIG } from './constants'
 import { defaultBodyState } from './metadata'
 import { reduceCharacterBody, seededRoll } from './reducer'
-import type { BeEvent, BeStoryConfig, BodyState } from './types'
+import type { BeEvent, BeLogRecord, BeStoryConfig, BodyState } from './types'
 
 const CONFIG: BeStoryConfig = { ...DEFAULT_BE_STORY_CONFIG, enabled: true }
 // Fill-sensitive legacy tests opt out of the Spec-1 passive tick (pipeline.test.ts owns it).
@@ -269,5 +269,196 @@ describe('growth-eligible kinds (per-story cosmology)', () => {
     )
     expect(next.fluids.fillPercent).toBe(40)
     expect(next.pendingGrowth).toBeUndefined()
+  })
+})
+
+/**
+ * Cast-guaranteed growth (resolve-then-narrate ruling).
+ *
+ * The shipped bug: the player cast a growth spell, the RPG check SUCCEEDED, the
+ * narrator was handed `[CHECK RESULT] success` and wrote the growth — and THEN
+ * the reducer rolled its own hidden d20, rolled a 1, and nothing landed. Two dice
+ * layers, only the first of them visible to the player. A successful cast IS the
+ * dice now; every other gate still binds.
+ */
+describe('cast-guaranteed growth (resolve-then-narrate)', () => {
+  // A seed on which an ambient intensity-2 event fails outright — the live bug in
+  // miniature, and the control every test below is measured against.
+  const failSeed = seedFor((roll) => roll + 2 < 6)
+
+  test('the very event that fails ambient LANDS when it comes from a cast', () => {
+    const ambient = reduceCharacterBody(defaultBodyState(10), [growthEvent()], NO_TICK, failSeed)
+    expect(ambient.state.tier).toBe(10)
+    expect(ambient.log.at(-1)).toMatchObject({ outcome: 'fail', delta: 0 })
+
+    const cast = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent({ guaranteed: true })],
+      NO_TICK,
+      failSeed,
+    )
+    expect(cast.state.tier).toBe(11)
+    expect(cast.state.lastGrowth).toEqual({ delta: 1, tierBefore: 10 })
+    expect(cast.log.at(-1)).toMatchObject({ outcome: 'success', delta: 1, tierAfter: 11 })
+    // The log says WHY it did not roll — a beLog reader must be able to tell a
+    // guaranteed cast from a lucky roll.
+    expect(cast.log.at(-1)?.note).toBe('cast @i2 (guaranteed)')
+  })
+
+  test('every band intensity lands, deterministically (crit +1 / success +0 / partial −1)', () => {
+    // translateSpellEffects turns the check band into an intensity: crit → 3,
+    // success → 2, partial → 1. All three must land, and land the SAME way twice.
+    for (const intensity of [1, 2, 3]) {
+      const once = reduceCharacterBody(
+        defaultBodyState(10),
+        [growthEvent({ intensity, guaranteed: true })],
+        NO_TICK,
+        failSeed,
+      )
+      const twice = reduceCharacterBody(
+        defaultBodyState(10),
+        [growthEvent({ intensity, guaranteed: true })],
+        NO_TICK,
+        failSeed,
+      )
+      expect(once).toEqual(twice) // replay-identical: no dice were consulted
+      expect(once.state.tier).toBeGreaterThan(10)
+      expect(once.log.at(-1)?.outcome).toBe(intensity === 3 ? 'critical' : 'success')
+    }
+  })
+
+  test('a scene-defining (i3) cast crits and splits: +1 now, +1 staged', () => {
+    const result = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent({ intensity: 3, guaranteed: true })],
+      NO_TICK,
+      failSeed,
+    )
+    expect(result.state.tier).toBe(11)
+    expect(result.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
+  })
+
+  test('ambient growth keeps its probability roll (the bypass is cast-only)', () => {
+    // Sweep enough seeds that an unrolled ambient path could not hide: ambient
+    // outcomes must still spread across the bands, cast outcomes never do.
+    const ambientOutcomes = new Set<string>()
+    const castOutcomes = new Set<string>()
+    for (let i = 0; i < 60; i++) {
+      const seed = `sweep-${i}`
+      ambientOutcomes.add(
+        reduceCharacterBody(defaultBodyState(10), [growthEvent()], NO_TICK, seed).log.at(-1)
+          ?.outcome ?? '',
+      )
+      castOutcomes.add(
+        reduceCharacterBody(
+          defaultBodyState(10),
+          [growthEvent({ guaranteed: true })],
+          NO_TICK,
+          seed,
+        ).log.at(-1)?.outcome ?? '',
+      )
+    }
+    expect(ambientOutcomes.size).toBeGreaterThan(1)
+    expect(ambientOutcomes).toContain('fail')
+    expect(castOutcomes).toEqual(new Set(['success']))
+  })
+
+  test('bypassing the roll does not shift a co-occurring ambient event', () => {
+    // seededRoll is keyed per event index, not a sequential stream — proving it
+    // here so a future "draw from a stream" refactor cannot silently desync the
+    // ambient goldens. Size-capped at the current tier so nothing lands and the
+    // cooldown stays unarmed, leaving the second event free to roll in both runs.
+    const capped: BeStoryConfig = { ...NO_TICK, sizeCapTier: 10 }
+    const ambientFirst = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent(), growthEvent({ kind: 'contact' })],
+      capped,
+      'stream-seed',
+    )
+    const castFirst = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent({ guaranteed: true }), growthEvent({ kind: 'contact' })],
+      capped,
+      'stream-seed',
+    )
+    const secondEvent = (log: ReadonlyArray<BeLogRecord>) =>
+      log.find((entry) => entry.kind === 'contact')
+    expect(secondEvent(castFirst.log)).toEqual(secondEvent(ambientFirst.log))
+    expect(secondEvent(castFirst.log)?.note).toMatch(/^roll \d+ @i2$/)
+  })
+
+  test('the size-lock still muzzles a cast', () => {
+    const state = { ...defaultBodyState(10), locked: true }
+    const result = reduceCharacterBody(
+      state,
+      [growthEvent({ intensity: 3, guaranteed: true })],
+      NO_TICK,
+      'any',
+    )
+    expect(result.state.tier).toBe(10)
+    expect(result.log.at(-1)?.outcome).toBe('muzzled')
+  })
+
+  test('an active cooldown still gates a cast', () => {
+    const state = { ...defaultBodyState(10), cooldown: 2 }
+    const result = reduceCharacterBody(state, [growthEvent({ guaranteed: true })], NO_TICK, 'any')
+    expect(result.state.tier).toBe(10)
+    expect(result.log.at(-1)?.outcome).toBe('cooldown')
+  })
+
+  test('one growth per turn: a landed ambient event still cools down a later cast', () => {
+    const critSeed = seedFor((roll) => roll + 2 >= 18)
+    const result = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent(), growthEvent({ guaranteed: true })],
+      NO_TICK,
+      critSeed,
+    )
+    const outcomes = result.log.filter((e) => e.kind === 'catalyst').map((e) => e.outcome)
+    expect(outcomes).toEqual(['critical', 'cooldown'])
+    expect(result.state.tier).toBe(11) // one growth landed this turn, not two
+  })
+
+  test('the story size cap still clamps a cast', () => {
+    const capped: BeStoryConfig = { ...NO_TICK, sizeCapTier: 10 }
+    const result = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent({ intensity: 3, guaranteed: true })],
+      capped,
+      'any',
+    )
+    expect(result.state.tier).toBe(10)
+    expect(result.log.at(-1)?.delta).toBe(0)
+  })
+
+  test('the growth cosmology still refuses a cast of an ineligible kind', () => {
+    // A story whose canon says only intimate contact grows a girl does not get a
+    // catalyst-shaped exception just because the player rolled well.
+    const contactOnly: BeStoryConfig = { ...NO_TICK, growthEligibleKinds: ['contact'] }
+    const result = reduceCharacterBody(
+      defaultBodyState(10),
+      [growthEvent({ guaranteed: true })],
+      contactOnly,
+      'any',
+    )
+    expect(result.state.tier).toBe(10)
+    expect(result.log.at(-1)?.outcome).toBe('ineligible')
+  })
+
+  test('slow_burn still stages a cast, and the bank drains at the metered rate', () => {
+    const state = { ...defaultBodyState(10), quirks: ['slow_burn'] }
+    const turn1 = reduceCharacterBody(
+      state,
+      [growthEvent({ intensity: 3, guaranteed: true })],
+      NO_TICK,
+      failSeed,
+    )
+    // Nothing lands the turn of the cast — her growth is delayed, not denied.
+    expect(turn1.state.tier).toBe(10)
+    expect(turn1.state.pendingGrowth).toEqual({ delta: 2, source: 'catalyst' })
+    // M-2: the bank releases at MAX_GROWTH_LAND_PER_TURN, re-staging the rest.
+    const turn2 = reduceCharacterBody(turn1.state, [], NO_TICK, `${failSeed}:t2`)
+    expect(turn2.state.tier).toBe(11)
+    expect(turn2.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
   })
 })

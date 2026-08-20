@@ -26,7 +26,11 @@ import type { PresetPack, FullPack } from './types'
 //     vocabulary, arousal ladder gated on the explicit rating) and the prose
 //     analysis template names the character's own emotional state. Expression
 //     only reached images by accident before.
-const SERVICE_TEMPLATE_SYNC_VERSION = 5
+// 6 — 2026-08-20: booru writer's "action" field is now act-first — an ongoing
+//     sex act must be tagged with its full Danbooru family BEFORE any
+//     event-of-the-moment tags (live failure: a paizuri beat with breast growth
+//     came back as growth tags only, dropping the act).
+const SERVICE_TEMPLATE_SYNC_VERSION = 6
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

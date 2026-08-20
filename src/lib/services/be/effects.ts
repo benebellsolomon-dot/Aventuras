@@ -194,6 +194,13 @@ export function translateSpellEffects(
           character: targetCharacter,
           kind: 'catalyst',
           intensity: scaled(effect.intensity),
+          // The check already rolled and the narrator already saw the band, so
+          // the reducer must not roll again — see BeEvent.guaranteed. Only a
+          // non-fail band reaches this line (fail returned above), so a fizzled
+          // cast can never emit a guaranteed event. The band's whole influence
+          // is the intensity scaling above: crit lands bigger, partial smaller,
+          // and BOTH land.
+          guaranteed: true,
         })
         break
       case 'induction':

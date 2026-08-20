@@ -50,6 +50,23 @@ export const ROLL_BANDS = {
 /** Roll bonus per intensity step above 1 (intensity 1-3 → +0/+2/+4). */
 export const INTENSITY_ROLL_BONUS = 2
 
+/**
+ * The synthetic roll a CAST-originated growth event resolves on instead of the
+ * reducer's own d20 (resolve-then-narrate ruling, from live play).
+ *
+ * The bug it fixes: the RPG check succeeded, the narrator was told "success" and
+ * described the growth, and then the reducer rolled a SECOND, invisible d20 that
+ * failed — narrated growth, no stats. A successful cast IS the dice; the engine
+ * must not re-roll behind the player's back.
+ *
+ * Derived, not magic: the lowest roll at which a scene-defining (intensity 3)
+ * beat still crits. So every intensity lands at least `success`, and the band→
+ * intensity scaling (crit +1 / success +0 / partial −1) keeps a meaningful top
+ * end — an intensity-3 cast lands `critical`. Every other gate (eligible kinds,
+ * lock, cooldown, per-turn land cap, size cap, slow-burn staging) still applies.
+ */
+export const GUARANTEED_GROWTH_ROLL = ROLL_BANDS.critical - 2 * INTENSITY_ROLL_BONUS
+
 /** Fluid drained per milking event, scaled by intensity (percent points). */
 export const MILKING_DRAIN_PER_INTENSITY = 40
 

@@ -8,6 +8,9 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { readBodyState } from '$lib/services/be'
+import { defaultRpgSheet } from '$lib/services/rpg'
+
 import {
   makeCharacter,
   makeClassificationResult,
@@ -35,6 +38,43 @@ vi.mock('./ui.svelte', () => ({ ui: uiMock }))
 
 const { story } = await import('./story.svelte')
 
+/** A learned growth spell + the cast CheckRecord that fires it (Phase 4 shapes). */
+const SPELL_ID = 'spell-verdant-swell'
+
+const growthSpellEntry = () => ({
+  id: SPELL_ID,
+  storyId: 's1',
+  name: 'Verdant Swell',
+  type: 'spell',
+  description: 'A transmutation that coaxes a body into blooming.',
+  state: {
+    type: 'spell',
+    school: 'transmutation',
+    essenceCost: 1,
+    dc: 12,
+    effects: [{ kind: 'growth', intensity: 2 }],
+    revealed: true,
+  },
+  branchId: null,
+})
+
+/** The live failure's numbers: DC 12, total 15, band success. */
+const castCheckRecord = (targetId: string) => ({
+  action: 'cast Verdant Swell at Amelia',
+  skill: 'transmutation',
+  dc: 12,
+  nat: 9,
+  bonusBreakdown: { attribute: 0, ranks: 0, modifiers: [] },
+  bonus: 6,
+  total: 15,
+  margin: 3,
+  band: 'success',
+  essenceSpent: 1,
+  spellId: SPELL_ID,
+  target: 'Amelia',
+  targetId,
+})
+
 // Reset the mutable pieces of the shared singleton between tests.
 function reset(recorder: DbRecorder) {
   recorder.calls.length = 0
@@ -49,6 +89,8 @@ function reset(recorder: DbRecorder) {
   story.entries = [] as never
   story.chapters = [] as never
   story.branches = [] as never
+  // Spell casts resolve against this — a leaked entry would let a later test cast.
+  story.lorebookEntries = [] as never
 }
 
 describe('store harness — drive a real write path (CR-1 foundation)', () => {
@@ -323,6 +365,93 @@ describe('store harness — drive a real write path (CR-1 foundation)', () => {
     warn.mockRestore()
     // The rest of the engine still ran: Mira's body state moved and was written.
     expect(db.calls.some((c) => c.method === 'updateCharacter' && c.args[0] === girl.id)).toBe(true)
+  })
+
+  it('a successful cast grows the target — no second, hidden growth roll', async () => {
+    // The live failure this fixes: the player cast a growth spell at Amelia, the
+    // check SUCCEEDED (DC 12, total 15), the narration described her growing —
+    // and then the reducer's own d20 rolled a 1, so her tier never moved. The
+    // story restricted growth to catalyst-only, making the cast the sole growth
+    // channel, so the mismatch was player-visible every time.
+    //
+    // ENTRY_ID is load-bearing: the reducer seed is `${storyId}:${entryId}:${id}`,
+    // and this one rolls a 1 — the literal live failure. The control half of the
+    // test proves it, so the cast half cannot pass on a lucky roll.
+    const ENTRY_ID = 'entry-4'
+    settingsMock.experimentalFeatures.stateTracking = false
+    story.currentStory = makeStory({ settings: { beMode: true } }) as never
+    const protagonist = () =>
+      makeProtagonist('Rowan', {
+        metadata: { rpgSheet: { ...defaultRpgSheet(), knownSpells: [SPELL_ID] } },
+      })
+    story.lorebookEntries = [growthSpellEntry()] as never
+
+    // Control: the SAME catalyst event as ambient classifier output, no cast. It
+    // still rolls, and on this seed it still fails — nothing lands.
+    const ambientGirl = makeGirlWithBodyState('Amelia')
+    story.characters = [protagonist(), ambientGirl] as never
+    const tierBefore = readBodyState(ambientGirl.metadata as Record<string, unknown>)?.tier ?? 0
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        beEvents: [{ character: 'Amelia', kind: 'catalyst', intensity: 2 }],
+        scene: { presentCharacterNames: ['Amelia'] },
+      }) as never,
+      ENTRY_ID,
+    )
+    expect(
+      readBodyState(
+        story.characters.find((c) => c.name === 'Amelia')?.metadata as Record<string, unknown>,
+      )?.tier,
+    ).toBe(tierBefore)
+
+    // The cast: the classifier proposes NOTHING (the cast is the only growth
+    // channel), the same losing seed applies — and the growth lands anyway.
+    const castGirl = makeGirlWithBodyState('Amelia')
+    story.characters = [protagonist(), castGirl] as never
+    const applied = await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } }) as never,
+      ENTRY_ID,
+      castCheckRecord(castGirl.id as string) as never,
+    )
+
+    expect(applied).toEqual({ applied: true })
+    const after = readBodyState(
+      story.characters.find((c) => c.name === 'Amelia')?.metadata as Record<string, unknown>,
+    )
+    expect(after?.tier).toBe(tierBefore + 1)
+    // lastGrowth is what drives the next turn's growth-narration directive — the
+    // stats and the prose now agree in both directions.
+    expect(after?.lastGrowth).toEqual({ delta: 1, tierBefore })
+  })
+
+  it('a fizzled (fail-band) cast still applies nothing', async () => {
+    settingsMock.experimentalFeatures.stateTracking = false
+    story.currentStory = makeStory({ settings: { beMode: true } }) as never
+    const girl = makeGirlWithBodyState('Amelia')
+    story.characters = [
+      makeProtagonist('Rowan', {
+        metadata: { rpgSheet: { ...defaultRpgSheet(), knownSpells: [SPELL_ID] } },
+      }),
+      girl,
+    ] as never
+    story.lorebookEntries = [growthSpellEntry()] as never
+    const tierBefore = readBodyState(girl.metadata as Record<string, unknown>)?.tier ?? 0
+
+    const result = makeClassificationResult({ scene: { presentCharacterNames: ['Amelia'] } })
+    await story.applyClassificationResult(result as never, 'entry-1', {
+      ...castCheckRecord('char-amelia'),
+      band: 'fail',
+      total: 7,
+      margin: -5,
+    } as never)
+
+    // Guaranteed growth rides a SUCCESSFUL check only; a fizzle translates to no
+    // effects at all (essence is still spent by the RPG layer).
+    expect(
+      readBodyState(
+        story.characters.find((c) => c.name === 'Amelia')?.metadata as Record<string, unknown>,
+      )?.tier,
+    ).toBe(tierBefore)
   })
 
   it('replay guard: re-applying an entry that already has a delta is a no-op', async () => {

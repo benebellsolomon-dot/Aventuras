@@ -23,6 +23,7 @@ import {
   ANTICIPATION_THRESHOLD,
   ENGORGED_TTL,
   GROWTH_DELTA_BY_OUTCOME,
+  GUARANTEED_GROWTH_ROLL,
   MAX_BE_CONDITIONS,
   MAX_GROWTH_LAND_PER_TURN,
   MILKING_DRAIN_PER_INTENSITY,
@@ -428,7 +429,19 @@ export function reduceCharacterBody(
       return
     }
 
-    const roll = seededRoll(`${seed}:${index}`)
+    // A cast-originated growth event does NOT roll: the successful RPG check was
+    // already the dice, and the narrator saw that band before this reducer ran —
+    // a second hidden d20 here is how "successful roll, no stats" happened. Every
+    // other gate above and below still binds (eligibility, lock, cooldown, the
+    // land cap, the size cap, slow-burn staging).
+    //
+    // Skipped, not consumed-and-ignored: seededRoll is keyed per event as
+    // `${seed}:${index}` — a pure hash, not a sequential stream — so not calling
+    // it cannot shift any co-occurring ambient event's outcome. Index positions
+    // are untouched (nothing is removed from `events`), so ambient replay is
+    // byte-identical.
+    const guaranteed = event.guaranteed === true
+    const roll = guaranteed ? GUARANTEED_GROWTH_ROLL : seededRoll(`${seed}:${index}`)
     const outcome = resolveGrowthOutcome(roll, intensity)
     const bandDelta = GROWTH_DELTA_BY_OUTCOME[outcome] ?? 0
     let landed = 0
@@ -461,7 +474,7 @@ export function reduceCharacterBody(
       outcome,
       delta: landed,
       tierAfter: tier,
-      note: `roll ${roll} @i${intensity}${isSlowBurn && bandDelta > 0 ? ' (slow burn: staged)' : ''}`,
+      note: `${guaranteed ? `cast @i${intensity} (guaranteed)` : `roll ${roll} @i${intensity}`}${isSlowBurn && bandDelta > 0 ? ' (slow burn: staged)' : ''}`,
     })
   })
 

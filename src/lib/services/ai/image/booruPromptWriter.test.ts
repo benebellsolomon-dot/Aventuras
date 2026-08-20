@@ -52,6 +52,7 @@ import {
   type BooruSceneSections,
 } from './booruPromptWriter'
 import { apparentTier, bandWord, defaultBodyState, writeBodyState } from '$lib/services/be'
+import { imageTemplates } from '$lib/services/prompts/templates/image'
 import type { Character, Location } from '$lib/types'
 
 const BOORU_MODEL = 'wai-illustrious-sdxl'
@@ -696,5 +697,90 @@ describe('resolveBooruScenePrompt', () => {
     mocks.getServicePresetId.mockReturnValue('') // writer returns null
     const result = await resolveBooruScenePrompt({ ...baseInput(), model: BOORU_MODEL })
     expect(result).toBe(baseInput().scenePrompt)
+  })
+})
+
+/**
+ * The template is the writer's whole specification, and it has been rewritten
+ * repeatedly (sections → POV/size → emotion → act-first). Each rewrite has
+ * silently broken something the code depends on: the emotion round left the
+ * character-run bullet still asking for an expression that had moved to its own
+ * field, and the live act-first regression showed up as an action block with no
+ * act in it. These pin the contract the code and the worked example must share.
+ */
+describe('image-booru-scene-prompt template contract', () => {
+  const template = imageTemplates.find((t) => t.id === 'image-booru-scene-prompt')
+
+  /** Pull the template's worked example back out as the sections it depicts. */
+  function parseWorkedExample(content: string): BooruSceneSections {
+    const str = (field: string): string => {
+      const match = content.match(new RegExp(`^\\s*${field}: (".*")$`, 'm'))
+      if (!match) throw new Error(`worked example is missing the "${field}" field`)
+      return JSON.parse(match[1]) as string
+    }
+    const arr = (field: string): string[] => {
+      const match = content.match(new RegExp(`^\\s*${field}: (\\[.*\\])$`, 'm'))
+      if (!match) throw new Error(`worked example is missing the "${field}" field`)
+      return JSON.parse(match[1]) as string[]
+    }
+    return {
+      rating: str('rating'),
+      camera: str('camera'),
+      countTags: str('countTags'),
+      action: str('action'),
+      characters: arr('characters'),
+      expressions: arr('expressions'),
+      scene: str('scene'),
+    }
+  }
+
+  it('names every section field the writer schema requires', () => {
+    for (const field of [
+      'rating',
+      'camera',
+      'countTags',
+      'action',
+      'characters',
+      'expressions',
+      'scene',
+    ]) {
+      expect(template?.content).toContain(`FIELD "${field}"`)
+    }
+  })
+
+  it('makes the ongoing act outrank the event of the moment in the action field', () => {
+    const content = template?.content ?? ''
+    // The regression: a transformation mid-act replaced the act tags entirely.
+    expect(content).toContain('THE ACT FIRST')
+    expect(content).toContain('NEVER INSTEAD')
+    expect(content).toMatch(/SUPPLEMENTS the act tags/)
+  })
+
+  it('never asks for expression tags inside a character run — they have their own field', () => {
+    expect(template?.content).toContain('NO expression tags here')
+  })
+
+  it('composes its worked example act-first, inside the tag budget', () => {
+    const example = parseWorkedExample(template?.content ?? '')
+    const prompt = composeBooruScenePrompt(example)
+    const tags = prompt.split(', ')
+
+    expect(tags.length).toBeLessThanOrEqual(BOORU_MAX_TAGS)
+    // Act tags lead the action block; the growth event follows, and both survive.
+    expect(prompt.indexOf('paizuri')).toBeLessThan(prompt.indexOf('breast expansion'))
+    expect(prompt.indexOf('hetero')).toBeLessThan(prompt.indexOf('breast expansion'))
+    // ...and the whole action block still precedes the identity runs.
+    expect(prompt.indexOf('breast expansion')).toBeLessThan(prompt.indexOf('blonde hair'))
+    // Size stays hoisted between action and identity (placement is code-side).
+    expect(prompt.indexOf('huge breasts')).toBeLessThan(prompt.indexOf('blonde hair'))
+  })
+
+  it('keeps the worked example on the faceless protagonist-POV form', () => {
+    const example = parseWorkedExample(template?.content ?? '')
+    expect(example.camera).toContain('pov')
+    expect(example.characters[0]).toContain('faceless male')
+    expect(example.expressions).toHaveLength(example.characters.length)
+    expect(example.expressions[0]).toBe('') // no face to render
+    expect(example.expressions[1].split(', ').length).toBeLessThanOrEqual(3)
   })
 })

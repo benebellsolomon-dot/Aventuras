@@ -49,6 +49,18 @@ describe('coercers (tolerant, Phase-1-compatible)', () => {
     expect(exposureEventsFromResult(result)).toEqual([{ character: 'Mira', intensity: 3 }])
   })
 
+  it('a classifier-invented `guaranteed` flag is stripped, never honored', () => {
+    // `guaranteed` bypasses the reducer's growth roll, so ONLY the cast
+    // translation may set it. The classifier's schema has no such field and Zod
+    // strips unknown keys — a model that invents it is silently disarmed.
+    const smuggled = {
+      beEvents: [{ character: 'Mira', kind: 'catalyst', intensity: 3, guaranteed: true }],
+    }
+    expect(beEventsFromResult(smuggled)).toEqual([
+      { character: 'Mira', kind: 'catalyst', intensity: 3 },
+    ])
+  })
+
   it('over-max arrays slice to the cap', () => {
     const flood = {
       bondEvents: Array.from({ length: 40 }, () => ({

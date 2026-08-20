@@ -130,6 +130,18 @@ export interface BeEvent {
   kind: BeEventKind
   /** 1 (incidental) — 3 (scene-defining). Clamped by the reducer. */
   intensity: number
+  /**
+   * Cast-origin marker: this growth event came from a SUCCESSFUL spell cast, so
+   * the RPG check already WAS its dice and the reducer must not roll a second,
+   * invisible d20 (resolve-then-narrate ruling — narration sees the check band,
+   * so a hidden re-roll produces narrated growth with no stat change).
+   *
+   * Set ONLY by translateSpellEffects (be/effects.ts). The classifier can never
+   * set it: beEventSchema has no such field and Zod strips unknown keys, so a
+   * model that invents `guaranteed: true` is silently disarmed. Transient —
+   * events are per-turn inputs, never persisted, so this needs no migration.
+   */
+  guaranteed?: boolean
 }
 
 /**
