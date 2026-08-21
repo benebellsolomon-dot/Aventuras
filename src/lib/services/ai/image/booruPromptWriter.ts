@@ -51,6 +51,7 @@ import {
   readBodyState,
 } from '$lib/services/be'
 import { generateStructured } from '../sdk/generate'
+import { chunksLongPrompts } from './providerCapabilities'
 import { detectPromptDialect } from './dialect'
 import {
   compressStateCues,
@@ -64,7 +65,7 @@ import {
   type SizeSanction,
 } from './booruTags'
 import { engineExpressionTags, isExpressionTag } from './expressionTags'
-import type { Character, Location, VisualDescriptors } from '$lib/types'
+import type { Character, ImageProviderType, Location, VisualDescriptors } from '$lib/types'
 
 const log = createLogger('BooruPromptWriter')
 
@@ -78,11 +79,23 @@ const TEMPLATE_ID = 'image-booru-scene-prompt'
 const NARRATIVE_CONTEXT_CHARS = 1200
 
 /**
- * Soft tag budget for the composed prompt (research/56): CLIP attends to roughly
- * the first 75 tokens, and a booru tag averages ~1.5 of them. ~60 tags plus the
- * quality prefix keeps the whole scene inside the window that actually renders.
+ * Tag budgets for the composed prompt (research/56 + D5 measurement).
+ *
+ * A booru tag plus its comma averages ~2 CLIP tokens, so a 75-token window
+ * holds ≈36 tags after the quality prefix. Local SD backends (a1111/comfy/
+ * si-bridge) CHUNK long prompts into multiple windows, so they can afford the
+ * richer 60-tag budget; endpoint providers (nanogpt — measured 2026-08-21)
+ * TRUNCATE at the first window, and anything past it simply never renders
+ * (the app's real prompts lost their whole scene block this way). The
+ * single-window budget exists so the ENTIRE prompt fits in what renders.
  */
 export const BOORU_MAX_TAGS = 60
+export const BOORU_MAX_TAGS_SINGLE_WINDOW = 36
+
+/** Per-character run cap in single-window mode: identity banks lead the run,
+ * so the tail (clothing extras) gives way first. Without this, two long
+ * identity runs alone could fill the window before any scene tag. */
+export const BOORU_MAX_RUN_TAGS_SINGLE_WINDOW = 13
 
 /** Floors for the trimmable blocks — a scene still needs a place and a beat. */
 const MIN_SCENE_TAGS = 3
@@ -105,7 +118,7 @@ const booruScenePromptSchema = z.object({
   rating: z
     .string()
     .describe(
-      'Content rating tags only: "general", "sensitive", or "explicit, uncensored, detailed anatomy".',
+      'Content rating tags only: "general", "sensitive", or "explicit, uncensored, detailed anatomy". Rate THIS beat, from the scene intent and narrative beat ONLY: if they describe no sexual act, nudity, or exposure, the rating is "general" (or "sensitive" for suggestive-but-clothed) — regardless of the characters\' stats, their arousal state, or anything from earlier scenes.',
     ),
   camera: z
     .string()
@@ -125,7 +138,7 @@ const booruScenePromptSchema = z.object({
   action: z
     .string()
     .describe(
-      'What the people are DOING: interaction/sex-act/pose tags (e.g. "hetero, paizuri, breast squeezing, lying on back"). The scene beat, not the people. When actInProgress is true this MUST open with the act tag family.',
+      'What the people are DOING: interaction/sex-act/pose tags (e.g. "hetero, paizuri, breast squeezing, lying on back"). The scene beat, not the people. When actInProgress is true this MUST open with the act tag family. When the scene describes NO sexual act, use only mundane pose/interaction tags — never invent nudity or acts the beat does not contain. Name held items SPECIFICALLY (holding dagger, holding sword) — never the bare "weapon" tag, which renders as a random firearm.',
     ),
   characters: z
     .array(z.string())
@@ -365,7 +378,9 @@ export function composeBooruScenePrompt(
   sections: Partial<BooruSceneSections>,
   engineExpressions: ReadonlyArray<CharacterExpressionCue> = [],
   sizeSanctions: ReadonlyArray<SubjectSizeSanction> = [],
+  options: { singleWindow?: boolean } = {},
 ): string {
+  const budget = options.singleWindow ? BOORU_MAX_TAGS_SINGLE_WINDOW : BOORU_MAX_TAGS
   const stripped: string[] = []
   const sanitize = (tags: ReadonlyArray<string>, sanction: SizeSanction | undefined): string[] => {
     const result = sanitizeBreastTags(tags, sanction)
@@ -410,7 +425,12 @@ export function composeBooruScenePrompt(
   ])
   const engineByRun = assignEngineExpressions(characterRuns, engineExpressions)
   const runs: PreparedRun[] = characterRuns.map((run, index) => ({
-    base: dedupe(run.filter((tag) => !isExpressionTag(tag))),
+    // Single-window mode caps each run at the head: identity banks lead, so
+    // trailing clothing extras give way before any identity core does.
+    base: dedupe(run.filter((tag) => !isExpressionTag(tag))).slice(
+      0,
+      options.singleWindow ? BOORU_MAX_RUN_TAGS_SINGLE_WINDOW : Number.POSITIVE_INFINITY,
+    ),
     expression: dedupeTags([
       ...engineByRun[index],
       ...toTags(sections.expressions?.[index]),
@@ -434,7 +454,7 @@ export function composeBooruScenePrompt(
     prepared.reduce((total, run) => total + run.expression.length, 0)
   const fixed = rating.length + camera.length + count.length + size.length + baseTotal
   const overBy = (sceneLength: number, expressionLength: number, actionLength: number): number =>
-    fixed + sceneLength + expressionLength + actionLength - BOORU_MAX_TAGS
+    fixed + sceneLength + expressionLength + actionLength - budget
 
   const sceneOver = overBy(scene.length, expressionTotal(runs), action.length)
   const trimmedScene =
@@ -471,6 +491,9 @@ export interface BooruPromptWriterInput {
   narrativeText: string
   /** BE-mode gate — include body-size band phrases only when on. */
   beMode: boolean
+  /** Image provider — single-window endpoints get the tighter tag budget so
+   * the WHOLE prompt fits in the one CLIP window that actually renders. */
+  providerType?: ImageProviderType
   /**
    * Story id — used to look up the current location for scene tags. Optional:
    * the regeneration path has no story id, and the location block is a
@@ -710,6 +733,46 @@ export function buildLocationBlock(location: Location | null | undefined): strin
   return `## Current location\n${line}\n`
 }
 
+/**
+ * POV-driven camera guidance (D5 playtest): how the scene is presented should
+ * follow how the story is TOLD. First/second/hybrid person = the protagonist
+ * is the camera; third person = an observed scene. Empty when the story
+ * carries no POV.
+ */
+export function buildPovGuidance(pov: string | null | undefined): string {
+  if (pov === 'first' || pov === 'second' || pov === 'hybrid') {
+    return `## Camera and POV
+This story is told through the protagonist's eyes. Frame the image the same way: prefer pov framing tags (pov, from behind, over-shoulder, or first-person hands where the scene supports it), keep the protagonist the unseen or barely-seen viewer, and never depict the protagonist's face.
+`
+  }
+  if (pov === 'third') {
+    return `## Camera and POV
+This story is narrated in third person. Frame the image as an observed scene (e.g. cowboy shot, wide shot, from side) — the protagonist, when present, may be depicted fully like any other character.
+`
+  }
+  return ''
+}
+
+/**
+ * Story setting/genre block — the atmosphere anchor the writer was missing:
+ * without it, attire and props default to the checkpoint's modern-day prior
+ * (jeans in a fantasy tavern; a smartphone in a castle). Playtest finding,
+ * D5 round 1. Empty when the story carries no genre or description.
+ */
+export function buildStorySettingBlock(
+  story: { genre?: string | null; description?: string | null } | null | undefined,
+): string {
+  if (!story) return ''
+  const genre = story.genre?.trim()
+  const description = story.description?.trim()
+  if (!genre && !description) return ''
+  const lines = [genre ? `Genre: ${genre}.` : '', description ?? ''].filter(Boolean)
+  return `## Story setting
+${lines.join(' ')}
+Attire, props, architecture, and technology in your tags MUST fit this setting and era — no modern clothing or devices in period/fantasy settings (and vice versa) unless the narration explicitly says so.
+`
+}
+
 /** Trim the narrative beat to a bounded tail so it stays a hint, not the bulk. */
 function narrativeContext(narrativeText: string): string {
   const trimmed = (narrativeText ?? '').trim()
@@ -827,16 +890,26 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
 
     const subjects = resolveSubjects(input.presentCharacters, input.tagCharacterNames)
 
-    // Current location for scene tags — best-effort; a lookup failure (or no
-    // story id, as on the regeneration path) just omits the location block
-    // rather than failing the whole write.
+    // Current location + story setting for scene tags — best-effort; a lookup
+    // failure (or no story id, as on the regeneration path) just omits the
+    // block rather than failing the whole write.
     let location: Location | undefined
+    let story: {
+      genre?: string | null
+      description?: string | null
+      settings?: { pov?: string } | null
+    } | null = null
     if (input.storyId) {
       try {
         const locations = await database.getLocations(input.storyId)
         location = locations.find((l) => l.current) ?? undefined
       } catch (error) {
         log('current-location lookup failed — omitting location block', error)
+      }
+      try {
+        story = await database.getStory(input.storyId)
+      } catch (error) {
+        log('story lookup failed — omitting story-setting block', error)
       }
     }
 
@@ -850,6 +923,8 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
         input.tagCharacterNames,
         input.beMode,
       ),
+      storySetting: buildStorySettingBlock(story),
+      povGuidance: buildPovGuidance(story?.settings?.pov),
       locationBlock: buildLocationBlock(location),
     })
     const { system, user: prompt } = await ctx.render(TEMPLATE_ID)
@@ -912,6 +987,7 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
       raw,
       buildExpressionCues(input.presentCharacters, input.tagCharacterNames, input.beMode),
       buildSizeSanctions(input.presentCharacters, input.tagCharacterNames, input.beMode),
+      { singleWindow: !chunksLongPrompts(input.providerType) },
     )
     if (!rawWritten) {
       log('booru prompt writer returned empty — falling back')

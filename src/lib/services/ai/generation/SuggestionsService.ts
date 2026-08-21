@@ -12,7 +12,11 @@ import { BaseAIService } from '../BaseAIService'
 import { ContextBuilder } from '$lib/services/context'
 import { getContextConfig, getLorebookConfig } from '../core/config'
 import { createLogger } from '$lib/log'
-import { suggestionsResultSchema, type SuggestionsResult } from '../sdk/schemas/suggestions'
+import {
+  suggestionsResultSchema,
+  type Suggestion,
+  type SuggestionsResult,
+} from '../sdk/schemas/suggestions'
 
 const log = createLogger('Suggestions')
 
@@ -134,15 +138,14 @@ export class SuggestionsService extends BaseAIService {
     // Render through the suggestions template
     const { system, user: prompt } = await ctx.render('suggestions')
 
-    try {
-      // Use SDK's generateStructured - all boilerplate handled automatically
-      const result = await this.generate(suggestionsResultSchema, system, prompt, 'suggestions')
+    // No local catch: propagate so PostGenerationPhase's non-fatal error event
+    // fires and the UI can surface the failure (see ActionChoicesService — the
+    // return-empty swallow hid a broken Suggestions-preset model entirely).
+    const result = await this.generate(suggestionsResultSchema, system, prompt, 'suggestions')
 
-      log('Suggestions generated:', result.suggestions.length)
-      return result
-    } catch (error) {
-      log('Suggestions generation failed:', error)
-      return { suggestions: [] }
-    }
+    log('Suggestions generated:', result.suggestions.length)
+    // Cap by slicing — the schema deliberately has no hard .max() (overflow
+    // must not void the parse).
+    return { suggestions: (result.suggestions as Suggestion[]).slice(0, 3) }
   }
 }

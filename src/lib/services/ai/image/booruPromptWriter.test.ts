@@ -44,6 +44,8 @@ import {
   buildExpressionCues,
   detectActDefects,
   buildLocationBlock,
+  buildPovGuidance,
+  buildStorySettingBlock,
   buildSizeSanctions,
   buildSubjectDossier,
   composeBooruScenePrompt,
@@ -297,6 +299,48 @@ describe('stripCharacterNames', () => {
   })
 })
 
+describe('buildPovGuidance', () => {
+  it('first/second/hybrid person → protagonist-as-camera framing', () => {
+    for (const pov of ['first', 'second', 'hybrid']) {
+      const block = buildPovGuidance(pov)
+      expect(block).toContain('## Camera and POV')
+      expect(block).toContain("through the protagonist's eyes")
+    }
+  })
+
+  it('third person → observed-scene framing', () => {
+    expect(buildPovGuidance('third')).toContain('observed scene')
+  })
+
+  it('empty when the story has no POV', () => {
+    expect(buildPovGuidance(undefined)).toBe('')
+    expect(buildPovGuidance(null)).toBe('')
+  })
+})
+
+describe('buildStorySettingBlock', () => {
+  it('renders genre + description with the setting-fidelity instruction', () => {
+    const block = buildStorySettingBlock({
+      genre: 'high fantasy',
+      description: 'A kingdom on the eve of a mage war.',
+    })
+    expect(block).toContain('## Story setting')
+    expect(block).toContain('Genre: high fantasy.')
+    expect(block).toContain('A kingdom on the eve of a mage war.')
+    expect(block).toContain('MUST fit this setting')
+  })
+
+  it('is empty when there is no story or no genre/description', () => {
+    expect(buildStorySettingBlock(null)).toBe('')
+    expect(buildStorySettingBlock(undefined)).toBe('')
+    expect(buildStorySettingBlock({ genre: '  ', description: '' })).toBe('')
+  })
+
+  it('renders with genre alone', () => {
+    expect(buildStorySettingBlock({ genre: 'cyberpunk' })).toContain('Genre: cyberpunk.')
+  })
+})
+
 describe('buildLocationBlock', () => {
   it('renders name and description', () => {
     const loc = { name: 'Bedroom', description: 'a small candlelit room' } as Location
@@ -306,6 +350,36 @@ describe('buildLocationBlock', () => {
   it('is empty for a missing location', () => {
     expect(buildLocationBlock(null)).toBe('')
     expect(buildLocationBlock(undefined)).toBe('')
+  })
+})
+
+describe('composeBooruScenePrompt — single-window budget (D5 measurement)', () => {
+  it('fits the whole prompt in one CLIP window: total tags capped, scene floor preserved', () => {
+    const sections = {
+      rating: 'sensitive',
+      camera: 'medium shot, pov',
+      countTags: '1girl, solo',
+      actInProgress: false,
+      action:
+        'standing, leaning against viewer, grabbing clothes, pov hands, holding dagger, looking at viewer',
+      characters: [Array.from({ length: 24 }, (_, i) => `identity tag ${i + 1}`).join(', ')],
+      expressions: ['flustered, blush, parted lips'],
+      scene:
+        'castle courtyard, wet stone, night, rain, hanging lantern, lantern light, dramatic shadow, depth of field',
+    }
+    const single = composeBooruScenePrompt(sections, [], [], { singleWindow: true })
+    const tags = single.split(',').map((t) => t.trim())
+    expect(tags.length).toBeLessThanOrEqual(36)
+    // The scene keeps its floor — losing the whole setting is the exact
+    // failure the budget exists to prevent (bare-wall render, measured).
+    expect(single).toContain('castle courtyard')
+    // Per-run cap: the 24-tag identity run was trimmed from the tail.
+    expect(single).toContain('identity tag 1')
+    expect(single).not.toContain('identity tag 24')
+
+    // Default (chunking backends) keeps the richer budget.
+    const chunked = composeBooruScenePrompt(sections)
+    expect(chunked.split(',').length).toBeGreaterThan(tags.length)
   })
 })
 

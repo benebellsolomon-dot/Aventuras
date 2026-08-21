@@ -10,6 +10,7 @@ import {
   extractReasoningMiddleware,
   generateText,
   streamText,
+  NoObjectGeneratedError,
   Output,
   wrapLanguageModel,
 } from 'ai'
@@ -459,26 +460,70 @@ export async function generateStructured<T extends z.ZodType>(
     supportsStructuredOutput,
   })
 
-  const result = await generateText({
-    model: wrapLanguageModel({
-      model,
-      middleware: buildStructuredMiddleware(
-        supportsStructuredOutput,
-        useThinkTag,
-        !!preset.reasoningEffort && preset.reasoningEffort !== 'off',
-        !!preset.thinkingNudgePrompt,
-      ),
-    }),
-    system,
-    prompt,
-    output: Output.object({ schema }),
-    temperature: !settings.advancedRequestSettings.manualMode ? preset.temperature : undefined,
-    maxOutputTokens: !settings.advancedRequestSettings.manualMode ? preset.maxTokens : undefined,
-    providerOptions,
-    abortSignal: signal,
-  })
+  const attempt = async (forcePromptSchema: boolean, systemText: string): Promise<z.infer<T>> => {
+    const result = await generateText({
+      model: wrapLanguageModel({
+        model,
+        middleware: buildStructuredMiddleware(
+          forcePromptSchema ? false : supportsStructuredOutput,
+          useThinkTag,
+          !!preset.reasoningEffort && preset.reasoningEffort !== 'off',
+          !!preset.thinkingNudgePrompt,
+        ),
+      }),
+      system: systemText,
+      prompt,
+      output: Output.object({ schema }),
+      temperature: !settings.advancedRequestSettings.manualMode ? preset.temperature : undefined,
+      maxOutputTokens: !settings.advancedRequestSettings.manualMode ? preset.maxTokens : undefined,
+      providerOptions,
+      abortSignal: signal,
+    })
+    return result.output as z.infer<T>
+  }
 
-  return result.output as z.infer<T>
+  try {
+    return await attempt(false, system ?? '')
+  } catch (firstError) {
+    // ONE corrective retry, with the schema forced into the PROMPT: a
+    // provider that claims structured-output support but ignores
+    // response_format never shows the model any JSON instruction at all, so
+    // it answers in markdown (D5 playtest: minimax returned a markdown list
+    // and every action choice vanished). The retry treats the model as
+    // schemaless and says explicitly what went wrong. Skipped for aborts.
+    if (!NoObjectGeneratedError.isInstance(firstError) || signal?.aborted) throw firstError
+    log('structured output failed — corrective retry with prompt-injected schema', {
+      serviceId,
+      model: preset.model,
+    })
+    try {
+      return await attempt(
+        true,
+        `${system ?? ''}\n\nCORRECTION — your previous reply was not the required JSON object. Respond with ONLY the JSON object described below: no markdown, no headings, no commentary.`,
+      )
+    } catch (error) {
+      // "No object generated" alone is undiagnosable — say WHY (schema
+      // validation vs no JSON at all) and show what the model actually sent,
+      // so a mismatched model on a preset names itself in the UI.
+      if (NoObjectGeneratedError.isInstance(error)) {
+        const raw = (error.text ?? '').replace(/\s+/g, ' ').trim()
+        const snippet = raw === '' ? '(empty response)' : raw.slice(0, 180)
+        const cause =
+          error.cause instanceof Error ? error.cause.message.split('\n')[0].slice(0, 200) : ''
+        log('structured output failed after retry', {
+          serviceId,
+          model: preset.model,
+          cause,
+          snippet,
+        })
+        throw new Error(
+          `model "${preset.model}" returned unusable structured output twice${cause ? ` (${cause})` : ''}. Raw: ${snippet}`,
+          { cause: error },
+        )
+      }
+      throw error
+    }
+  }
 }
 
 export async function generatePlainText(

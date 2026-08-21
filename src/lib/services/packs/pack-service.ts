@@ -36,7 +36,11 @@ import type { PresetPack, FullPack } from './types'
 // 8 — 2026-08-20: booru writer declares actInProgress (mechanical act-tag
 //     validation + one corrective retry — template compliance alone kept
 //     dropping the ongoing act from explicit beats).
-const SERVICE_TEMPLATE_SYNC_VERSION = 8
+// v9: booru scene writer + background analyzer gained the {{ storySetting }}
+// genre/era block (D5 playtest: images drifted modern in fantasy settings).
+// v10: booru scene writer gained {{ povGuidance }} — camera framing follows
+// the story's POV (first/second = protagonist-as-camera, third = observed).
+const SERVICE_TEMPLATE_SYNC_VERSION = 10
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

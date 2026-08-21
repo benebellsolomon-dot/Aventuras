@@ -328,11 +328,13 @@ const backgroundImagePromptAnalysisTemplate: PromptTemplate = {
 
 When generating a description, follow these standards:
 *   **Style**: Visual Novel / Anime Style. Keywords to use include "anime scenery," "2D," "digital art," "cell-shaded," and "highly detailed."
+*   **Setting fidelity**: When a Story Setting block is provided, the environment, architecture, technology, and era in your prompt MUST match it — no modern elements in period/fantasy settings (and vice versa) unless the messages explicitly describe them.
 *   **Artistic Reference**: Mimic the style of high-quality visual novel backgrounds (e.g., Key, Leaf, FAVORITE or 07th-expansion backgrounds).
 *   **Details**: Describe the environment with vibrant or atmospheric colors. Include elements like "soft lighting," "lens flare," or "depth of field" if applicable.
 *   **Composition**: Ensure the composition leaves negative space (usually the lower center or middle) for dialogue boxes and character sprites. Do not clutter the entire image; the edges should be detailed but the focal area should be relatively open.
 *   **Format**: A single, cohesive paragraph. 800 characters or less, any more **will break** the process.`,
-  userContent: `##Previous Message:
+  userContent: `{{ storySetting }}
+##Previous Message:
 {{ previousResponse }}
 
 ##Current Message:
@@ -503,6 +505,8 @@ Mine this for concrete environment details (the place, furnishings, objects, lig
 These are the characters we hold identity tags for. The scene may contain MORE people than these — count and depict EVERYONE the scene describes, and give unnamed people generic booru tags.
 {{ subjectDossier }}
 
+{{ storySetting }}
+{{ povGuidance }}
 {{ locationBlock }}
 Fill the fields now — booru tags only, no prose. The pipeline orders and joins them.`,
 }

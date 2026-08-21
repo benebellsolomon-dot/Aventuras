@@ -35,3 +35,16 @@ const WEIGHTING_CAPABLE_PROVIDERS: ReadonlySet<ImageProviderType> = new Set([
 export function parsesPromptWeighting(providerType: ImageProviderType | undefined): boolean {
   return providerType !== undefined && WEIGHTING_CAPABLE_PROVIDERS.has(providerType)
 }
+
+/**
+ * Whether the provider's backend splits long prompts into multiple 77-token
+ * CLIP windows (A1111-style chunking). The local SD backends do; endpoint
+ * providers hand the string to a hosted pipeline that TRUNCATES at the first
+ * window — measured on nanogpt 2026-08-21: the app's real ~120-token prompt
+ * lost its entire scene tail (castle/rain/night rendered as a bare wall),
+ * while a ~40-token control with identical scene tags rendered every one.
+ * Unknown providers are treated conservatively as single-window.
+ */
+export function chunksLongPrompts(providerType: ImageProviderType | undefined): boolean {
+  return providerType !== undefined && WEIGHTING_CAPABLE_PROVIDERS.has(providerType)
+}

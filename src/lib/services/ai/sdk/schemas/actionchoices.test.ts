@@ -19,19 +19,29 @@ describe('actionChoiceSchema (research/47 Step 4)', () => {
     expect(actionChoiceSchema.parse(tagged)).toEqual(tagged)
   })
 
-  it('rejects unknown skill ids', () => {
-    expect(
-      actionChoiceSchema.safeParse({ text: 'x', type: 'action', skill: 'lockpicking', dc: 10 })
-        .success,
-    ).toBe(false)
+  it('coerces unknown skill ids to no-skill instead of voiding the choice', () => {
+    // One bad field must not void the whole response on providers that don't
+    // enforce json-schema constraints (D5 playtest: every choice vanished).
+    const parsed = actionChoiceSchema.parse({
+      text: 'x',
+      type: 'action',
+      skill: 'lockpicking',
+      dc: 10,
+    })
+    expect(parsed.skill).toBeUndefined()
+    expect(parsed.dc).toBe(10)
   })
 
-  it('rejects out-of-range dc and essenceCost', () => {
-    expect(actionChoiceSchema.safeParse({ text: 'x', type: 'action', dc: 0 }).success).toBe(false)
-    expect(actionChoiceSchema.safeParse({ text: 'x', type: 'action', dc: 41 }).success).toBe(false)
+  it('coerces out-of-range dc and essenceCost to unset instead of voiding the choice', () => {
+    expect(actionChoiceSchema.parse({ text: 'x', type: 'action', dc: 0 }).dc).toBeUndefined()
+    expect(actionChoiceSchema.parse({ text: 'x', type: 'action', dc: 41 }).dc).toBeUndefined()
     expect(
-      actionChoiceSchema.safeParse({ text: 'x', type: 'action', essenceCost: 9 }).success,
-    ).toBe(false)
+      actionChoiceSchema.parse({ text: 'x', type: 'action', essenceCost: 9 }).essenceCost,
+    ).toBeUndefined()
+  })
+
+  it('coerces an off-list type to action', () => {
+    expect(actionChoiceSchema.parse({ text: 'x', type: 'combat' }).type).toBe('action')
   })
 
   it('growthIntent parses alongside the target, and stays absent when unset', () => {
@@ -50,10 +60,10 @@ describe('actionChoiceSchema (research/47 Step 4)', () => {
     ).not.toHaveProperty('growthIntent')
   })
 
-  it('rejects a non-boolean growthIntent and strips unknown neighbours', () => {
+  it('coerces a non-boolean growthIntent to unset and strips unknown neighbours', () => {
     expect(
-      actionChoiceSchema.safeParse({ text: 'x', type: 'action', growthIntent: 'yes' }).success,
-    ).toBe(false)
+      actionChoiceSchema.parse({ text: 'x', type: 'action', growthIntent: 'yes' }).growthIntent,
+    ).toBeUndefined()
     // Unknown keys are stripped, so a model cannot smuggle engine-only markers
     // (e.g. the reducer's `guaranteed`) in through the choice tag.
     expect(

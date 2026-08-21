@@ -156,19 +156,14 @@ export class ActionChoicesService extends BaseAIService {
     // Render through the action-choices template
     const { system, user: prompt } = await ctx.render('action-choices')
 
-    try {
-      const result = await this.generate(
-        actionChoicesResultSchema,
-        system,
-        prompt,
-        'action-choices',
-      )
+    // No local catch: a failed call must PROPAGATE so PostGenerationPhase's
+    // non-fatal error event fires and the UI can say so. The old return-[]
+    // swallow made a broken model on the Suggestions preset indistinguishable
+    // from "no choices this turn" — the feature just silently vanished
+    // (D5 playtest finding).
+    const result = await this.generate(actionChoicesResultSchema, system, prompt, 'action-choices')
 
-      log('Action choices generated:', result.choices.length)
-      return result.choices.slice(0, 4)
-    } catch (error) {
-      log('Action choices generation failed:', error)
-      return []
-    }
+    log('Action choices generated:', result.choices.length)
+    return (result.choices as ActionChoice[]).slice(0, 4)
   }
 }

@@ -178,6 +178,7 @@ class UIStore {
   // RPG action choices (displayed after narration)
   actionChoices = $state<ActionChoice[]>([])
   actionChoicesLoading = $state(false)
+  actionChoicesError = $state<string | null>(null)
   pendingActionChoice = $state<string | null>(null)
   /** Full choice object behind pendingActionChoice — carries the RPG check tag
    * (skill/dc/essenceCost) from a clicked choice to the generation pipeline.
@@ -866,6 +867,7 @@ class UIStore {
 
   setActionChoices(choices: ActionChoice[], storyId?: string) {
     this.actionChoices = choices
+    this.actionChoicesError = null
     // Persist to database if we have a story ID
     if (storyId && choices.length > 0) {
       const data: PersistedActionChoices = { storyId, choices }
@@ -877,6 +879,13 @@ class UIStore {
 
   setActionChoicesLoading(loading: boolean) {
     this.actionChoicesLoading = loading
+    if (loading) this.actionChoicesError = null
+  }
+
+  /** Persistent failure notice rendered where the choices would have been —
+   * a toast alone disappears before the error can be read (D5 playtest). */
+  setActionChoicesError(message: string | null) {
+    this.actionChoicesError = message
   }
 
   clearActionChoices(storyId?: string) {

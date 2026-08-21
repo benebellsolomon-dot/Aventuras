@@ -76,6 +76,17 @@
     <Loader2 class="h-4 w-4 animate-spin" />
     <span class="text-sm">Generating options...</span>
   </div>
+{:else if ui.actionChoicesError}
+  <!-- Persistent failure notice — a toast alone disappears before it can be
+       read, and a silent gap here is indistinguishable from "no choices". -->
+  <div
+    class="border-border mt-3 rounded-lg border border-l-4 border-l-amber-500/60 p-3 text-sm sm:mt-4 {story.currentBgImage
+      ? 'bg-card/60 backdrop-blur-md'
+      : 'bg-card'}"
+  >
+    <span class="font-medium text-amber-500">Choices unavailable:</span>
+    <span class="text-muted-foreground wrap-break-word"> {ui.actionChoicesError}</span>
+  </div>
 {:else if ui.actionChoices.length > 0}
   <div
     class="border-border border-l-muted-foreground/20 mt-3 space-y-2 rounded-lg border border-l-4 p-3 shadow-sm sm:mt-4 sm:p-4 {story.currentBgImage

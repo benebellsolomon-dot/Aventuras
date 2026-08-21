@@ -823,6 +823,22 @@
           console.error('[ActionInput] Fatal pipeline error:', event.error)
           break
         }
+
+        // Non-fatal post-phase failures (suggestions / action choices) used to
+        // die silently: the spinner cleared and nothing rendered, so a broken
+        // model on the Suggestions preset looked like the feature vanishing —
+        // and with it every dice-roll prompt (D5 playtest finding). Surface it
+        // PERSISTENTLY: the toast alone vanished before it could be read.
+        if (event.type === 'error' && !event.fatal && event.phase === 'post') {
+          console.error('[ActionInput] Suggestions/choices failed:', event.error)
+          const label = isCreativeMode ? 'Suggestions' : 'Action choices'
+          ui.setActionChoicesError(`${label} failed: ${event.error.message}`)
+          ui.showToast(
+            `${label} failed: ${event.error.message}. Check the model on the Suggestions preset.`,
+            'warning',
+            12000,
+          )
+        }
       }
 
       ui.updateActivationData(activationTracker, currentStoryRef.id)

@@ -1111,6 +1111,7 @@ class AIService {
           beMode,
           storyId,
           model: modelToUse,
+          providerType: getImageProfile(profileId ?? '')?.providerType,
         })
 
     // Build the request via the shared inline-image assembly (BE grounding +
@@ -1267,7 +1268,7 @@ class AIService {
     try {
       const service = serviceFactory.createBackgroundImageService()
       emitBackgroundImageAnalysisStarted()
-      const result = await service.analyzeResponsesForBackgroundImage(visibleEntries)
+      const result = await service.analyzeResponsesForBackgroundImage(visibleEntries, storyId)
       emitBackgroundImageAnalysisComplete()
       // Ai returns empty string or short response if no change, otherwise the image prompt
       if (result.changeNecessary) {

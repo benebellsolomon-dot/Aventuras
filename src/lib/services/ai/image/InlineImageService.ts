@@ -181,6 +181,7 @@ export class InlineImageGenerationService {
       beMode: context.beMode,
       storyId: context.storyId,
       model: modelToUse,
+      providerType: activeProviderType,
     })
 
     // Assemble the request (BE grounding + cues + per-character LoRA/trigger

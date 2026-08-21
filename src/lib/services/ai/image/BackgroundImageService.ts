@@ -1,10 +1,12 @@
 import { emitBackgroundImageAnalysisFailed } from '$lib/services/events'
 import { ContextBuilder } from '$lib/services/context'
+import { database } from '$lib/services/database'
 import { settings } from '$lib/stores/settings.svelte'
 import type { StoryEntry } from '$lib/types'
 import { createLogger } from '$lib/log'
 import { backgroundImageAnalysisResultSchema, type BackgroundImageAnalysisResult } from '../sdk'
 import { BaseAIService } from '../BaseAIService'
+import { buildStorySettingBlock } from './booruPromptWriter'
 import { generateImage } from './providers/registry'
 
 const log = createLogger('BackgroundImageService')
@@ -22,6 +24,7 @@ export class BackgroundImageService extends BaseAIService {
 
   async analyzeResponsesForBackgroundImage(
     visibleEntries: StoryEntry[],
+    storyId?: string,
   ): Promise<BackgroundImageAnalysisResult> {
     log('analyzeResponsesForBackgroundImage called', {
       visibleEntriesCount: visibleEntries.length,
@@ -40,8 +43,20 @@ export class BackgroundImageService extends BaseAIService {
     const previousResponse = narrationEntries[narrationEntries.length - 2]?.content
     const currentResponse = narrationEntries[narrationEntries.length - 1]?.content
 
+    // Story setting anchors the backdrop's era/atmosphere (D5 playtest
+    // finding: without it, generated scenery drifts modern). Best-effort —
+    // a lookup failure just renders no block.
+    let storySetting = ''
+    if (storyId) {
+      try {
+        storySetting = buildStorySettingBlock(await database.getStory(storyId))
+      } catch (error) {
+        log('story lookup failed — omitting story-setting block', error)
+      }
+    }
+
     const ctx = new ContextBuilder()
-    ctx.add({ previousResponse, currentResponse })
+    ctx.add({ previousResponse, currentResponse, storySetting })
     const { system, user: prompt } = await ctx.render('background-image-prompt-analysis')
 
     try {
