@@ -24,6 +24,17 @@ export {
 
 // Classification
 export { ClassifierService, type ClassificationContext } from './ClassifierService'
+export {
+  ENTITY_NAME_MAX,
+  ENTITY_NAME_MAX_WORDS,
+  SPACELESS_NAME_MAX,
+  guardClassifierEntities,
+  knownEntityNames,
+  type ClassifierEntityReject,
+  type GuardedClassification,
+  type GuardedEntityKind,
+  type KnownEntityNames,
+} from './classifier-entity-guards'
 
 // Memory
 export {

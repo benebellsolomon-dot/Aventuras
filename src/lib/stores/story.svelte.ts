@@ -108,6 +108,7 @@ import {
 import { buildSpellEntryData, type SpellGeneration } from '$lib/services/ai/sdk/schemas/spell'
 import { extractInlineCustomVars } from '$lib/services/ai/sdk/schemas/runtime-variables'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
+import { guardClassifierEntities, knownEntityNames } from '$lib/services/ai/generation'
 import type { RuntimeVariable } from '$lib/services/packs/types'
 import { DEFAULT_MEMORY_CONFIG } from '$lib/services/ai/generation/MemoryService'
 import { LorebookImportExport } from '$lib/services/lorebookImportExport'
@@ -2191,7 +2192,7 @@ class StoryStore {
    * and to tell the user which of the three endings happened (D-7).
    */
   async applyClassificationResult(
-    result: ClassificationResult,
+    rawResult: ClassificationResult,
     entryId?: string,
     checkRecord: CheckRecord | null = null,
   ): Promise<ClassificationApplyOutcome> {
@@ -2215,6 +2216,24 @@ class StoryStore {
         return { applied: false, reason: 'replay' }
       }
     }
+
+    // Accept-time entity-routing guard (research/63): nothing below may create a
+    // row from a name that isn't plausible for its type. The classifier seam
+    // already ran the same pure guard, so this normally rejects nothing — it is
+    // the last line for any caller handing the store a raw result.
+    const guarded = guardClassifierEntities(
+      rawResult,
+      knownEntityNames({
+        characters: this.characters,
+        locations: this.locations,
+        items: this.items,
+        storyBeats: this.storyBeats,
+      }),
+    )
+    if (guarded.rejects.length > 0) {
+      log('entity guard dropped implausibly-routed entities at accept time', guarded.rejects)
+    }
+    const result = guarded.result
 
     log('applyClassificationResult called', {
       characterUpdates: result.entryUpdates.characterUpdates.length,

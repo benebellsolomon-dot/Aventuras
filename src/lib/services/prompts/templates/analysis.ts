@@ -11,6 +11,15 @@ const classifierPromptTemplate: PromptTemplate = {
 Extract ONLY significant, named entities that matter to the ongoing story. Be precise and conservative.
 Note: The story may be in Adventure mode (player as protagonist) or Creative Writing mode (author directing characters).
 
+## Entity Routing (field discipline — read before extracting)
+Each output array holds ONE kind of thing. Put an entity in the array for what it IS, never for where it was mentioned:
+- **newCharacters / characterUpdates** = named people or beings ONLY (a person, creature, spirit, AI). A quest, a plan, a meal, an event, or an object is NEVER a character — even if a character is involved in it.
+- **newLocations / locationUpdates** = places ONLY (a room, building, town, region). A location name is a short proper name ("The Manor Study"), never a sentence describing what happened there.
+- **newItems / itemUpdates** = physical objects ONLY — things rather than places or people (a dagger, a letter, a wagon, a key). A place, a person, or an event is never an item.
+- **newStoryBeats / storyBeatUpdates** = everything else that matters: quests, tasks, plans, promises, events, revelations, milestones. A beat's \`title\` is 3-6 words; its \`description\` is REQUIRED — one or two sentences of context (what happened or what needs to happen, who is involved, what it's for).
+- **scene.currentLocationName** = the name of a PLACE (or null) — never a time word, a character, or an item. Time elapsed goes ONLY in \`scene.timeProgression\`.
+Fill every JSON field by its KEY, not by position: \`name\` holds the name, \`description\` holds prose, \`relationship\` holds a relationship word (friend, enemy, ally, neutral, unknown, or a specific tie like "stepdaughter"), \`status\` holds a status word. Omit an optional field rather than filling it with a placeholder, a status word, or text that belongs in another field (this does NOT apply to \`visualDescriptors\` — always fill those, inventing plausible details as described below).
+
 ## What to Extract
 
 ### Characters - ONLY extract if:
@@ -76,6 +85,7 @@ Example: If character has bloated appearance with duplicate Face/Hair/Eyes entri
 - Example: "She asks for help finding her missing brother" = YES (quest/plot_point)
 - Example: "The truth about the king's murder is revealed" = YES (revelation)
 - Example: "They enjoy a nice meal" = NO
+- Every new beat MUST carry a \`description\` with its context: a bare title ("Star Chart") is useless later — "The Warden promised Amelia a star chart years ago; she wants it for the camping trip" is what the story needs.
 
 ### Story Beat Updates - CRITICAL for cleanup:
 - Always check if existing story beats have been RESOLVED in this passage
@@ -134,8 +144,9 @@ List the exact proper name of EVERY named character physically present in the CU
 2. Only extract what ACTUALLY HAPPENED, not what might happen
 3. Use the exact names from the text, don't invent or embellish
 4. ALWAYS check if active story beats should be marked completed or failed
-5. ALWAYS assess timeProgression - prefer incrementing time over "none" when activities occur
-6. ALWAYS populate presentCharacterNames with every named character physically in the current scene (exact names)`,
+5. Route by KIND (see Entity Routing): quests/events/plans are story beats with a description, never characters, locations, or items; currentLocationName is a place or null
+6. ALWAYS assess timeProgression - prefer incrementing time over "none" when activities occur
+7. ALWAYS populate presentCharacterNames with every named character physically in the current scene (exact names)`,
   userContent: `Analyze this narrative passage and extract world state changes.
 
 ## Context

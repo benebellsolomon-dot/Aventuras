@@ -1726,3 +1726,94 @@ describe('store harness — chekhov narrative debt (E2, research/62)', () => {
     expect(chekhovOf()!.bullets[0].age).toBe(2)
   })
 })
+
+describe('store harness — accept-time entity-routing guard (research/63)', () => {
+  beforeEach(() => {
+    settingsMock.experimentalFeatures.stateTracking = false
+    settingsMock.experimentalFeatures.rollbackOnDelete = false
+    reset(db)
+  })
+
+  const argNames = (method: string, key: 'name' | 'title') =>
+    db.calls
+      .filter((c) => c.method === method)
+      .map((c) => (c.args[0] as Record<string, unknown>)[key])
+
+  it('never creates rows from mis-routed entities and still applies the legitimate ones', async () => {
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.characters = [makeCharacter('Amelia'), makeCharacter('Cook Maren')] as never
+    story.locations = [
+      { id: 'loc-kitchen', storyId: 's1', name: 'The Kitchen', visited: true, current: true },
+    ] as never
+
+    const result = makeClassificationResult({
+      entryUpdates: {
+        newCharacters: [
+          { name: 'Camping trip with Amelia', relationship: 'quest', description: 'packing' },
+          { name: 'Elara', relationship: 'friend', description: 'a traveller' },
+        ],
+        characterUpdates: [{ name: 'Amelia', changes: { newTraits: ['brave'] } }],
+        // Unknown update names would stub rows: a known character as a location,
+        // a known location as an item.
+        locationUpdates: [{ name: 'Cook Maren', changes: { description: 'broad woman' } }],
+        itemUpdates: [{ name: 'The Kitchen', changes: { quantity: 0 } }],
+        newLocations: [
+          {
+            name: 'Amelia challenged her stepfather to a sparring match with practice daggers in the rainy yard. First bout went to Amelia.',
+          },
+          { name: 'Rainy Yard', visited: true },
+        ],
+        newItems: [{ name: 'Practice dagger' }],
+        newStoryBeats: [
+          { title: 'Sparring rematch', description: 'Amelia wants a deciding round' },
+        ],
+      },
+      scene: { currentLocationName: 'minutes', presentCharacterNames: ['Amelia'] },
+    })
+
+    await story.applyClassificationResult(result as never, 'entry-1')
+
+    expect(argNames('addCharacter', 'name')).toEqual(['Elara'])
+    expect(argNames('addLocation', 'name')).toEqual(['Rainy Yard'])
+    expect(argNames('addItem', 'name')).toEqual(['Practice dagger'])
+    expect(argNames('addStoryBeat', 'title')).toEqual(['Sparring rematch'])
+    expect(story.characters.map((c) => c.name)).toEqual(['Amelia', 'Cook Maren', 'Elara'])
+    expect(story.locations.map((l) => l.name)).toEqual(['The Kitchen', 'Rainy Yard'])
+    expect(story.items.map((i) => i.name)).toEqual(['Practice dagger'])
+    // "minutes" was dropped: the current location is untouched and no stub exists.
+    expect(story.locations.find((l) => l.current)?.name).toBe('The Kitchen')
+    expect(story.characters.find((c) => c.name === 'Amelia')?.traits).toContain('brave')
+    // The rejects ride into the persisted delta (classificationResult._guardRejects)
+    // so a mis-routing provider stays diagnosable in a shipped build.
+    const deltaWrite = db.calls.find((c) => c.method === 'updateStoryEntry')
+    const delta = (deltaWrite?.args[1] as { worldStateDelta?: Record<string, unknown> })
+      ?.worldStateDelta
+    const persisted = delta?.classificationResult as { _guardRejects?: { name: string }[] }
+    expect(persisted?._guardRejects?.map((r) => r.name)).toEqual([
+      'Camping trip with Amelia',
+      expect.stringMatching(/^Amelia challenged/),
+      'Cook Maren',
+      'The Kitchen',
+      'minutes',
+    ])
+  })
+
+  it('does not let a known junk "minutes" location be re-targeted as current', async () => {
+    story.locations = [
+      { id: 'loc-kitchen', storyId: 's1', name: 'The Kitchen', visited: true, current: true },
+      { id: 'loc-junk', storyId: 's1', name: 'minutes', visited: true, current: false },
+    ] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        entryUpdates: { locationUpdates: [{ name: 'minutes', changes: { current: true } }] },
+        scene: { currentLocationName: 'minutes' },
+      }) as never,
+      'entry-1',
+    )
+
+    expect(story.locations.find((l) => l.current)?.name).toBe('The Kitchen')
+    expect(db.methodsCalled()).not.toContain('setCurrentLocation')
+    expect(db.methodsCalled()).not.toContain('updateLocation')
+  })
+})

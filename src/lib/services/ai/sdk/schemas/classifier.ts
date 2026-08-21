@@ -140,7 +140,12 @@ export const storyBeatUpdateSchema = z.object({
 
 export const newStoryBeatSchema = z.object({
   title: z.string().describe('Short title (3-6 words)'),
-  description: z.string().describe('What happened or needs to happen').optional(),
+  description: z
+    .string()
+    .describe(
+      'REQUIRED context — one or two sentences: what happened or needs to happen, who is involved, what it is for',
+    )
+    .optional(),
   type: z
     .enum(['milestone', 'quest', 'revelation', 'event', 'plot_point'])
     .describe('milestone, quest, revelation, event, or plot_point')
@@ -224,9 +229,33 @@ export type StoryBeatUpdate = z.infer<typeof storyBeatUpdateSchema>
 export type NewStoryBeat = z.infer<typeof newStoryBeatSchema>
 export type EntryUpdates = z.infer<typeof entryUpdatesSchema>
 export type Scene = z.infer<typeof sceneSchema>
+/** Which result slot a guard reject came from (see ai/generation/classifier-entity-guards.ts). */
+export type GuardedEntityKind =
+  | 'character'
+  | 'location'
+  | 'item'
+  | 'storyBeat'
+  | 'currentLocation'
+  | 'presentCharacter'
+
+/** One entity dropped by the accept-time entity-routing guard (research/63). */
+export interface ClassifierEntityReject {
+  kind: GuardedEntityKind
+  /** Which result field the entry came from (e.g. `newCharacters`, `scene.currentLocationName`). */
+  field: string
+  name: string
+  reason: string
+}
+
 export type ClassificationResult = z.infer<typeof classificationResultSchema> & {
   /** Internal metadata: runtime variable definitions for use by applyClassificationResult. Not LLM output. */
   _runtimeVarDefs?: RuntimeVariable[]
+  /**
+   * Internal metadata: entities the entity-routing guard dropped (both seams
+   * append). Persists with the turn's worldStateDelta.classificationResult so a
+   * mis-routing provider stays diagnosable in a shipped build. Not LLM output.
+   */
+  _guardRejects?: ClassifierEntityReject[]
   /** BE transformation events (present only when the story's beMode schema extension is active). */
   beEvents?: BeEvent[]
   /** Off-screen agenda proposals (present only when the npcAgendas schema extension is active). */

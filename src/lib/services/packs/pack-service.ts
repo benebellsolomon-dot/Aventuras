@@ -40,7 +40,12 @@ import type { PresetPack, FullPack } from './types'
 // genre/era block (D5 playtest: images drifted modern in fantasy settings).
 // v10: booru scene writer gained {{ povGuidance }} — camera framing follows
 // the story's POV (first/second = protagonist-as-camera, third = observed).
-const SERVICE_TEMPLATE_SYNC_VERSION = 10
+// v11: classifier gained the Entity Routing block (characters = named beings,
+// locations = places, items = objects, everything else = story beats WITH a
+// description; currentLocationName is a place or null) — D5 playtest: a
+// position-filling model routed quests into characters and "minutes" into the
+// current location (research/63).
+const SERVICE_TEMPLATE_SYNC_VERSION = 11
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

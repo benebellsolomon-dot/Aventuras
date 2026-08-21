@@ -42,6 +42,7 @@ import {
 } from '$lib/services/worldsim'
 import type { RuntimeVariable, RuntimeEntityType } from '$lib/services/packs/types'
 import { boundClassifierExtensionArrays } from './classifier-bounds'
+import { guardClassifierEntities, knownEntityNames } from './classifier-entity-guards'
 
 const log = createLogger('Classifier')
 
@@ -223,7 +224,24 @@ export class ClassifierService extends BaseAIService {
           bound.overflow,
         )
       }
-      const result = bound.result as unknown as ClassificationResult
+      // Entity-routing plausibility guard (research/63): a provider that fills
+      // the JSON by position parses cleanly yet routes quests into characters and
+      // time words into currentLocationName. Drop those here so the persisted
+      // delta and the image/translation consumers only ever see accepted
+      // entities; applyClassificationResult re-runs the same (idempotent) guard.
+      const guarded = guardClassifierEntities(
+        bound.result as unknown as ClassificationResult,
+        knownEntityNames({
+          characters: context.existingCharacters,
+          locations: context.existingLocations,
+          items: context.existingItems,
+          storyBeats: context.existingStoryBeats,
+        }),
+      )
+      if (guarded.rejects.length > 0) {
+        log('entity guard dropped implausibly-routed entities', guarded.rejects)
+      }
+      const result = guarded.result
 
       // Post-process: clamp number values to min/max constraints
       if (runtimeVars.length > 0) {
