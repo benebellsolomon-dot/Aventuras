@@ -79,9 +79,11 @@
     </div>
     <div class="mt-1">
       <span
-        class="rounded-full border border-emerald-700/60 px-2 py-0.5 text-[10px] text-emerald-400"
+        class="rounded-full border px-2 py-0.5 text-[10px] {bond < 0
+          ? 'border-red-700/60 text-red-400'
+          : 'border-emerald-700/60 text-emerald-400'}"
       >
-        bond {bondStance(bond)} · {bond}
+        bond {bondStance(bond)} · {bond > 0 ? '+' : ''}{bond}
       </span>
     </div>
   </div>

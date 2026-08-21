@@ -48,6 +48,49 @@ describe('buildHaremStateBlock', () => {
     ])
     expect(block).toContain('milk: light')
   })
+
+  // ---- research/60: stance blurbs, grudge line, and the no-invention guard ----
+
+  it('a girl with relationship history carries the behavioral blurb', () => {
+    const block = buildHaremStateBlock([{ name: 'Mira', state: { ...freshState(9), bond: 75 } }])
+    expect(block).toContain('bond: deeply bonded (deep trust')
+  })
+
+  it('a never-touched girl gets the bare stance word — no manufactured blurb', () => {
+    const block = buildHaremStateBlock([
+      { name: 'Sable', state: { ...freshState(9), quirks: ['proud'] } },
+    ])
+    const line = block.split('\n').find((l) => l.startsWith('Sable —'))
+    expect(line).toContain('bond: warming.')
+    expect(line).not.toContain('bond: warming (')
+  })
+
+  it('a stalled grudge renders its warning line', () => {
+    const block = buildHaremStateBlock([
+      {
+        name: 'Mira',
+        state: {
+          ...freshState(9),
+          rel: { bond: 9, sparks: 8, grudge: 3, ct: 4, warmed: true },
+        },
+      },
+    ])
+    expect(block).toContain('carrying a grudge')
+  })
+
+  it('rel wins over stale legacy bond in the rendered stance', () => {
+    const block = buildHaremStateBlock([
+      {
+        name: 'Mira',
+        state: {
+          ...freshState(9),
+          bond: 90,
+          rel: { bond: -4, sparks: 0, grudge: 0, ct: 0, warmed: false },
+        },
+      },
+    ])
+    expect(block).toContain('bond: hostile')
+  })
 })
 
 // ---- Phase 3 (research/49 Step 6): lactation prompt lines ----

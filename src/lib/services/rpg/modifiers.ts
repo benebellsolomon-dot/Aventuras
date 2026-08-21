@@ -43,8 +43,9 @@ export function buildTargetCheckModifiers(
     if (bondValue !== 0) {
       modifiers.push({ label: `bond: ${bondStance(bond)}`, value: bondValue })
     }
-    // skittish: social DCs +2 until bond >= 50 → bonus −2 (sign inverted).
-    if (hasQuirk(state, 'skittish') && bond < 50) {
+    // skittish: social DCs +2 until bond >= 10 → bonus −2 (sign inverted).
+    // (10 on the −5..+20 scale ≈ the old 50, research/60.)
+    if (hasQuirk(state, 'skittish') && bond < 10) {
       modifiers.push({ label: 'skittish (harder to approach)', value: -2 })
     }
   }

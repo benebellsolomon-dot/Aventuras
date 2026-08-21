@@ -3504,9 +3504,10 @@ class StoryStore {
       )
       eventsByCharacterId.set(id, [...keptClassifierEvents, ...spellCast.events])
       // Bond / exposure: APPEND the spell's shift to the classifier's (both are
-      // legitimate — the spell is mechanical, the classifier read the prose), and
-      // the reducer's per-turn velocity caps bound the total. Replacing would drop
-      // a genuine same-turn opposite movement for this girl (review finding).
+      // legitimate — the spell is mechanical, the classifier read the prose).
+      // Classifier events stay gain-capped; spell events carry `potent` and are
+      // cap-exempt but bounded by the sparks bank cap (research/60). Replacing
+      // would drop a genuine same-turn opposite movement for this girl.
       if (spellCast.bondEvents.length > 0) {
         bondEventsByCharacterId.set(id, [
           ...(bondEventsByCharacterId.get(id) ?? []),

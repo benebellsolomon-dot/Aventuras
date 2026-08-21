@@ -24,7 +24,7 @@
  */
 
 import { SPRITE_AROUSAL_FLUSH_THRESHOLD } from '$lib/services/be'
-import { bondStance } from '$lib/services/be'
+import { bondStance, relOf } from '$lib/services/be'
 import type { BodyState, TransformationAttitude } from '$lib/services/be'
 
 /**
@@ -135,12 +135,15 @@ const ATTITUDE_EXPRESSION: Readonly<Record<TransformationAttitude, string>> = {
 
 /** Bond extremes only — the middle of the track has no distinctive face. */
 function bondExpression(state: BodyState): string | null {
-  // Read the raw field, NOT bondOf(): an unset bond reads through to a default,
-  // and rendering a default as devotion or wariness would be inventing state.
-  if (state.bond === undefined) return null
-  const stance = bondStance(state.bond)
+  // Presence check on the raw fields, NOT bondOf(): an unset track reads
+  // through to a default, and rendering a default as devotion or wariness
+  // would be inventing state. relOf converts a legacy 0-100 value to the
+  // −5..+20 scale before banding (research/60).
+  if (state.rel === undefined && state.bond === undefined) return null
+  const stance = bondStance(relOf(state).bond)
   if (stance === 'devoted') return 'loving gaze'
-  if (stance === 'wary') return 'averted eyes'
+  if (stance === 'wary' || stance === 'cold') return 'averted eyes'
+  if (stance === 'hostile') return 'glaring'
   return null
 }
 

@@ -153,19 +153,43 @@ export function parseGrowthEligibleKinds(
   return kinds.length > 0 ? kinds : undefined
 }
 
-// ---- Phase 2 harem tracks (research/48 R6) ----
+// ---- Phase 2 harem tracks (research/48 R6; bond re-based research/60) ----
 // ⚠ D5: reference defaults — re-derive against real play cadence data.
 
-/** Net absolute bond movement per character per turn — SYMMETRIC (caps warming
- * AND strain). The primary anti-positivity-bias lever: one gushing scene can't
- * max the track. */
-export const MAX_BOND_DELTA_PER_TURN = 5
+// Relationship track (FF5.2 unification, research/60): bond lives on −5..+20
+// and RISES only through sparks conversion — the anti-positivity-bias lever
+// that replaced the old symmetric ±5 velocity cap. Direct movement is
+// negative-only and capped.
+export const REL_BOND_MIN = -5
+export const REL_BOND_MAX = 20
+/** New-scale default (old BOND_DEFAULT 20 ÷ LEGACY_BOND_DIVISOR — stays 'warming'). */
+export const REL_BOND_DEFAULT = 4
+/** Legacy 0-100 bond values convert on read: round(bond / 5). */
+export const LEGACY_BOND_DIVISOR = 5
+/** Sparks gained per turn cap (devoted_heart folds +1/event BEFORE this binds). */
+export const MAX_SPARKS_GAIN_PER_TURN = 2
+export const MAX_GRUDGE_GAIN_PER_TURN = 1
+/** Direct bond loss per turn cap (scene-defining strain only). */
+export const MAX_DIRECT_BOND_LOSS_PER_TURN = 2
+/** Every SPARKS_CHECK_PERIOD interaction turns: sparks >= threshold → bond +1. */
+export const SPARKS_CONVERT_THRESHOLD = 7
+export const SPARKS_CHECK_PERIOD = 5
+/**
+ * Hard ceiling on banked sparks (fix-diff HIGH-1): under 2× the threshold, a
+ * bank can pay out at most ONE conversion after warmth stops, then fades —
+ * an unbounded bank converted to bond forever with zero new warmth.
+ */
+export const SPARKS_BANK_CAP = SPARKS_CONVERT_THRESHOLD * 2 - 1
+/** Every GRUDGE_CHECK_PERIOD interaction turns: grudge >= threshold → bond −1. */
+export const GRUDGE_CONVERT_THRESHOLD = 5
+export const GRUDGE_CHECK_PERIOD = 3
+/** At/above this grudge, sparks conversion is blocked (sparks hold, banked). */
+export const GRUDGE_STALL_THRESHOLD = 3
+
 /** Dependence gain cap per character per turn (gain only; decay is 1/turn). */
 export const MAX_DEPENDENCE_GAIN_PER_TURN = 4
-export const BOND_DELTA_PER_INTENSITY = 2
 export const DEPENDENCE_GAIN_PER_INTENSITY = 2
 export const DEPENDENCE_DECAY_PER_IDLE_BEAT = 1
-export const BOND_DEFAULT = 20
 export const DEPENDENCE_DEFAULT = 0
 export const WITHDRAWAL_DEPENDENCE_THRESHOLD = 60
 /** devoted_heart lowers the withdrawal threshold by this much. */

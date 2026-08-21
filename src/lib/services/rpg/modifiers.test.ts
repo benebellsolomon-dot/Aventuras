@@ -24,6 +24,15 @@ describe('buildTargetCheckModifiers (research/48 R4 sign contract)', () => {
     expect(sum(girl({ bond: 95 }), 'aftercare')).toBe(3)
   })
 
+  it('new-scale rel path: hostile −4, cold −2; skittish cutoff at rel.bond 10', () => {
+    const relGirl = (bond: number, quirks: string[] = []): BodyState =>
+      girl({ rel: { bond, sparks: 0, grudge: 0, ct: 0, warmed: false }, quirks })
+    expect(sum(relGirl(-5), 'seduction')).toBe(-4)
+    expect(sum(relGirl(-1), 'seduction')).toBe(-2)
+    expect(sum(relGirl(9, ['skittish']), 'persuasion')).toBe(-1) // bonded +1, skittish −2
+    expect(sum(relGirl(10, ['skittish']), 'persuasion')).toBe(1) // cutoff: bond only
+  })
+
   it('bond does not touch non-social skills', () => {
     expect(buildTargetCheckModifiers(girl({ bond: 95 }), 'athletics')).toEqual([])
     expect(buildTargetCheckModifiers(girl({ bond: 5 }), 'alchemy')).toEqual([])

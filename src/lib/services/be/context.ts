@@ -12,7 +12,7 @@
  * (31a §3.5, register tier-gated).
  */
 
-import { SUPPORT_HANG_GATE } from './constants'
+import { GRUDGE_STALL_THRESHOLD, SUPPORT_HANG_GATE } from './constants'
 import { bandWord, comparative, cupLetter } from './ladder'
 import {
   bodyRow,
@@ -24,7 +24,7 @@ import {
 import { apparentTierBonus, isEngorged, lactationOf, supplyLabel } from './lactation'
 import { nextMilestone } from './milestones'
 import { QUIRK_BY_ID, readQuirks, type QuirkDef } from './quirks'
-import { bondOf, bondStance, dependenceOf, dependenceStage } from './tracks'
+import { bondStance, dependenceOf, dependenceStage, relOf, stanceBlurb } from './tracks'
 import type { BodyState } from './types'
 
 export interface BeStateEntry {
@@ -185,6 +185,7 @@ export const HAREM_STATE_HEADER = '[HAREM STATE — canonical and authoritative]
 export function buildHaremStateBlock(entries: BeStateEntry[]): string {
   const tracked = entries.filter(
     (e) =>
+      e.state.rel !== undefined ||
       e.state.bond !== undefined ||
       e.state.dependence !== undefined ||
       (e.state.quirks?.length ?? 0) > 0 ||
@@ -193,8 +194,15 @@ export function buildHaremStateBlock(entries: BeStateEntry[]): string {
   if (tracked.length === 0) return ''
   const lines = tracked.map((entry) => {
     const parts: string[] = []
-    const bond = bondOf(entry.state)
-    parts.push(`bond: ${bondStance(bond)}`)
+    const rel = relOf(entry.state)
+    const stance = bondStance(rel.bond)
+    // The behavioral blurb only for girls with actual relationship history —
+    // asserting a manufactured stance for a never-touched girl would be
+    // inventing state (review F4; same rule as expressionTags).
+    const hasHistory = entry.state.rel !== undefined || entry.state.bond !== undefined
+    parts.push(hasHistory ? `bond: ${stance} (${stanceBlurb(stance)})` : `bond: ${stance}`)
+    if (rel.grudge >= GRUDGE_STALL_THRESHOLD)
+      parts.push('carrying a grudge — warmth is not landing until she feels it repaired')
     const dependence = dependenceOf(entry.state)
     if (dependence > 0) parts.push(`dependence: ${dependenceStage(dependence)}`)
     const lactation = lactationOf(entry.state)

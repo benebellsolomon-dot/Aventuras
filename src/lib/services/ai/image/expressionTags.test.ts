@@ -109,6 +109,11 @@ describe('engineExpressionTags', () => {
     expect(engineExpressionTags(state({ bond: 95 }))).toEqual(['loving gaze'])
     expect(engineExpressionTags(state({ bond: 5 }))).toEqual(['averted eyes'])
     expect(engineExpressionTags(state({ bond: 50 }))).toEqual([])
+    // New-scale negative bands (research/60): hostile glares, cold averts.
+    const relState = (bond: number) =>
+      state({ rel: { bond, sparks: 0, grudge: 0, ct: 0, warmed: false } })
+    expect(engineExpressionTags(relState(-4))).toEqual(['glaring'])
+    expect(engineExpressionTags(relState(-1))).toEqual(['averted eyes'])
   })
 
   it('lets the stronger signals crowd out the bond flavor', () => {

@@ -50,11 +50,11 @@ import {
 import { INTERACTION_MILESTONES } from './milestones'
 import { hasQuirk } from './quirks'
 import {
-  applyBondEvents,
   applyExposure,
-  bondOf,
+  applyRelationshipTurn,
   decayDependence,
   dependenceOf,
+  relOf,
   withdrawalCondition,
 } from './tracks'
 import { CRAVING_PULL_DEPENDENCE } from './constants'
@@ -113,7 +113,11 @@ export interface ReducerExtras {
    * time (decay, cooldown) but never change size unseen. Default true.
    */
   ticksEnabled?: boolean
-  /** Classifier-proposed bond movement this turn (research/48; velocity-capped). */
+  /**
+   * Bond movement this turn (research/60): classifier-proposed events feed the
+   * gain-capped sparks/grudge math; spell-authored events carry `potent` and
+   * are cap-exempt.
+   */
   bondEvents?: ReadonlyArray<BondEvent>
   /** Classifier-proposed catalyst exposure this turn (research/48; gain-capped). */
   exposureEvents?: ReadonlyArray<ExposureEvent>
@@ -667,27 +671,64 @@ export function reduceCharacterBody(
     }
   }
 
-  // ---- Step 8: harem tracks — bond, exposure/dependence, attitude pull ----
+  // ---- Step 8: harem tracks — relationship, exposure/dependence, attitude pull ----
   // Track fields materialize only when something moves them (research/48 risk 7:
   // no eager default writes; read-through defaults live in tracks.ts).
-  let bond = state.bond
+  // The relationship engine (research/60) runs only while ACTIVE — events this
+  // turn, or accumulators still draining — so an untouched girl stays
+  // key-identical, a legacy `bond` converts exactly once (on her first active
+  // turn), and the cadence counter never write-amplifies idle girls.
+  let rel = state.rel
   let dependence = state.dependence
   let beatsSinceExposure = state.beatsSinceExposure
   const bondEvents = extras?.bondEvents ?? []
   const exposureEvents = extras?.exposureEvents ?? []
 
-  if (bondEvents.length > 0) {
-    // devoted_heart: +1 per event, folded in BEFORE the velocity cap binds.
-    const result = applyBondEvents(bondOf(state), bondEvents, isDevotedHeart ? 1 : 0)
-    if (result.delta !== 0) bond = result.value
-    log.push({
-      character: characterName,
-      kind: 'bond',
-      outcome: 'none',
-      delta: 0,
-      tierAfter: tier,
-      note: `${result.delta >= 0 ? '+' : ''}${result.delta} → ${result.value}${result.capped ? ' (velocity-capped)' : ''}`,
+  const relActive =
+    bondEvents.length > 0 ||
+    (state.rel !== undefined && (state.rel.sparks > 0 || state.rel.grudge > 0))
+  if (relActive) {
+    const before = relOf(state)
+    // devoted_heart: +1 spark per warm event, folded in BEFORE the cap binds.
+    const result = applyRelationshipTurn(before, bondEvents, {
+      ticks: ticksEnabled,
+      devotedHeart: isDevotedHeart,
     })
+    const moved =
+      state.rel === undefined ||
+      result.bondDelta !== 0 ||
+      result.sparksDelta !== 0 ||
+      result.grudgeDelta !== 0 ||
+      result.rel.ct !== before.ct ||
+      result.rel.warmed !== before.warmed
+    if (moved) rel = result.rel
+    const parts: string[] = []
+    if (result.sparksDelta !== 0)
+      parts.push(
+        `sparks ${result.sparksDelta > 0 ? '+' : ''}${result.sparksDelta} → ${result.rel.sparks}`,
+      )
+    if (result.grudgeDelta !== 0)
+      parts.push(
+        `grudge ${result.grudgeDelta > 0 ? '+' : ''}${result.grudgeDelta} → ${result.rel.grudge}`,
+      )
+    if (result.bondDelta !== 0)
+      parts.push(`bond ${result.bondDelta > 0 ? '+' : ''}${result.bondDelta} → ${result.rel.bond}`)
+    for (const conversion of result.conversions) {
+      if (conversion === 'sparks') parts.push('sparks converted')
+      if (conversion === 'grudge') parts.push('grudge boiled over')
+      if (conversion === 'stalled') parts.push('conversion stalled by grudge')
+    }
+    if (result.capped) parts.push('gain-capped')
+    if (parts.length > 0) {
+      log.push({
+        character: characterName,
+        kind: 'bond',
+        outcome: 'none',
+        delta: 0,
+        tierAfter: tier,
+        note: parts.join(' | '),
+      })
+    }
   }
 
   if (exposureEvents.length > 0) {
@@ -836,7 +877,9 @@ export function reduceCharacterBody(
       driftNote,
       // Track fields spread conditionally: an untouched girl's state stays
       // key-identical (the store's stringify no-op-write skip depends on it).
-      ...(bond !== undefined ? { bond } : {}),
+      // Legacy `bond` passes through via ...state untouched; `rel` is
+      // authoritative once present (research/60).
+      ...(rel !== undefined ? { rel } : {}),
       ...(dependence !== undefined ? { dependence } : {}),
       ...(beatsSinceExposure !== undefined ? { beatsSinceExposure } : {}),
       // Same conditional-spread contract: the lactation block appears only when

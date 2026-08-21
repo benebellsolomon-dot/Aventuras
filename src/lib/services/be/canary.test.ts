@@ -204,12 +204,17 @@ describe('Phase 2 full-turn canary', () => {
         exposureEvents: [{ character: 'Mira', intensity: 2 }],
       },
     )
-    // Pin the observed goldens (harvested at implementation time; identical
-    // forever after — do NOT update to make a refactor pass).
+    // Pin the observed goldens (do NOT update to make a refactor pass).
+    // DELIBERATELY RE-HARVESTED 2026-08-20 for the research/60 relationship
+    // engine (post-adversarial-review math): legacy bond 40 floor-converts to
+    // rel.bond 8 — still warming, gates stay locked exactly as the old scale
+    // had them; the warm event feeds sparks (2+1 devoted_heart, quirk-raised
+    // cap 3) instead of raising bond directly; legacy `bond` stays untouched.
     expect({
       tier: next.tier,
       pendingGrowth: next.pendingGrowth ?? null,
-      bond: next.bond,
+      rel: next.rel ?? null,
+      legacyBond: next.bond,
       dependence: next.dependence,
       beatsSinceExposure: next.beatsSinceExposure,
       attitude: next.attitude ?? null,
@@ -219,7 +224,6 @@ describe('Phase 2 full-turn canary', () => {
       {
         "attitude": "craving",
         "beatsSinceExposure": 0,
-        "bond": 45,
         "cooldown": 2,
         "dependence": 62,
         "kinds": [
@@ -228,7 +232,15 @@ describe('Phase 2 full-turn canary', () => {
           "exposure",
           "mood",
         ],
+        "legacyBond": 40,
         "pendingGrowth": null,
+        "rel": {
+          "bond": 8,
+          "ct": 1,
+          "grudge": 0,
+          "sparks": 3,
+          "warmed": true,
+        },
         "tier": 7,
       }
     `)

@@ -110,7 +110,11 @@ describe('translateSpellEffects — channel routing (Phase 4 Step 2)', () => {
       { character: T, kind: 'catalyst', intensity: 2, guaranteed: true },
       { character: T, kind: 'induction', intensity: 1 },
     ])
-    expect(out.bondEvents).toEqual([{ character: T, direction: 'warm', intensity: 2 }])
+    // `potent` marks the engine-authored (spell-cast) origin: cap-exempt and
+    // doubled in the sparks math (research/60 R-2), classifier can never set it.
+    expect(out.bondEvents).toEqual([
+      { character: T, direction: 'warm', intensity: 2, potent: true },
+    ])
     expect(out.exposureEvents).toEqual([{ character: T, intensity: 1 }])
     expect(out.softConditions).toContainEqual({ label: 'buoyancy charm', ttl: 3 })
     expect(out.softConditions).toContainEqual(

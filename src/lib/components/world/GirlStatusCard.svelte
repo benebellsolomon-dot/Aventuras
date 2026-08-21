@@ -9,11 +9,13 @@
     bondStance,
     dependenceOf,
     dependenceStage,
+    GRUDGE_STALL_THRESHOLD,
     fluidPressureLabel,
     isEngorged,
     lactationOf,
     QUIRK_BY_ID,
     readQuirks,
+    relOf,
     selectSprite,
     supplyMeter,
     type BodyState,
@@ -40,6 +42,7 @@
   )
   const portrait = $derived(character.portrait ? asImageUrl(character.portrait) : null)
 
+  const rel = $derived(relOf(state))
   const bond = $derived(bondOf(state))
   const dependence = $derived(dependenceOf(state))
   const engorged = $derived(isEngorged(state))
@@ -119,10 +122,19 @@
   <div class="space-y-1.5 px-3 pt-1.5 pb-2">
     <div>
       <div class="text-muted-foreground flex justify-between text-[11px]">
-        <span>bond</span><span class="text-foreground">{bondStance(bond)} · {bond}</span>
+        <span>bond</span><span class="text-foreground"
+          >{bondStance(bond)} · {bond > 0
+            ? '+'
+            : ''}{bond}{#if rel.grudge >= GRUDGE_STALL_THRESHOLD}
+            · grudge{/if}</span
+        >
       </div>
       <div class="bg-muted mt-0.5 h-1.5 overflow-hidden rounded">
-        <div class="h-full rounded bg-emerald-400" style="width: {bond}%"></div>
+        <!-- bond is −5..+20 (research/60); normalize onto the bar -->
+        <div
+          class="h-full rounded {bond < 0 ? 'bg-red-400' : 'bg-emerald-400'}"
+          style="width: {((bond + 5) / 25) * 100}%"
+        ></div>
       </div>
     </div>
 

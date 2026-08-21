@@ -27,17 +27,20 @@ interface GateDef {
 }
 
 // ⚠ D5-style reference defaults — re-derive from play.
+// Bond thresholds are on the −5..+20 scale (research/60): 9 = bonded,
+// 14 = deeply bonded — the exact floor-conversions of the old 45/70 (÷5),
+// so no existing save gains or loses gate access on load. Dependence stays 0-100.
 export const GATED_INTERACTIONS: ReadonlyArray<GateDef> = [
   {
     id: 'intimate_handling',
     label: 'intimate handling',
-    available: (i) => i.bond >= 45,
+    available: (i) => i.bond >= 9,
     requirement: 'bond: bonded or deeper',
   },
   {
     id: 'induce_lactation',
     label: 'inducing lactation',
-    available: (i) => i.bond >= 45 && !i.lactationActive,
+    available: (i) => i.bond >= 9 && !i.lactationActive,
     requirement: 'bond: bonded, and she is not already lactating',
   },
   // research/49 risk 8: the mass floor was a pre-lactation proxy for "full
@@ -46,19 +49,19 @@ export const GATED_INTERACTIONS: ReadonlyArray<GateDef> = [
   {
     id: 'milking',
     label: 'milking',
-    available: (i) => i.bond >= 45 && i.lactationActive,
+    available: (i) => i.bond >= 9 && i.lactationActive,
     requirement: 'bond: bonded, and an established milk supply',
   },
   {
     id: 'advanced_catalyst',
     label: 'advanced catalysts',
-    available: (i) => i.bond >= 70 || i.dependence >= 35,
+    available: (i) => i.bond >= 14 || i.dependence >= 35,
     requirement: 'deep trust, or an already-hooked appetite',
   },
   {
     id: 'deep_ritual',
     label: 'deep ritual workings',
-    available: (i) => i.bond >= 70 && i.dependence >= 60,
+    available: (i) => i.bond >= 14 && i.dependence >= 60,
     requirement: 'deep trust and a craving dependence',
   },
 ]

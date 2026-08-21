@@ -26,6 +26,7 @@ export {
   GROWTH_DELTA_BY_OUTCOME,
   GROWTH_EVENT_KINDS,
   GROWTH_INTENT_BASE_INTENSITY,
+  GRUDGE_STALL_THRESHOLD,
   GUARANTEED_GROWTH_ROLL,
   MAX_BE_CONDITIONS,
   MILK_UNIT_ML,
@@ -138,18 +139,22 @@ export {
   type PresenceEntrySource,
 } from './presence'
 export {
-  applyBondEvents,
+  applyRelationshipTurn,
   applyExposure,
   bondCheckModifier,
   bondOf,
   bondStance,
+  clampBond,
   clampTrack,
   decayDependence,
   dependenceOf,
   dependenceStage,
+  relOf,
+  stanceBlurb,
   withdrawalCondition,
   type BondStance,
   type DependenceStage,
+  type RelationshipTurnResult,
   type TrackDelta,
 } from './tracks'
 export {

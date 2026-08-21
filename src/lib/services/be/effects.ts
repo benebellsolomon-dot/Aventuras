@@ -216,10 +216,13 @@ export function translateSpellEffects(
         })
         break
       case 'bond':
+        // potent: a check-earned charm is cap-exempt and doubled in the sparks
+        // math (research/60 R-2) — the classifier can never set this flag.
         out.bondEvents.push({
           character: targetCharacter,
           direction: effect.direction ?? 'warm',
           intensity: scaled(effect.intensity),
+          potent: true,
         })
         break
       case 'dependence':

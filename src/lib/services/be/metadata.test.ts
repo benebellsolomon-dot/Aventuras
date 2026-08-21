@@ -120,6 +120,52 @@ describe('lactation block (research/49 R1 — neutral passthrough)', () => {
   })
 })
 
+describe('relationship block persistence (research/60)', () => {
+  test('a rel-bearing state survives the write/read round-trip', () => {
+    const state = {
+      ...defaultBodyState(9),
+      rel: { bond: -3, sparks: 4, grudge: 2, ct: 7, warmed: true },
+    }
+    expect(readBodyState(writeBodyState(null, state))?.rel).toEqual(state.rel)
+  })
+
+  test('a legacy-only save (bond, no rel) still parses', () => {
+    const parsed = readBodyState({
+      [BODY_STATE_KEY]: { ...defaultBodyState(9), bond: 45 },
+    })
+    expect(parsed?.bond).toBe(45)
+    expect(parsed?.rel).toBeUndefined()
+  })
+
+  test('a partial rel from a different build parses with defaulted counters', () => {
+    const parsed = readBodyState({
+      [BODY_STATE_KEY]: { ...defaultBodyState(9), rel: { bond: 12 } },
+    })
+    expect(parsed?.rel).toMatchObject({ bond: 12, sparks: 0, grudge: 0, ct: 0, warmed: false })
+  })
+
+  test('an out-of-range rel.bond from a newer build survives the parse (31a lesson 3)', () => {
+    const parsed = readBodyState({
+      [BODY_STATE_KEY]: {
+        ...defaultBodyState(9),
+        rel: { bond: 25, sparks: 0, grudge: 0, ct: 0, warmed: false },
+      },
+    })
+    expect(parsed).not.toBeNull() // strict bounds here would nuke the whole body state
+    expect(parsed?.rel?.bond).toBe(25) // normalization happens at read time in relOf()
+  })
+
+  test('a MALFORMED rel degrades to absent instead of nuking the whole body state', () => {
+    for (const garbage of [null, 7, 'bonded', { bond: 'twelve' }, { sparks: 3 }]) {
+      const parsed = readBodyState({
+        [BODY_STATE_KEY]: { ...defaultBodyState(9), rel: garbage },
+      })
+      expect(parsed).not.toBeNull() // the girl keeps tier/quirks/lactation
+      expect(parsed?.rel).toBeUndefined() // only the relationship history is lost
+    }
+  })
+})
+
 describe('seeding from a card cup letter', () => {
   test('a known letter seeds its anchor tier', () => {
     const state = seedBodyStateFromCup('X')

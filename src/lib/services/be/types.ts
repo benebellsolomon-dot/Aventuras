@@ -81,11 +81,20 @@ export interface BodyState {
   /** One-turn drift-correction carrier (Spec 1 Task 6; cleared by the next reduce). */
   driftNote?: { note: string }
   /**
-   * Relationship/trust track 0-100 (research/46 §2.3 — the D2 model, ruled in
-   * as Phase 2). Read through tracks.ts bondOf() so an unset field defaults
-   * without an eager write.
+   * @deprecated LEGACY relationship/trust track 0-100 (research/46 §2.3).
+   * Superseded by `rel` (research/60): read-only conversion input, never
+   * written anymore, and NEVER valid input to bondStance() — read through
+   * relOf()/bondOf() only. Kept (frozen) so old saves parse and pre-migration
+   * snapshots roll back cleanly; `rel` wins once present.
    */
   bond?: number
+  /**
+   * The relationship track (research/60): bond −5..+20 with sparks/grudge
+   * accumulators and the cadence counter. Materializes only when something
+   * moves it; read through tracks.ts relOf()/bondOf(), which convert a legacy
+   * `bond` value lazily.
+   */
+  rel?: RelationshipState
   /** Catalyst dependence/addiction track 0-100 (research/46 §2.3). */
   dependence?: number
   /**
@@ -119,6 +128,24 @@ export interface LactationState {
   demandBeats?: number
   /** Sustained high-supply beats toward a growth proposal (R5). */
   chronicBeats?: number
+}
+
+/**
+ * Relationship state (research/60, FF5.2 unification). Bond RISES only via
+ * sparks conversion; direct movement is negative-only. `ct` counts ACTIVE
+ * relationship turns — on-screen reduces while events land or an accumulator
+ * is draining; it freezes while the engine sleeps (reducer relActive gate) —
+ * and drives the conversion cadences. `warmed` remembers whether a warm event
+ * landed since the last sparks check so an untouched cycle fades and an
+ * active one does not.
+ */
+export interface RelationshipState {
+  /** −5..+20. Negative range is hostility the legacy 0-100 scale had no words for. */
+  bond: number
+  sparks: number
+  grudge: number
+  ct: number
+  warmed: boolean
 }
 
 /** Classifier-extracted event kinds (research/31 §2.2). The LLM proposes EVENTS, not values. */
@@ -179,6 +206,14 @@ export interface BondEvent {
   direction: 'warm' | 'strain'
   /** 1 (a small moment) — 3 (scene-defining). Clamped by the reducer. */
   intensity: number
+  /**
+   * Engine-authored spell-cast marker (research/60 R-2): potent warm events
+   * are cap-exempt and doubled in the sparks math — a check-earned charm must
+   * not be a no-op. Set ONLY by translateSpellEffects (be/effects.ts); the
+   * classifier can never set it (bondEventSchema has no such field and Zod
+   * strips unknown keys). Transient — events are per-turn inputs.
+   */
+  potent?: boolean
 }
 
 /** Classifier-proposed catalyst exposure (dependence intake) for one character. */

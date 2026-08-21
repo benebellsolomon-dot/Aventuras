@@ -11,6 +11,11 @@ const config = { ...DEFAULT_BE_STORY_CONFIG, enabled: true, passiveFillEnabled: 
 
 const catalyst = (intensity = 2): BeEvent => ({ character: 'Mira', kind: 'catalyst', intensity })
 const warm = (intensity = 2): BondEvent => ({ character: 'Mira', direction: 'warm', intensity })
+const strain = (intensity = 2): BondEvent => ({
+  character: 'Mira',
+  direction: 'strain',
+  intensity,
+})
 const exposure = (intensity = 2): ExposureEvent => ({ character: 'Mira', intensity })
 
 function stateWith(overrides: Partial<BodyState> = {}): BodyState {
@@ -244,17 +249,19 @@ describe('quirk hooks in isolation', () => {
   })
 })
 
-describe('step 7 — tracks', () => {
-  it('bond events apply velocity-capped, with the capped note in the log', () => {
+describe('step 8 — tracks (relationship engine, research/60)', () => {
+  it('warm events feed sparks (gain-capped), never bond directly', () => {
     const result = reduceCharacterBody(stateWith(), [], config, 's', 'Mira', undefined, {
       bondEvents: [warm(3), warm(3), warm(3)],
     })
-    expect(result.state.bond).toBe(25) // default 20 + capped 5
+    expect(result.state.rel?.sparks).toBe(2) // capped at +2/turn
+    expect(result.state.rel?.bond).toBe(4) // default; no direct raise ever
+    expect(result.state.bond).toBeUndefined() // legacy field never written
     const row = result.log.find((r) => r.kind === 'bond')
-    expect(row?.note).toContain('velocity-capped')
+    expect(row?.note).toContain('gain-capped')
   })
 
-  it('devoted_heart folds +1 per event before the cap', () => {
+  it('devoted_heart folds +1 spark per event before the cap', () => {
     const result = reduceCharacterBody(
       stateWith({ quirks: ['devoted_heart'] }),
       [],
@@ -264,7 +271,33 @@ describe('step 7 — tracks', () => {
       undefined,
       { bondEvents: [warm(1)] },
     )
-    expect(result.state.bond).toBe(23) // 20 + (2+1)
+    expect(result.state.rel?.sparks).toBe(2) // 1 + 1 quirk
+  })
+
+  it('a legacy bond converts once, on the first active turn', () => {
+    const result = reduceCharacterBody(
+      stateWith({ bond: 70 }),
+      [],
+      config,
+      's',
+      'Mira',
+      undefined,
+      { bondEvents: [strain(3)] },
+    )
+    expect(result.state.rel?.bond).toBe(13) // floor(70/5) = 14, −1 scene-defining strain
+    expect(result.state.rel?.grudge).toBe(1)
+    expect(result.state.bond).toBe(70) // legacy field untouched, now dead
+  })
+
+  it('accumulators keep the engine ticking without events until drained', () => {
+    const withSparks = stateWith({
+      rel: { bond: 4, sparks: 3, grudge: 0, ct: 3, warmed: false },
+    })
+    const ticked = reduceCharacterBody(withSparks, [], config, 's', 'Mira')
+    expect(ticked.state.rel?.ct).toBe(4)
+    const drained = stateWith({ rel: { bond: 4, sparks: 0, grudge: 0, ct: 4, warmed: false } })
+    const asleep = reduceCharacterBody(drained, [], config, 's', 'Mira')
+    expect(asleep.state.rel?.ct).toBe(4) // engine sleeps: no events, nothing draining
   })
 
   it('exposure resets the withdrawal clock; idle beats advance it and decay dependence', () => {

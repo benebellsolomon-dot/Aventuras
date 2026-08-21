@@ -47,7 +47,29 @@ export const bodyStateSchema = z
     arousal: z.number().min(0).max(100).optional(),
     growthPressure: z.number().nonnegative().optional(),
     driftNote: z.object({ note: z.string() }).passthrough().optional(),
+    // LEGACY 0-100 bond — read-only conversion input (research/60); kept so
+    // old saves parse. `rel` below is authoritative once present.
     bond: z.number().min(0).max(100).optional(),
+    // Relationship track (research/60): bond −5..+20, sparks/grudge/ct
+    // accumulators. Optional block — a save without it parses key-identical.
+    // NO min/max on bond and defaults on the counters (31a lesson 3 + review
+    // R-8): a wider-range value from a newer build must survive this older
+    // reader — clampBond/clampCounter normalize at read time in relOf(), and a
+    // strict bound here would nuke the ENTIRE body state on parse failure.
+    // .catch(undefined): a malformed rel (null, a number, wrong-typed fields)
+    // degrades to "no relationship history" instead of failing the WHOLE body
+    // state parse — total-loss surface, fix-diff MEDIUM-4.
+    rel: z
+      .object({
+        bond: z.number(),
+        sparks: z.number().default(0),
+        grudge: z.number().default(0),
+        ct: z.number().default(0),
+        warmed: z.boolean().default(false),
+      })
+      .passthrough()
+      .optional()
+      .catch(undefined),
     dependence: z.number().min(0).max(100).optional(),
     // Plain strings, NOT z.enum(QUIRK_IDS): an unknown future quirk id must
     // survive a round-trip through this (older) reader — narrowing happens at
