@@ -1,6 +1,7 @@
 // ---- Scene presence scoping for the [BODY STATE] block ----
 import { describe, expect, it } from 'vitest'
 
+import { MAX_BE_CONDITIONS, MAX_BE_EVENTS_PER_TURN } from './constants'
 import {
   PRESENCE_LOOKBACK,
   effectivePresence,
@@ -146,6 +147,12 @@ describe('referencedCharacterNames', () => {
 
   it('ignores arrays that are not presence evidence', () => {
     expect(referencedCharacterNames({ entryUpdates: [{ character: 'Ghost' }] })).toEqual([])
+  })
+
+  it('bounds the walk to the extractor caps now that the schemas carry no maxItems', () => {
+    const flood = Array.from({ length: 100 }, (_, i) => ({ character: `C${i}` }))
+    const names = referencedCharacterNames({ bondEvents: flood, beConditions: flood })
+    expect(names).toHaveLength(MAX_BE_EVENTS_PER_TURN + MAX_BE_CONDITIONS)
   })
 })
 

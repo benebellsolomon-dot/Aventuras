@@ -231,4 +231,8 @@ export type ClassificationResult = z.infer<typeof classificationResultSchema> & 
   beEvents?: BeEvent[]
   /** Off-screen agenda proposals (present only when the npcAgendas schema extension is active). */
   agendaProposals?: unknown[]
+  /** New narrative-debt setups (present only when the chekhovGun schema extension is active). */
+  narrativeDebt?: unknown[]
+  /** Ids of active setups this response paid off (chekhovGun schema extension). */
+  resolvedDebts?: unknown[]
 }

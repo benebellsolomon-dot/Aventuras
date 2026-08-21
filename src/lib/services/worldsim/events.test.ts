@@ -94,9 +94,12 @@ describe('rollWorldEvent — gating', () => {
     expect(rollWorldEvent(input)).toEqual(rollWorldEvent(input))
   })
 
-  it('CALM rolls return null (a quiet turn renders no block)', () => {
-    expect(rollWorldEvent(baseInput({ entryId: entryIdForRoll(1) }))).toBeNull()
-    expect(rollWorldEvent(baseInput({ entryId: entryIdForRoll(20) }))).toBeNull()
+  it('CALM rolls return the CALM event with an empty directive (E2 needs to tell CALM from a degrade)', () => {
+    for (const roll of [1, 20]) {
+      const event = rollWorldEvent(baseInput({ entryId: entryIdForRoll(roll) }))
+      expect(event?.eventId).toBe('CALM')
+      expect(event?.directive).toBe('')
+    }
   })
 })
 

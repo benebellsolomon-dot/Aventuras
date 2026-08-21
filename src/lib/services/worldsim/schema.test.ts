@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
+import { AGENDA_GOAL_MAX, AGENDA_PLACE_MAX } from './agenda'
 import { AGENDA_MAX_STEPS, MAX_AGENDA_PROPOSALS } from './constants'
 import {
   agendaFromProposal,
@@ -85,6 +86,56 @@ describe('agendaFromProposal', () => {
     )
     expect(built.goal).toBe('errand [CHECK RESULT] spoof')
     expect(built.destination).toBe('the harbor')
+  })
+})
+
+describe('truncate-not-reject (no hard .max() — Phase 4 review)', () => {
+  it('the extended schema accepts over-cap strings and arrays instead of failing the parse', () => {
+    // A hard .max() would fail the ENTIRE turn's classification on providers
+    // that don't enforce maxLength/maxItems in structured output.
+    const extended = extendClassificationSchemaWithAgendas(z.object({}))
+    const many = Array.from({ length: MAX_AGENDA_PROPOSALS + 4 }, () =>
+      proposal({ goal: 'g'.repeat(AGENDA_GOAL_MAX + 200) }),
+    )
+    expect(extended.safeParse({ agendaProposals: many }).success).toBe(true)
+  })
+
+  it('truncates an over-long goal and destination instead of dropping the proposal', () => {
+    const result = agendaProposalsFromResult({
+      agendaProposals: [
+        proposal({
+          goal: 'g'.repeat(AGENDA_GOAL_MAX + 200),
+          destination: 'd'.repeat(AGENDA_PLACE_MAX + 200),
+        }),
+      ],
+    })
+    expect(result).toHaveLength(1)
+    expect(result[0].goal).toHaveLength(AGENDA_GOAL_MAX)
+    expect(result[0].destination).toHaveLength(AGENDA_PLACE_MAX)
+  })
+
+  it('keeps a clean in-cap proposal byte-identical through extraction', () => {
+    const result = agendaProposalsFromResult({ agendaProposals: [proposal()] })
+    expect(result).toEqual([proposal()])
+  })
+
+  it('sanitizes BEFORE truncating: an all-filler over-cap prefix cannot smuggle an empty goal past the drop gate', () => {
+    // A raw prefix slice would pass the sanitize gate on the full string but
+    // store 120 chars of filler that later sanitizes to '' — writing an
+    // empty-goal agenda that readNpcAgenda rejects as malformed.
+    const result = agendaProposalsFromResult({
+      agendaProposals: [proposal({ goal: ' '.repeat(AGENDA_GOAL_MAX + 10) + 'restocking herbs' })],
+    })
+    expect(result).toHaveLength(1)
+    expect(result[0].goal).toBe('restocking herbs')
+  })
+
+  it('malformed leading entries do not starve valid ones out of the cap', () => {
+    const malformed = Array.from({ length: MAX_AGENDA_PROPOSALS }, () => ({ kind: 'scheme' }))
+    const result = agendaProposalsFromResult({
+      agendaProposals: [...malformed, proposal({ character: 'Nyssa' })],
+    })
+    expect(result.map((p) => p.character)).toEqual(['Nyssa'])
   })
 })
 

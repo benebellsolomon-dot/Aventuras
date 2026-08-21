@@ -137,14 +137,12 @@ describe('buildInlineImageInstructions', () => {
   })
 })
 
-describe('buildUserPrompt — turn-directive placement (research/61)', () => {
+describe('buildUserPrompt — turn-directive placement (research/61 + 62)', () => {
   const service = new NarrativeService()
+  type Directives = { offScreenBlock: string; worldEventBlock: string; callbackBlock: string }
   // TS-private, runtime-accessible: the placement contract is exactly what the
   // review demanded a pin for, and the method is pure string assembly.
-  const build = (
-    postHistoryBlock: string,
-    turnDirectives: { offScreenBlock: string; worldEventBlock: string } | null,
-  ): string =>
+  const build = (postHistoryBlock: string, turnDirectives: Directives | null): string =>
     (
       service as unknown as {
         buildUserPrompt: (
@@ -153,7 +151,7 @@ describe('buildUserPrompt — turn-directive placement (research/61)', () => {
           inlineImageMode: boolean,
           postHistoryBlock: string,
           pendingCheck: null,
-          turnDirectives: { offScreenBlock: string; worldEventBlock: string } | null,
+          turnDirectives: Directives | null,
         ) => string
       }
     ).buildUserPrompt(
@@ -167,23 +165,31 @@ describe('buildUserPrompt — turn-directive placement (research/61)', () => {
 
   it('no directives → byte-identical to the pre-Phase-3 prompt (cache guard)', () => {
     const before = build('house rules', null)
-    const withEmpty = build('house rules', { offScreenBlock: '', worldEventBlock: '' })
+    const withEmpty = build('house rules', {
+      offScreenBlock: '',
+      worldEventBlock: '',
+      callbackBlock: '',
+    })
     expect(withEmpty).toBe(before)
     expect(before).not.toContain('[OFF-SCREEN')
+    expect(before).not.toContain('[CALLBACK')
   })
 
-  it('renders [OFF-SCREEN] then [WORLD EVENT] after [Narrative Directives], before the tail', () => {
+  it('renders [OFF-SCREEN], [WORLD EVENT], then [CALLBACK] after [Narrative Directives], before the tail', () => {
     const prompt = build('house rules', {
       offScreenBlock: '[OFF-SCREEN — the world keeps moving]\n- Mira — away: resting.',
       worldEventBlock: '[WORLD EVENT — background texture, advisory]\nA knock at the door.',
+      callbackBlock: '[CALLBACK — an earlier thread resurfaces]\nEarlier: the locked drawer.',
     })
     const directives = prompt.indexOf('[Narrative Directives]')
     const offScreen = prompt.indexOf('[OFF-SCREEN')
     const worldEvent = prompt.indexOf('[WORLD EVENT')
+    const callback = prompt.indexOf('[CALLBACK')
     const tail = prompt.indexOf('Continue the narrative:')
     expect(directives).toBeGreaterThanOrEqual(0)
     expect(offScreen).toBeGreaterThan(directives)
     expect(worldEvent).toBeGreaterThan(offScreen)
-    expect(tail).toBeGreaterThan(worldEvent)
+    expect(callback).toBeGreaterThan(worldEvent)
+    expect(tail).toBeGreaterThan(callback)
   })
 })

@@ -119,6 +119,18 @@ export const PRESSURE_CAP = 170
 export const ENGORGED_FILL_THRESHOLD = 75
 export const ENGORGED_TTL = 2
 export const MAX_BE_CONDITIONS = 6
+/** Condition labels persist in character metadata and render into prompts —
+ * the extractor (schema.ts) AND the metadata reader sanitize+truncate to these
+ * caps. They live here, not schema.ts, for the same cycle reason as
+ * MAX_BE_EVENTS_PER_TURN below: schema.ts sits on the be↔worldsim import
+ * cycle and its exports can be undefined mid-init depending on entry order. */
+export const BE_CONDITION_LABEL_MAX = 200
+export const BE_CONDITION_NOTE_MAX = 200
+/** Hard cap on classifier events per turn — bounds reducer work and the persisted
+ * cadence log. Lives here (not schema.ts) so module-scope consumers like
+ * presence.ts get it cycle-free: schema.ts sits on a be↔worldsim import cycle
+ * and its exports can be undefined mid-init depending on entry order. */
+export const MAX_BE_EVENTS_PER_TURN = 16
 
 /** Support/buoyancy axis (Spec 1 Task 7): shape base + condition deltas, clamped [0,1]. */
 export const SHAPE_SUPPORT: Readonly<Record<BodyShape, number>> = {

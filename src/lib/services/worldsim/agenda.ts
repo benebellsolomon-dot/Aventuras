@@ -79,7 +79,18 @@ const clampStep = (value: number): number =>
  */
 export const sanitizeAgendaText = (value: string, max: number): string =>
   value
-
+    // Invisible/format codepoints strip OUTRIGHT (soft hyphen, bidi marks
+    // and isolates, ZWSP, word joiners, Hangul fillers, interlinear
+    // annotation, and the U+E0000 tag block — the standard ASCII-smuggling
+    // carrier): invisible to human review, fully legible to a model (review
+    // lens 2, Phase 4). ZWJ/ZWNJ (U+200C/D) are deliberately KEPT — they are
+    // load-bearing in emoji sequences, Persian, and Indic conjuncts, and
+    // carry no block-breakout risk once newlines/brackets are handled
+    // (fix-diff round: the first cut stripped them and corrupted real text).
+    .replace(
+      /[\u00ad\u061c\u115f\u1160\u180e\u200b\u200e\u200f\u2060-\u2064\u2066-\u206f\u3164\ufff9-\ufffb\uffa0\u{e0000}-\u{e007f}]+/gu,
+      '',
+    )
     .replace(/[\r\n\u0000-\u001f\u007f-\u009f]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()

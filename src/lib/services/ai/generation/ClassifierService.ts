@@ -34,9 +34,14 @@ import { buildExtendedClassificationSchema } from '../sdk/schemas/runtime-variab
 import { buildBeEventInstructions, extendClassificationSchemaWithBeEvents } from '$lib/services/be'
 import {
   buildAgendaInstructions,
+  buildChekhovInstructions,
   extendClassificationSchemaWithAgendas,
+  extendClassificationSchemaWithChekhov,
+  findSelfCharacter,
+  readChekhovState,
 } from '$lib/services/worldsim'
 import type { RuntimeVariable, RuntimeEntityType } from '$lib/services/packs/types'
+import { boundClassifierExtensionArrays } from './classifier-bounds'
 
 const log = createLogger('Classifier')
 
@@ -124,6 +129,28 @@ export class ClassifierService extends BaseAIService {
       schema = extended
     }
 
+    // Chekhov stories additionally observe narrative debt: new setups and
+    // paid-off ones (research/62, same schema-extension contract). The active
+    // bullet list lives on the SELF character's metadata and renders into the
+    // instructions so resolutions can reference real ids. No protagonist ⇒
+    // the whole engine is inert — including this extension: the store pass
+    // would drop the output unread, so extending would only spend tokens
+    // (review lens 3).
+    const chekhovSelf =
+      context.story.settings?.chekhovGun === true
+        ? findSelfCharacter(context.existingCharacters)
+        : null
+    const chekhovMode = chekhovSelf !== null
+    let chekhovBullets: ReturnType<typeof readChekhovState> = null
+    if (chekhovMode) {
+      chekhovBullets = readChekhovState(chekhovSelf.metadata)
+      const extended = extendClassificationSchemaWithChekhov(schema)
+      if (extended === schema) {
+        log('WARNING: narrativeDebt schema extension no-op — chekhov extraction disabled this turn')
+      }
+      schema = extended
+    }
+
     // Format existing entities for the prompt
     const existingCharacters = this.formatExistingCharacters(context.existingCharacters)
     const existingLocations = context.existingLocations.map((l) => l.name).join(', ') || '(none)'
@@ -146,6 +173,7 @@ export class ClassifierService extends BaseAIService {
       runtimeVars.length > 0 ? this.buildCustomVarInstructions(runtimeVarsByType) : '',
       beMode ? buildBeEventInstructions(context.story.settings?.beGrowthCosmology) : '',
       agendaMode ? buildAgendaInstructions() : '',
+      chekhovMode ? buildChekhovInstructions(chekhovBullets?.bullets ?? []) : '',
     ]
       .filter(Boolean)
       .join('\n\n')
@@ -178,7 +206,7 @@ export class ClassifierService extends BaseAIService {
     const { system, user: prompt } = await ctx.render('classifier')
 
     try {
-      const result = (await generateStructured(
+      const rawResult = (await generateStructured(
         {
           presetId: this.presetId,
           schema,
@@ -187,6 +215,15 @@ export class ClassifierService extends BaseAIService {
         },
         'classifier',
       )) as ClassificationResult
+
+      const bound = boundClassifierExtensionArrays(rawResult as unknown as Record<string, unknown>)
+      if (Object.keys(bound.overflow).length > 0) {
+        log(
+          'extension arrays over engine caps — extractors keep the first valid cap-N',
+          bound.overflow,
+        )
+      }
+      const result = bound.result as unknown as ClassificationResult
 
       // Post-process: clamp number values to min/max constraints
       if (runtimeVars.length > 0) {

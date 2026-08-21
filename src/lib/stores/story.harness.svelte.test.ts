@@ -8,8 +8,24 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { readBodyState, relOf, writeBodyState, defaultBodyState } from '$lib/services/be'
-import { readNpcAgenda, writeNpcAgenda, type NpcAgenda } from '$lib/services/worldsim'
+import {
+  readBodyState,
+  relOf,
+  writeBodyState,
+  defaultBodyState,
+  seededRoll,
+} from '$lib/services/be'
+import {
+  computeTurnDirectives,
+  readChekhovState,
+  readNpcAgenda,
+  writeChekhovState,
+  writeNpcAgenda,
+  type ChekhovBullet,
+  type ChekhovState,
+  type DirectiveCharacter,
+  type NpcAgenda,
+} from '$lib/services/worldsim'
 import { defaultRpgSheet } from '$lib/services/rpg'
 
 import {
@@ -1372,5 +1388,341 @@ describe('store harness — off-screen agendas (E4, research/61)', () => {
     expect(deltaWriteIdx).toBeGreaterThan(charWriteIdx)
     expect(commitIdx).toBeGreaterThan(deltaWriteIdx)
     expect(agendaOf('Mira')).not.toBeNull()
+  })
+})
+
+describe('store harness — chekhov narrative debt (E2, research/62)', () => {
+  beforeEach(() => {
+    settingsMock.experimentalFeatures.stateTracking = false
+    settingsMock.experimentalFeatures.rollbackOnDelete = false
+    reset(db)
+    story.currentStory = makeStory({ settings: { chekhovGun: true } }) as never
+  })
+
+  const chekhovOf = (): ChekhovState | null => {
+    const self = story.characters.find((c) => c.relationship === 'self')
+    return readChekhovState((self?.metadata as Record<string, unknown> | null) ?? null)
+  }
+
+  const priorNarration = (id: string, names: string[]) => ({
+    id,
+    type: 'narration',
+    worldStateDelta: {
+      classificationResult: { scene: { presentCharacterNames: names } },
+    },
+  })
+
+  const userAction = (id: string) => ({ id, type: 'user_action', content: 'look around' })
+
+  // The pass fails closed unless the applied narration entry exists in the
+  // entry list (it reconstructs the pipeline's pre-generation view from it).
+  const narration = (id: string) => ({ id, type: 'narration', content: 'x' })
+
+  const bullet = (overrides: Partial<ChekhovBullet> = {}): ChekhovBullet => ({
+    id: 'c1',
+    description: 'the locked drawer in the study',
+    weight: 3,
+    age: 5,
+    subjects: [],
+    ...overrides,
+  })
+
+  /** A user-action id whose c1 fire roll clears a weight-3/age-5 threshold (3). */
+  function firingActionId(): string {
+    for (let i = 0; i < 5000; i++) {
+      if (seededRoll(`s1:ua${i}:chekhov:c1`) >= 3) return `ua${i}`
+    }
+    throw new Error('unreachable')
+  }
+
+  it('toggle off: no chekhov machinery runs at all', async () => {
+    story.currentStory = makeStory({ settings: {} }) as never
+    story.characters = [makeProtagonist('Hero')] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: [] },
+        narrativeDebt: [{ description: 'a planted key', weight: 2, subjects: [] }],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(chekhovOf()).toBeNull()
+  })
+
+  it('loads classifier narrative debt onto the SELF character, sanitized and id-assigned', async () => {
+    story.characters = [makeProtagonist('Hero'), makeCharacter('Mira')] as never
+    story.entries = [
+      priorNarration('p1', ['Mira']),
+      userAction('ua-1'),
+      narration('entry-1'),
+    ] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: ['Mira'] },
+        narrativeDebt: [
+          { description: 'Mira promised to\nreturn by dusk', weight: 2, subjects: ['Mira'] },
+        ],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(chekhovOf()).toEqual({
+      bullets: [
+        {
+          id: 'c1',
+          description: 'Mira promised to return by dusk',
+          weight: 2,
+          age: 0,
+          subjects: ['Mira'],
+        },
+      ],
+      nextId: 2,
+    })
+  })
+
+  it('ages bullets each applied turn and retires resolved ones', async () => {
+    story.characters = [
+      makeProtagonist('Hero', {
+        metadata: writeChekhovState(null, {
+          bullets: [bullet({ weight: 1, age: 1 }), bullet({ id: 'c2', weight: 1, age: 1 })],
+          nextId: 3,
+        }),
+      }),
+    ] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: [] },
+        resolvedDebts: ['c2'],
+      }) as never,
+      'entry-1',
+    )
+
+    const state = chekhovOf()!
+    expect(state.bullets.map((b) => b.id)).toEqual(['c1'])
+    expect(state.bullets[0].age).toBe(2)
+  })
+
+  it('two-site contract: the rendered [CALLBACK] and the store mark agree on the fired bullet', async () => {
+    const actionId = firingActionId()
+    const characters = [
+      makeProtagonist('Hero', {
+        metadata: writeChekhovState(null, { bullets: [bullet()], nextId: 2 }),
+      }),
+      makeCharacter('Mira'),
+    ]
+    const entries = [priorNarration('p1', ['Mira']), userAction(actionId)]
+
+    // Site 1 — the pipeline's pre-generation render.
+    const directives = computeTurnDirectives({
+      storyId: 's1',
+      entryId: actionId,
+      settings: { chekhovGun: true },
+      characters: characters as unknown as DirectiveCharacter[],
+      entries: entries as never,
+    })
+    expect(directives.callbackBlock).toContain('the locked drawer in the study')
+
+    // Site 2 — the store's post-classification mark, over the same persisted state.
+    story.characters = characters as never
+    story.entries = [...entries, { id: 'entry-1', type: 'narration', content: 'x' }] as never
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Mira'] } }) as never,
+      'entry-1',
+    )
+
+    // Fired but unresolved → the same bullet re-loads with a refractory.
+    const state = chekhovOf()!
+    expect(state.bullets[0].id).toBe('c1')
+    expect(state.bullets[0].refractory).toBeGreaterThan(0)
+  })
+
+  it('a fired bullet the classifier reports resolved retires instead of re-loading', async () => {
+    const actionId = firingActionId()
+    story.characters = [
+      makeProtagonist('Hero', {
+        metadata: writeChekhovState(null, { bullets: [bullet()], nextId: 2 }),
+      }),
+    ] as never
+    story.entries = [
+      userAction(actionId),
+      { id: 'entry-1', type: 'narration', content: 'x' },
+    ] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: [] },
+        resolvedDebts: ['c1'],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(chekhovOf()!.bullets).toHaveLength(0)
+  })
+
+  it('a completed research agenda plants a seed about what she learned', async () => {
+    story.currentStory = makeStory({ settings: { npcAgendas: true, chekhovGun: true } }) as never
+    story.characters = [
+      makeProtagonist('Hero'),
+      makeCharacter('Mira', {
+        metadata: writeNpcAgenda(null, {
+          goal: 'tracing the sigil',
+          kind: 'research',
+          step: 1,
+          maxSteps: 2,
+        }),
+      }),
+      makeCharacter('Opal'),
+    ] as never
+    story.entries = [
+      priorNarration('p1', ['Mira', 'Opal']),
+      userAction('ua-1'),
+      narration('entry-1'),
+    ] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Opal'] } }) as never,
+      'entry-1',
+    )
+
+    expect(
+      readNpcAgenda(
+        (story.characters.find((c) => c.name === 'Mira')?.metadata as Record<string, unknown>) ??
+          null,
+      ),
+    ).toMatchObject({ kind: 'research', done: true })
+    expect(chekhovOf()!.bullets).toEqual([
+      {
+        id: 'c1',
+        description: 'Mira learned something while tracing the sigil',
+        weight: 2,
+        age: 0,
+        subjects: ['Mira'],
+      },
+    ])
+  })
+
+  it('an empty engine writes nothing (no materialization, no row churn)', async () => {
+    story.characters = [makeProtagonist('Hero')] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      // A real (signal-carrying) classify — the no-write here is the
+      // value-identity skip, not the signal gate.
+      makeClassificationResult({ scene: { presentCharacterNames: ['Mira'] } }) as never,
+      'entry-1',
+    )
+
+    expect(chekhovOf()).toBeNull()
+    expect(db.methodsCalled()).not.toContain('updateCharacter')
+  })
+
+  it('a signal-less classify (failure stub) pauses the engine: no aging, no marks', async () => {
+    story.characters = [
+      makeProtagonist('Hero', {
+        metadata: writeChekhovState(null, { bullets: [bullet({ weight: 1, age: 3 })], nextId: 2 }),
+      }),
+    ] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: [] } }) as never,
+      'entry-1',
+    )
+
+    expect(chekhovOf()!.bullets[0].age).toBe(3)
+    expect(db.methodsCalled()).not.toContain('updateCharacter')
+  })
+
+  it('fails closed when no user action precedes the narration (state frozen)', async () => {
+    story.characters = [
+      makeProtagonist('Hero', {
+        metadata: writeChekhovState(null, { bullets: [bullet({ weight: 1, age: 3 })], nextId: 2 }),
+      }),
+    ] as never
+    story.entries = [narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Mira'] } }) as never,
+      'entry-1',
+    )
+
+    expect(chekhovOf()!.bullets[0].age).toBe(3)
+  })
+
+  it('no protagonist → the engine is inert', async () => {
+    story.characters = [makeCharacter('Mira')] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: [] },
+        narrativeDebt: [{ description: 'a planted key', weight: 2, subjects: [] }],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(db.methodsCalled()).not.toContain('updateCharacter')
+  })
+
+  it('malformed stored state degrades to fresh: loads still land', async () => {
+    story.characters = [makeProtagonist('Hero', { metadata: { chekhovState: 'garbage' } })] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: [] },
+        narrativeDebt: [{ description: 'a planted key', weight: 2, subjects: [] }],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(chekhovOf()!.bullets[0].description).toBe('a planted key')
+  })
+
+  it('chekhov writes ride the turn batch before the delta', async () => {
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.characters = [
+      makeProtagonist('Hero', {
+        metadata: writeChekhovState(null, { bullets: [bullet({ weight: 1, age: 1 })], nextId: 2 }),
+      }),
+    ] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Mira'] } }) as never,
+      'entry-1',
+    )
+
+    const methods = db.methodsCalled()
+    const charWriteIdx = methods.indexOf('updateCharacter')
+    const deltaWriteIdx = methods.indexOf('updateStoryEntry')
+    const commitIdx = methods.indexOf('commitWriteBatch')
+    expect(charWriteIdx).toBeGreaterThanOrEqual(0)
+    expect(deltaWriteIdx).toBeGreaterThan(charWriteIdx)
+    expect(commitIdx).toBeGreaterThan(deltaWriteIdx)
+  })
+
+  it('replay guard: a re-applied turn with an existing delta does not re-age', async () => {
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.characters = [
+      makeProtagonist('Hero', {
+        metadata: writeChekhovState(null, { bullets: [bullet({ weight: 1, age: 1 })], nextId: 2 }),
+      }),
+    ] as never
+    story.entries = [userAction('ua-1'), narration('entry-1')] as never
+
+    const result = makeClassificationResult({ scene: { presentCharacterNames: ['Mira'] } })
+    await story.applyClassificationResult(result as never, 'entry-1')
+    expect(chekhovOf()!.bullets[0].age).toBe(2)
+
+    // Second apply for the same entry: the delta written by the first apply arms
+    // the CR-1 replay guard.
+    await story.applyClassificationResult(result as never, 'entry-1')
+    expect(chekhovOf()!.bullets[0].age).toBe(2)
   })
 })

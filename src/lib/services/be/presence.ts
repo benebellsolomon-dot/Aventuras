@@ -12,6 +12,12 @@
  * an unreadable/absent/unmatched presence signal falls back to the full cast.
  */
 
+// Caps come from constants.ts, NOT schema.ts: these are captured at module
+// scope, and schema.ts sits on a be↔worldsim import cycle — entering the graph
+// through it can leave its exports undefined mid-init (unbounding the walk
+// silently, since `.slice(0, undefined)` is a full copy).
+import { MAX_BE_CONDITIONS, MAX_BE_EVENTS_PER_TURN } from './constants'
+
 /** Narration entries are checked back this far; the classifier intermittently returns []. */
 export const PRESENCE_LOOKBACK = 10
 
@@ -115,27 +121,30 @@ export function recentPresenceUnion(
  * therefore presence evidence exactly as strong as the presence list itself.
  */
 const PRESENCE_IMPLYING_ARRAYS = [
-  'beEvents',
-  'beStates',
-  'beConditions',
-  'bondEvents',
-  'exposureEvents',
+  ['beEvents', MAX_BE_EVENTS_PER_TURN],
+  ['beStates', MAX_BE_EVENTS_PER_TURN],
+  ['beConditions', MAX_BE_CONDITIONS],
+  ['bondEvents', MAX_BE_EVENTS_PER_TURN],
+  ['exposureEvents', MAX_BE_EVENTS_PER_TURN],
 ] as const
 
 /**
  * Every character name this turn's classifier output referenced through a
  * character-scoped array. Raw (un-normalized) names, duplicates included;
- * malformed entries are skipped, matching the tolerant *FromResult coercions.
+ * malformed entries are skipped, matching the tolerant *FromResult coercions —
+ * including their per-array caps: the schemas carry no hard maxItems anymore
+ * (truncate-not-reject), so this raw-result walk bounds itself the same way
+ * the extractors do instead of trusting the model's output length.
  */
 export function referencedCharacterNames(
   classification: Record<string, unknown> | null | undefined,
 ): string[] {
   if (!classification) return []
   const names: string[] = []
-  for (const field of PRESENCE_IMPLYING_ARRAYS) {
+  for (const [field, cap] of PRESENCE_IMPLYING_ARRAYS) {
     const raw = classification[field]
     if (!Array.isArray(raw)) continue
-    for (const item of raw) {
+    for (const item of raw.slice(0, cap)) {
       if (typeof item !== 'object' || item === null) continue
       const name = (item as { character?: unknown }).character
       if (typeof name === 'string' && name.trim().length > 0) names.push(name)

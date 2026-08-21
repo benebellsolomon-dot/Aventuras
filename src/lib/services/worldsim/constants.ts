@@ -26,8 +26,9 @@ export interface WorldEventDef {
   directive: string
 }
 
-// FF CALM plants a passive Chekhov seed — that half is E2 (Phase 4); until
-// then a CALM turn simply renders no block.
+// FF CALM plants a passive Chekhov seed (E2, research/62): with the chekhovGun
+// setting on, directives.ts substitutes CALM_PLANT_DIRECTIVE; otherwise a CALM
+// turn still renders no block. The empty directive here is the off-state.
 const CALM_LOW: WorldEventDef = { id: 'CALM', min: 1, max: 2, target: null, directive: '' }
 const CALM_HIGH: WorldEventDef = { id: 'CALM', min: 19, max: 20, target: null, directive: '' }
 
@@ -209,3 +210,64 @@ export const MUNDANE_GOALS: ReadonlyArray<{ goal: string; maxSteps: number }> = 
   { goal: 'wandering with no particular aim', maxSteps: 2 },
   { goal: 'tending to daily duties', maxSteps: 3 },
 ]
+
+// ---- E2 Chekhov's Gun (research/62) ----
+
+/** FF's firing bases by weight: heavier debt fires easier. */
+export const CHEKHOV_BASE_THRESHOLDS: Readonly<Record<1 | 2 | 3, number>> = { 1: 18, 2: 13, 3: 8 }
+
+/** FF's 4-Age Minimum: a bullet must simmer before it may fire. */
+export const CHEKHOV_MIN_FIRE_AGE = 4
+
+/** Unlocked bullets die of old age here (FF prune rule). */
+export const CHEKHOV_MAX_AGE = 12
+
+/** Active-bullet capacity; over it, lowest-weight/oldest are evicted (FF cap). */
+export const CHEKHOV_MAX_BULLETS = 20
+
+/** Classifier narrative-debt loads accepted per turn (FF: "load 1-2 Bullets per turn"). */
+export const CHEKHOV_MAX_LOADS_PER_TURN = 2
+
+/** Fired-but-unresolved cooldown, in turns (FF: "VETO and reload into gun"). */
+export const CHEKHOV_REFRACTORY = 2
+
+/** Unresolved fires before a bullet retires silently (FF: "Pruned Bullets fire
+ * silently") — bounds the identical-directive re-render loop. */
+export const CHEKHOV_MAX_FIRES = 2
+
+/** Turn-level cooldown after ANY fire — keeps callbacks an occasional beat
+ * (~1 per 3 turns at saturation) instead of a metronome. D5 tunable. */
+export const CHEKHOV_FIRE_COOLDOWN = 2
+
+/** Bullets at/above this age jump the fire-priority queue — near-prune debt
+ * gets its shot before heavy young debt monopolizes the slot. */
+export const CHEKHOV_OLD_AGE = 8
+
+/** Id counter ceiling — far above any real story; float-precision guard. */
+export const CHEKHOV_NEXT_ID_MAX = 1_000_000
+
+/** Threshold reduction when a subject character is on-scene (FF proximity mods, collapsed). */
+export const CHEKHOV_SUBJECT_PROXIMITY_MOD = 2
+
+/** Threshold reduction once a time lock has expired (FF urgency mod). */
+export const CHEKHOV_URGENCY_MOD = 2
+
+/** Effective threshold never drops below this — a natural 1 always fails,
+ * which ports FF's "jam on Nat 1" without a separate jam state. */
+export const CHEKHOV_THRESHOLD_FLOOR = 2
+
+export const CHEKHOV_DESC_MAX = 160
+export const CHEKHOV_SUBJECT_MAX = 40
+export const CHEKHOV_MAX_SUBJECTS = 3
+
+/** Time locks freeze a bullet for at most this many turns. */
+export const CHEKHOV_LOCK_MAX = 12
+
+/**
+ * CALM's E2 half (FF: "Quiet moment; plant 1 passive environment Chekhov seed").
+ * Rendered as the CALM [WORLD EVENT] directive only when chekhovGun is on; the
+ * narrator plants the detail and the classifier's debt scan observes it — the
+ * seed enters through the normal loading channel, never as LLM-authored state.
+ */
+export const CALM_PLANT_DIRECTIVE =
+  'A quiet beat. Plant one small, concrete environmental detail — an object out of place, a sound at the edge of hearing, a figure at a distance — that could matter later. Do not explain it or call attention to it.'

@@ -5,11 +5,27 @@
  * added through schema extension, never as ad-hoc fields. The prompt instructions
  * piggyback on the existing `customVariableInstructions` template slot, so the
  * shipped classifier template needs no edit.
+ *
+ * Deliberately NO hard `.max()` length/count constraints (chekhov-schema
+ * pattern, Phase 4 review): providers that don't enforce maxLength/maxItems
+ * in structured output would fail the WHOLE classification parse on overflow,
+ * silently voiding every entity update for the turn. Caps live in the
+ * `.describe` text for the model and are enforced by truncation/slicing in
+ * the *FromResult extractors below.
  */
 
 import { z } from 'zod'
-import { MAX_BE_CONDITIONS } from './constants'
+import { sanitizeDebtText } from '$lib/services/worldsim'
+import {
+  BE_CONDITION_LABEL_MAX,
+  BE_CONDITION_NOTE_MAX,
+  MAX_BE_CONDITIONS,
+  MAX_BE_EVENTS_PER_TURN,
+} from './constants'
 import type { BeEvent, BeSoftState, BondEvent, ExposureEvent } from './types'
+
+// Re-export from their constants.ts home for the existing './schema' importers.
+export { BE_CONDITION_LABEL_MAX, BE_CONDITION_NOTE_MAX, MAX_BE_EVENTS_PER_TURN }
 
 export const beEventSchema = z.object({
   character: z.string().describe('Exact name of the affected female character'),
@@ -23,11 +39,7 @@ export const beEventSchema = z.object({
     .describe('1=incidental, 2=deliberate scene focus, 3=scene-defining ritual/climax'),
 })
 
-const BE_EVENTS_DESCRIPTION =
-  'Body-transformation events that OCCURRED in this narrative response. Report the attempt/act itself, never its outcome — the game engine resolves outcomes. Empty array when nothing transformation-relevant happened.'
-
-/** Hard cap on events per turn — bounds reducer work and the persisted cadence log. */
-export const MAX_BE_EVENTS_PER_TURN = 16
+const BE_EVENTS_DESCRIPTION = `Body-transformation events that OCCURRED in this narrative response. Report the attempt/act itself, never its outcome — the game engine resolves outcomes. Empty array when nothing transformation-relevant happened; at most ${MAX_BE_EVENTS_PER_TURN}.`
 
 export const beSoftStateSchema = z.object({
   character: z.string().describe('Exact name of the female character'),
@@ -47,24 +59,28 @@ export const beSoftStateSchema = z.object({
     .optional(),
 })
 
-const BE_STATES_DESCRIPTION =
-  'Per-character soft-state reads OBSERVED in this response: transformation attitude, arousal, fluid fullness. Include a character only when the scene gives evidence; omit fields you cannot ground. Empty array is correct when nothing changed.'
+const BE_STATES_DESCRIPTION = `Per-character soft-state reads OBSERVED in this response: transformation attitude, arousal, fluid fullness. Include a character only when the scene gives evidence; omit fields you cannot ground. Empty array is correct when nothing changed; at most ${MAX_BE_EVENTS_PER_TURN}.`
 
 export const beConditionSchema = z.object({
   character: z.string().describe('Exact name of the affected female character'),
   label: z
     .string()
-    .max(200)
-    .describe('Short condition label, e.g. "aching fullness", "buoyancy charm", "lactation surge"'),
-  note: z.string().describe('One-phrase detail, when the scene gives one').optional(),
+    .describe(
+      `Short condition label, under ${BE_CONDITION_LABEL_MAX} characters, e.g. "aching fullness", "buoyancy charm", "lactation surge"`,
+    ),
+  note: z
+    .string()
+    .describe(
+      `One-phrase detail, when the scene gives one, under ${BE_CONDITION_NOTE_MAX} characters`,
+    )
+    .optional(),
   ttl: z
     .number()
     .describe('Turns the condition should persist; omit for until-resolved')
     .optional(),
 })
 
-const BE_CONDITIONS_DESCRIPTION =
-  'Transient body conditions the scene ESTABLISHED this response (enchantments, states, afflictions affecting her transformation). Empty array when none.'
+const BE_CONDITIONS_DESCRIPTION = `Transient body conditions the scene ESTABLISHED this response (enchantments, states, afflictions affecting her transformation). Empty array when none; at most ${MAX_BE_CONDITIONS}.`
 
 export const bondEventSchema = z.object({
   character: z.string().describe('Exact name of the female character'),
@@ -76,16 +92,14 @@ export const bondEventSchema = z.object({
   intensity: z.number().describe('1=a small moment, 2=a meaningful beat, 3=scene-defining'),
 })
 
-const BOND_EVENTS_DESCRIPTION =
-  'Relationship movement between the protagonist and a female character that this response EVIDENCED. Report strain as readily as warmth — a scene where he pushed her past her comfort is a strain event, not an omission. Report what happened between them, never how much she now likes him; the engine owns the number. Empty array when the scene moved no relationship.'
+const BOND_EVENTS_DESCRIPTION = `Relationship movement between the protagonist and a female character that this response EVIDENCED. Report strain as readily as warmth — a scene where he pushed her past her comfort is a strain event, not an omission. Report what happened between them, never how much she now likes him; the engine owns the number. Empty array when the scene moved no relationship; at most ${MAX_BE_EVENTS_PER_TURN}.`
 
 export const exposureEventSchema = z.object({
   character: z.string().describe('Exact name of the female character'),
   intensity: z.number().describe('1=trace dose, 2=a full dose, 3=heavy or prolonged exposure'),
 })
 
-const EXPOSURE_EVENTS_DESCRIPTION =
-  'Catalyst exposure this response: one event per scene in which she took the catalyst into her body (drank, absorbed, was infused), intensity by dose/duration. Distinct from beEvents — this feeds her dependence, not her growth. Empty array when no one was exposed.'
+const EXPOSURE_EVENTS_DESCRIPTION = `Catalyst exposure this response: one event per scene in which she took the catalyst into her body (drank, absorbed, was infused), intensity by dose/duration. Distinct from beEvents — this feeds her dependence, not her growth. Empty array when no one was exposed; at most ${MAX_BE_EVENTS_PER_TURN}.`
 
 /**
  * Extend a classification schema (base or runtime-vars-extended — both are object
@@ -98,31 +112,11 @@ export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.Zod
   // extraction silently disabled otherwise).
   if (typeof objectSchema.extend !== 'function') return schema
   return objectSchema.extend({
-    beEvents: z
-      .array(beEventSchema)
-      .max(MAX_BE_EVENTS_PER_TURN)
-      .default([])
-      .describe(BE_EVENTS_DESCRIPTION),
-    beStates: z
-      .array(beSoftStateSchema)
-      .max(MAX_BE_EVENTS_PER_TURN)
-      .default([])
-      .describe(BE_STATES_DESCRIPTION),
-    beConditions: z
-      .array(beConditionSchema)
-      .max(MAX_BE_CONDITIONS)
-      .default([])
-      .describe(BE_CONDITIONS_DESCRIPTION),
-    bondEvents: z
-      .array(bondEventSchema)
-      .max(MAX_BE_EVENTS_PER_TURN)
-      .default([])
-      .describe(BOND_EVENTS_DESCRIPTION),
-    exposureEvents: z
-      .array(exposureEventSchema)
-      .max(MAX_BE_EVENTS_PER_TURN)
-      .default([])
-      .describe(EXPOSURE_EVENTS_DESCRIPTION),
+    beEvents: z.array(beEventSchema).default([]).describe(BE_EVENTS_DESCRIPTION),
+    beStates: z.array(beSoftStateSchema).default([]).describe(BE_STATES_DESCRIPTION),
+    beConditions: z.array(beConditionSchema).default([]).describe(BE_CONDITIONS_DESCRIPTION),
+    bondEvents: z.array(bondEventSchema).default([]).describe(BOND_EVENTS_DESCRIPTION),
+    exposureEvents: z.array(exposureEventSchema).default([]).describe(EXPOSURE_EVENTS_DESCRIPTION),
   })
 }
 
@@ -185,7 +179,10 @@ export function beEventsFromResult(result: Record<string, unknown>): BeEvent[] {
   const raw = result['beEvents']
   if (!Array.isArray(raw)) return []
   const events: BeEvent[] = []
-  for (const candidate of raw.slice(0, MAX_BE_EVENTS_PER_TURN)) {
+  // All the *FromResult loops cap VALID entries, not raw indexes — a run of
+  // malformed leading entries must not starve out well-formed ones behind it.
+  for (const candidate of raw) {
+    if (events.length >= MAX_BE_EVENTS_PER_TURN) break
     const parsed = beEventSchema.safeParse(candidate)
     if (parsed.success) events.push(parsed.data)
   }
@@ -200,14 +197,25 @@ export interface BeCharacterCondition {
   ttl?: number
 }
 
-/** Pull validated conditions off a classification result (same tolerance rules). */
+/** Pull validated conditions off a classification result (same tolerance rules).
+ * The label cap the schema no longer hard-enforces is applied here — with the
+ * shared prompt-surface sanitizer, not a bare slice, because the label persists
+ * in character metadata (reducer) and re-renders into the BE prompt block every
+ * turn (context.ts): an embedded newline or `[BLOCK]` fake is the same breakout
+ * vector the agenda/chekhov extractors already strip. */
 export function beConditionsFromResult(result: Record<string, unknown>): BeCharacterCondition[] {
   const raw = result['beConditions']
   if (!Array.isArray(raw)) return []
   const conditions: BeCharacterCondition[] = []
-  for (const candidate of raw.slice(0, MAX_BE_CONDITIONS)) {
+  for (const candidate of raw) {
+    if (conditions.length >= MAX_BE_CONDITIONS) break
     const parsed = beConditionSchema.safeParse(candidate)
-    if (parsed.success) conditions.push(parsed.data)
+    if (!parsed.success) continue
+    const label = sanitizeDebtText(parsed.data.label, BE_CONDITION_LABEL_MAX)
+    if (label === '') continue
+    const { note: rawNote, ...rest } = parsed.data
+    const note = rawNote === undefined ? '' : sanitizeDebtText(rawNote, BE_CONDITION_NOTE_MAX)
+    conditions.push({ ...rest, label, ...(note !== '' ? { note } : {}) })
   }
   return conditions
 }
@@ -217,7 +225,8 @@ export function bondEventsFromResult(result: Record<string, unknown>): BondEvent
   const raw = result['bondEvents']
   if (!Array.isArray(raw)) return []
   const events: BondEvent[] = []
-  for (const candidate of raw.slice(0, MAX_BE_EVENTS_PER_TURN)) {
+  for (const candidate of raw) {
+    if (events.length >= MAX_BE_EVENTS_PER_TURN) break
     const parsed = bondEventSchema.safeParse(candidate)
     if (parsed.success) events.push(parsed.data)
   }
@@ -229,7 +238,8 @@ export function exposureEventsFromResult(result: Record<string, unknown>): Expos
   const raw = result['exposureEvents']
   if (!Array.isArray(raw)) return []
   const events: ExposureEvent[] = []
-  for (const candidate of raw.slice(0, MAX_BE_EVENTS_PER_TURN)) {
+  for (const candidate of raw) {
+    if (events.length >= MAX_BE_EVENTS_PER_TURN) break
     const parsed = exposureEventSchema.safeParse(candidate)
     if (parsed.success) events.push(parsed.data)
   }
@@ -241,7 +251,8 @@ export function beSoftStatesFromResult(result: Record<string, unknown>): BeSoftS
   const raw = result['beStates']
   if (!Array.isArray(raw)) return []
   const states: BeSoftState[] = []
-  for (const candidate of raw.slice(0, MAX_BE_EVENTS_PER_TURN)) {
+  for (const candidate of raw) {
+    if (states.length >= MAX_BE_EVENTS_PER_TURN) break
     const parsed = beSoftStateSchema.safeParse(candidate)
     if (parsed.success) states.push(parsed.data)
   }

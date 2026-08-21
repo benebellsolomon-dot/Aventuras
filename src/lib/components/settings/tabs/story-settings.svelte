@@ -435,6 +435,22 @@
         onCheckedChange={(v) => story.updateStorySettings({ npcAgendas: v ? true : undefined })}
       />
     </div>
+
+    <div class="mt-4 flex items-center justify-between gap-4">
+      <div>
+        <Label for="chekhov-gun" class="text-sm font-medium">Setups &amp; payoffs</Label>
+        <p class="text-muted-foreground mt-1 text-xs">
+          Chekhov's Gun: earlier details — planted objects, promises, secrets — are tracked and
+          resurface later as deliberate payoffs. Quiet World Events beats also plant new details
+          when both are on. Applies from the next turn.
+        </p>
+      </div>
+      <Switch
+        id="chekhov-gun"
+        checked={storySettings.chekhovGun ?? false}
+        onCheckedChange={(v) => story.updateStorySettings({ chekhovGun: v ? true : undefined })}
+      />
+    </div>
   </div>
 
   <!-- ── RPG Display (Phase 5 W3) ─────────────────────────────────────────── -->

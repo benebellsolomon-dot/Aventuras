@@ -85,15 +85,24 @@ import {
   type CheckRecord,
 } from '$lib/services/rpg'
 import {
+  EMPTY_CHEKHOV_STATE,
+  advanceChekhovState,
   agendaCompletionBondEvent,
   agendaCompletionLocation,
   agendaFromProposal,
   agendaProposalsFromResult,
   clearNpcAgenda,
+  computeChekhovFire,
+  findSelfCharacter,
   mundaneAgenda,
+  narrativeDebtFromResult,
   readNpcAgenda,
+  researchSeed,
+  resolvedDebtsFromResult,
   tickAgenda,
+  writeChekhovState,
   writeNpcAgenda,
+  type ChekhovLoad,
   type NpcAgenda,
 } from '$lib/services/worldsim'
 import { buildSpellEntryData, type SpellGeneration } from '$lib/services/ai/sdk/schemas/spell'
@@ -2244,6 +2253,12 @@ class StoryStore {
     const newlyCreatedCharacterIds: string[] = []
     let currentLocationIdBefore: string | null = null
     let timeTrackerBefore: TimeTracker | null = null
+    // PRE-TURN characters array reference (immutable updates reassign
+    // this.characters, so the reference is a stable snapshot). The chekhov
+    // pass recomputes the pre-generation fire decision over it — status and
+    // metadata as the pipeline's computeTurnDirectives saw them, before this
+    // turn's writes (research/62 two-site derivation contract).
+    const charactersAtTurnStart = this.characters
 
     if (trackingEnabled) {
       // Snapshot current location
@@ -3006,9 +3021,11 @@ class StoryStore {
       // toggle on, BEFORE the BE pass so completion bond events ride this
       // turn's reduce (outside beMode they are structurally dropped — the rel
       // engine lives in bodyState). Same rollback-visibility contract as BE.
+      // Research completions additionally seed the chekhov pass below.
       let agendaBondEvents: ReadonlyMap<string, BondEvent[]> | null = null
+      let agendaChekhovSeeds: ChekhovLoad[] = []
       if (this.currentStory.settings?.npcAgendas === true) {
-        agendaBondEvents = await this.applyAgendaTurn(
+        const agendaOutcome = await this.applyAgendaTurn(
           result,
           entryId,
           trackingEnabled,
@@ -3016,6 +3033,8 @@ class StoryStore {
           createdCharacterIds,
           resolvedCheck,
         )
+        agendaBondEvents = agendaOutcome.bondEvents
+        agendaChekhovSeeds = agendaOutcome.chekhovSeeds
         // The agenda pass may have copy-on-written the check's target (fresh
         // id): checkRecordTargets is id-only when targetId is set, so a stale
         // id would silently void the growth/spell apply (fix-diff MEDIUM).
@@ -3030,6 +3049,24 @@ class StoryStore {
             : undefined
           if (remapped) resolvedCheck = { ...resolvedCheck, targetId: remapped.id }
         }
+      }
+
+      // E2 Chekhov's Gun (research/62): recompute the pre-generation fire
+      // decision over the PRE-TURN snapshot, then advance the bullet state
+      // (resolve → re-load → age → prune → load → cap) in one write on the
+      // self character. AFTER the agenda pass (consumes its research seeds),
+      // BEFORE the BE pass (the suppression recompute needs pre-turn arousal,
+      // and this ordering keeps the two-site inputs provably identical).
+      if (this.currentStory.settings?.chekhovGun === true) {
+        await this.applyChekhovTurn(
+          result,
+          entryId,
+          trackingEnabled,
+          charactersBefore,
+          createdCharacterIds,
+          charactersAtTurnStart,
+          agendaChekhovSeeds,
+        )
       }
 
       // BE engine (Phase A): deterministic body-state reduction. Runs after every
@@ -3464,6 +3501,34 @@ class StoryStore {
    * Returns completion bond events keyed by character id for the BE pass
    * (ordinary capped warm/strain — never `potent`, never direct bond writes).
    */
+  /**
+   * True when a classification result carries ANY base signal — entity
+   * updates, a scene fact, presence, or time movement. A failed classify
+   * returns the empty-everything stub; the off-screen engines (agenda +
+   * chekhov) must PAUSE on it rather than advance state off a turn the
+   * classifier never actually read (research/61 fix-diff lineage; shared so
+   * the two passes cannot drift apart on what "signal-less" means).
+   */
+  private hasBaseClassifySignal(result: ClassificationResult): boolean {
+    const updates = result.entryUpdates
+    // NOTE: deliberately does NOT test presentCharacterNames — the agenda
+    // pass derives presence through effectivePresence (which drops blanks)
+    // and adding the raw field here would change its shipped pause behavior
+    // (fix-diff round). Callers add their own presence-shaped signals.
+    return (
+      updates.characterUpdates.length > 0 ||
+      updates.locationUpdates.length > 0 ||
+      updates.itemUpdates.length > 0 ||
+      updates.storyBeatUpdates.length > 0 ||
+      updates.newCharacters.length > 0 ||
+      updates.newLocations.length > 0 ||
+      updates.newItems.length > 0 ||
+      updates.newStoryBeats.length > 0 ||
+      Boolean(result.scene?.currentLocationName) ||
+      (result.scene?.timeProgression !== undefined && result.scene.timeProgression !== 'none')
+    )
+  }
+
   private async applyAgendaTurn(
     result: ClassificationResult,
     entryId: string | undefined,
@@ -3471,15 +3536,20 @@ class StoryStore {
     charactersBefore: CharacterBeforeState[],
     createdCharacterIds: string[],
     checkRecord: CheckRecord | null,
-  ): Promise<ReadonlyMap<string, BondEvent[]>> {
+  ): Promise<{ bondEvents: ReadonlyMap<string, BondEvent[]>; chekhovSeeds: ChekhovLoad[] }> {
     const completionEvents = new SvelteMap<string, BondEvent[]>()
+    // Research completions plant narrative-debt seeds (FF: "research/
+    // investigate: Plant Chekhov seed") — consumed by applyChekhovTurn when
+    // that engine is on, dropped otherwise.
+    const chekhovSeeds: ChekhovLoad[] = []
+    const outcome = { bondEvents: completionEvents, chekhovSeeds }
     const storyId = this.currentStory?.id
-    if (!storyId) return completionEvents
+    if (!storyId) return outcome
     // Same skip contract as applyBeEvents: no entry means no stable seed for
     // the mundane backfill and no delta carrier for rollback.
     if (!entryId) {
       log('applyAgendaTurn: no entryId, skipping agenda turn this apply')
-      return completionEvents
+      return outcome
     }
 
     // The dead and the departed never run errands (review lens 2/3).
@@ -3503,23 +3573,11 @@ class StoryStore {
       trackedNames: [],
     })
     const proposals = agendaProposalsFromResult(result as unknown as Record<string, unknown>)
-    const updates = result.entryUpdates
     const hasClassifySignal =
-      present.size > 0 ||
-      proposals.length > 0 ||
-      updates.characterUpdates.length > 0 ||
-      updates.locationUpdates.length > 0 ||
-      updates.itemUpdates.length > 0 ||
-      updates.storyBeatUpdates.length > 0 ||
-      updates.newCharacters.length > 0 ||
-      updates.newLocations.length > 0 ||
-      updates.newItems.length > 0 ||
-      updates.newStoryBeats.length > 0 ||
-      Boolean(result.scene?.currentLocationName) ||
-      (result.scene?.timeProgression !== undefined && result.scene.timeProgression !== 'none')
+      present.size > 0 || proposals.length > 0 || this.hasBaseClassifySignal(result)
     if (!hasClassifySignal) {
       log('applyAgendaTurn: signal-less classify — off-screen world pauses this turn')
-      return completionEvents
+      return outcome
     }
     // Active cast: recent presence union + this turn's signal. Bounds ticking,
     // backfill AND proposal acceptance so a character out of the story's orbit
@@ -3571,6 +3629,7 @@ class StoryStore {
       // pre-COW id misses the BE pass's post-COW lookup and the effect is
       // silently dropped on a branch's first turn).
       let completionBondEvent: BondEvent | null = null
+      let completionSeed: ChekhovLoad | null = null
 
       if (isPresent) {
         // On-screen: never advance (FF: verify without advancing). A done
@@ -3590,6 +3649,9 @@ class StoryStore {
             const arrivedAt = agendaCompletionLocation(ticked.next)
             next = arrivedAt ? { ...ticked.next, location: arrivedAt } : ticked.next
             completionBondEvent = agendaCompletionBondEvent(ticked.next, character.name)
+            if (ticked.next.kind === 'research') {
+              completionSeed = researchSeed(character.name, ticked.next.goal)
+            }
           } else {
             next = ticked.next
           }
@@ -3629,6 +3691,8 @@ class StoryStore {
         )
         // The POST-cow id is the one applyBeEvents will iterate with.
         if (completionBondEvent) completionEvents.set(ownedChar.id, [completionBondEvent])
+        // Seed counts only when the completing write actually landed.
+        if (completionSeed) chekhovSeeds.push(completionSeed)
         if (wasCowed && trackingEnabled) {
           createdCharacterIds.push(ownedChar.id)
           const idx = charactersBefore.findIndex((cb) => cb.id === character.id)
@@ -3637,7 +3701,125 @@ class StoryStore {
       })
     }
 
-    return completionEvents
+    return outcome
+  }
+
+  /**
+   * E2 Chekhov's Gun turn pass (research/62): the single writer of
+   * `metadata.chekhovState` on the SELF character. Recomputes the
+   * pre-generation fire decision (same pure derivation, entry-stable inputs),
+   * then advances the bullet state — resolve → re-load fired-but-unresolved →
+   * age/lock-countdown → prune → load new debt → cap — in ONE write riding the
+   * shared wrapUpdate/COW/rollback machinery.
+   */
+  private async applyChekhovTurn(
+    result: ClassificationResult,
+    entryId: string | undefined,
+    trackingEnabled: boolean,
+    charactersBefore: CharacterBeforeState[],
+    createdCharacterIds: string[],
+    charactersAtTurnStart: Character[],
+    agendaSeeds: ChekhovLoad[],
+  ): Promise<void> {
+    const storyId = this.currentStory?.id
+    if (!storyId) return
+    // Same skip contract as the sibling passes: no entry, no stable seed, no
+    // delta carrier for rollback.
+    if (!entryId) {
+      log('applyChekhovTurn: no entryId, skipping chekhov turn this apply')
+      return
+    }
+    // The state host — no protagonist, no engine (documented degrade).
+    const selfNow = findSelfCharacter(this.characters)
+    if (!selfNow) return
+
+    const resultRecord = result as unknown as Record<string, unknown>
+    // Seeds FIRST: each research completion is a one-shot beat (its agenda is
+    // done and never re-fires), while classifier debt recurs — under the
+    // combined per-turn load cap the seeds must survive (fix-diff round).
+    const loads = [...agendaSeeds, ...narrativeDebtFromResult(resultRecord)]
+    // A signal-less classify is the failure stub, not a real turn: pause the
+    // engine entirely — no aging, no fire-mark, no prune — exactly like the
+    // agenda pass. Advancing on a failed classify would lose that turn's
+    // resolvedDebts and mis-mark a paid-off callback as vetoed (review lens 1).
+    if (
+      loads.length === 0 &&
+      !Array.isArray(resultRecord['resolvedDebts']) &&
+      (result.scene?.presentCharacterNames?.length ?? 0) === 0 &&
+      !this.hasBaseClassifySignal(result)
+    ) {
+      log('applyChekhovTurn: signal-less classify — narrative debt pauses this turn')
+      return
+    }
+
+    // Reproduce the pipeline's pre-generation view: this turn's narration
+    // entry and anything after it are excluded, which leaves exactly the
+    // entry list computeTurnDirectives read (…, user action]. The fire seed
+    // is the USER-ACTION entry id — the nearest user_action before the
+    // narration entry — per the CheckPhase seed contract. Either lookup
+    // failing means the pipeline's decision CANNOT be reproduced — fail
+    // closed (skip the pass, keep state frozen) rather than advance on a
+    // decision known to potentially differ from what was rendered.
+    const narrationIdx = this.entries.findIndex((e) => e.id === entryId)
+    if (narrationIdx < 0) {
+      log('applyChekhovTurn: narration entry not found — skipping (fail closed)')
+      return
+    }
+    const preTurnEntries = this.entries.slice(0, narrationIdx)
+    let userActionEntryId: string | null = null
+    for (let i = preTurnEntries.length - 1; i >= 0; i--) {
+      if (preTurnEntries[i].type === 'user_action') {
+        userActionEntryId = preTurnEntries[i].id
+        break
+      }
+    }
+    if (!userActionEntryId) {
+      log('applyChekhovTurn: no user action precedes the narration — skipping (fail closed)')
+      return
+    }
+
+    // The fire decision, over the PRE-TURN snapshot (characters as the
+    // pipeline saw them — status/arousal/bullets before this turn's writes).
+    const fire = computeChekhovFire({
+      storyId,
+      userActionEntryId,
+      characters: charactersAtTurnStart,
+      entries: preTurnEntries,
+    })
+
+    const state = fire.state ?? EMPTY_CHEKHOV_STATE
+    const resolvedIds = resolvedDebtsFromResult(resultRecord, state.bullets)
+
+    const next = advanceChekhovState({
+      state,
+      firedBulletId: fire.result?.bullet.id ?? null,
+      resolvedIds,
+      loads,
+    })
+
+    // Value-identity skip: an empty engine stays unmaterialized, and an
+    // unchanged state writes nothing (no COW churn, no per-turn row traffic
+    // for stories with the toggle on but no debt).
+    if (fire.state === null && next.bullets.length === 0) return
+    if (fire.state !== null && JSON.stringify(state) === JSON.stringify(next)) return
+
+    this.captureCharacterBeforeState(
+      selfNow,
+      trackingEnabled,
+      charactersBefore,
+      createdCharacterIds,
+    )
+    await this.wrapUpdate('Narrative debt', selfNow.name, async () => {
+      const { entity: ownedChar, wasCowed } = await this.cowCharacter(selfNow)
+      const metadata = writeChekhovState(ownedChar.metadata, next)
+      await database.updateCharacter(ownedChar.id, { metadata })
+      this.characters = this.characters.map((c) => (c.id === ownedChar.id ? { ...c, metadata } : c))
+      if (wasCowed && trackingEnabled) {
+        createdCharacterIds.push(ownedChar.id)
+        const idx = charactersBefore.findIndex((cb) => cb.id === selfNow.id)
+        if (idx !== -1) charactersBefore.splice(idx, 1)
+      }
+    })
   }
 
   private async applyBeEvents(

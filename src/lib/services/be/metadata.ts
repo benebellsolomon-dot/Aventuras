@@ -8,8 +8,10 @@
  */
 
 import { z } from 'zod'
+import { sanitizeDebtText } from '$lib/services/worldsim'
+import { BE_CONDITION_LABEL_MAX, BE_CONDITION_NOTE_MAX } from './constants'
 import { bandWord, tierForCupLetter } from './ladder'
-import type { BodyState } from './types'
+import type { BodyCondition, BodyState } from './types'
 
 export const BODY_STATE_KEY = 'bodyState'
 
@@ -114,6 +116,30 @@ export function seedBodyStateFromCup(letter: string, fluidType?: string): BodySt
 }
 
 /**
+ * Stored condition labels/notes are never trusted at read (the worldsim
+ * agenda/chekhov reader rule): extraction-time sanitizing only guards NEW
+ * writes, and a label poisoned before that hardening (an embedded newline +
+ * "[CHECK RESULT]" fake) re-renders into the BE prompt block every turn. A
+ * condition whose label sanitizes away entirely is dropped; `note` is
+ * overwritten unconditionally — a conditional spread would let the raw value
+ * survive the sanitized-empty case (agenda fix-diff lesson).
+ */
+function sanitizeConditions(conditions: ReadonlyArray<BodyCondition>): BodyCondition[] {
+  const sanitized: BodyCondition[] = []
+  for (const condition of conditions) {
+    const label = sanitizeDebtText(condition.label, BE_CONDITION_LABEL_MAX)
+    if (label === '') continue
+    const note =
+      condition.note === undefined ? '' : sanitizeDebtText(condition.note, BE_CONDITION_NOTE_MAX)
+    const next: BodyCondition = { ...condition, label }
+    delete next.note
+    if (note !== '') next.note = note
+    sanitized.push(next)
+  }
+  return sanitized
+}
+
+/**
  * Read bodyState out of a character's metadata. Returns null when absent or
  * unparseable — callers decide whether to seed (BE stories) or ignore (others).
  */
@@ -124,7 +150,8 @@ export function readBodyState(metadata: Record<string, unknown> | null): BodySta
   const parsed = bodyStateSchema.safeParse(raw)
   if (!parsed.success) return null
   // The schema defaults `cooldown` for legacy states that predate the field.
-  return parsed.data as BodyState
+  const state = parsed.data as BodyState
+  return { ...state, conditions: sanitizeConditions(state.conditions) }
 }
 
 /**

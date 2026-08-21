@@ -59,10 +59,12 @@ function pickName(names: ReadonlyArray<string>, seed: string): string {
 }
 
 /**
- * Roll this turn's world event. Null = no block this turn (off, suppressed,
- * sparse-gated, CALM, or an event whose target pool is empty — a MOOD_SWING
- * with nobody on-scene degrades to a quiet turn rather than inventing a
- * target).
+ * Roll this turn's world event. Null = no roll happened or the event degraded
+ * (off, suppressed, sparse-gated, or an event whose target pool is empty — a
+ * MOOD_SWING with nobody on-scene degrades to a quiet turn rather than
+ * inventing a target). A true CALM band roll returns the event with an empty
+ * directive: it renders nothing by itself, but E2 (research/62) distinguishes
+ * FF's "quiet moment" — which plants a Chekhov seed — from a mere degrade.
  */
 export function rollWorldEvent(input: WorldEventInput): WorldEvent | null {
   if (input.frequency !== 'sparse' && input.frequency !== 'lively') return null
@@ -85,7 +87,8 @@ export function rollWorldEvent(input: WorldEventInput): WorldEvent | null {
 
   const roll = seededRoll(base)
   const def = eventForRoll(table, roll)
-  if (!def || def.directive === '') return null // CALM (or a table gap — impossible by construction)
+  if (!def) return null // table gap — impossible by construction
+  if (def.id === 'CALM') return { tableId, roll, eventId: 'CALM', directive: '' }
 
   let directive = def.directive
   let targetName: string | undefined

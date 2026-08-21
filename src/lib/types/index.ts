@@ -167,6 +167,7 @@ export interface StorySettings {
   // FF5.2 world-liveliness engines (research/58 D3, research/61):
   worldSimFrequency?: 'off' | 'sparse' | 'lively' // E3 seeded background-event roll cadence (unset = off)
   npcAgendas?: boolean // E4 off-screen NPC agendas: classifier-proposed goals, deterministic ticking, [OFF-SCREEN] block (unset = off)
+  chekhovGun?: boolean // E2 narrative-debt engine (research/62): classifier-observed setups, seeded firing, [CALLBACK] block (unset = off)
   // RPG layer display settings (Phase 5 W3) — DISPLAY-only, never injected into
   // the prompt (a prompt change would fragment the cache).
   rpgRollCardVerbosity?: 'compact' | 'full' // Roll-card detail: full math vs band+total (default: full)

@@ -815,6 +815,11 @@ export class NarrativeService {
     if (turnDirectives?.worldEventBlock) {
       prompt += `${turnDirectives.worldEventBlock}\n\n`
     }
+    // [CALLBACK] sits after the ambient blocks (a fired Chekhov bullet is more
+    // plot-authoritative than background texture) but still before the check.
+    if (turnDirectives?.callbackBlock) {
+      prompt += `${turnDirectives.callbackBlock}\n\n`
+    }
 
     // Resolved-check block goes DEAD LAST (research/47 Step 6): the volatile,
     // authority-dominant fact the narration must honor sits closest to

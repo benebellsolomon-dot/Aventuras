@@ -9,6 +9,14 @@
  * The classifier only PROPOSES goals — the engine owns the slot (a proposal
  * lands only where no active agenda exists), the ticking, the completion
  * effects, and the rendering. Never LLM-self-reported state.
+ *
+ * Deliberately NO hard `.max()` length/count constraints (chekhov-schema
+ * pattern, Phase 4 review): providers that don't enforce maxLength/maxItems
+ * in structured output would fail the WHOLE classification parse on overflow,
+ * silently voiding every entity update for the turn. Caps live in the
+ * `.describe` text for the model and are enforced by sanitize-and-truncate in
+ * agendaProposalsFromResult (agendaFromProposal re-sanitizes on the way to
+ * persistence, which is behavior-neutral).
  */
 
 import { z } from 'zod'
@@ -26,9 +34,8 @@ export const agendaProposalSchema = z.object({
   character: z.string().describe('Exact name of the named NPC'),
   goal: z
     .string()
-    .max(AGENDA_GOAL_MAX)
     .describe(
-      'Short phrase for what they are off doing, e.g. "restocking herbs in the lower market"',
+      `Short phrase for what they are off doing, under ${AGENDA_GOAL_MAX} characters, e.g. "restocking herbs in the lower market"`,
     ),
   kind: z
     .enum(['travel', 'research', 'rest', 'reconcile', 'confront', 'mundane'])
@@ -40,15 +47,13 @@ export const agendaProposalSchema = z.object({
     .describe(`How many turns it takes, 1 (quick) to ${AGENDA_MAX_STEPS} (a long undertaking)`),
   destination: z
     .string()
-    .max(AGENDA_PLACE_MAX)
-    .describe('For travel: where they are headed')
+    .describe(`For travel: where they are headed, under ${AGENDA_PLACE_MAX} characters`)
     .optional(),
 })
 
 export type AgendaProposal = z.infer<typeof agendaProposalSchema>
 
-const AGENDA_PROPOSALS_DESCRIPTION =
-  'Off-screen agenda proposals for named NPCs who LEFT the scene this response, were described as pursuing something elsewhere, or departed after being introduced. Ground each goal in what this response actually showed or implied. Empty array when nobody left with a purpose.'
+const AGENDA_PROPOSALS_DESCRIPTION = `Off-screen agenda proposals for named NPCs who LEFT the scene this response, were described as pursuing something elsewhere, or departed after being introduced. Ground each goal in what this response actually showed or implied. Empty array when nobody left with a purpose; at most ${MAX_AGENDA_PROPOSALS}.`
 
 /**
  * Extend a classification schema with the top-level agendaProposals array.
@@ -61,7 +66,6 @@ export function extendClassificationSchemaWithAgendas(schema: z.ZodType): z.ZodT
   return objectSchema.extend({
     agendaProposals: z
       .array(agendaProposalSchema)
-      .max(MAX_AGENDA_PROPOSALS)
       .default([])
       .describe(AGENDA_PROPOSALS_DESCRIPTION),
   })
@@ -81,18 +85,34 @@ This story tracks what named NPCs do while off-screen. Additionally fill the top
 /**
  * Pull validated proposals off a classification result. Tolerates absence and
  * silently drops malformed entries (same rules as the be/*FromResult family);
- * an empty-after-sanitizing goal drops the proposal too. Bounds clamp in
- * agendaFromProposal below.
+ * an empty-after-sanitizing goal drops the proposal too. Length caps the
+ * schema no longer hard-enforces are applied here by the same
+ * sanitize-and-truncate agendaFromProposal uses (sanitizing must come FIRST:
+ * a raw prefix slice could keep the sanitize-gate's pass verdict while
+ * storing an all-filler prefix that later sanitizes to an empty goal).
+ * agendaFromProposal's re-sanitize is behavior-neutral on this output: at
+ * most it trims a dangling space the cap cut left behind, and it can never
+ * empty a non-empty once-sanitized goal.
  */
 export function agendaProposalsFromResult(result: Record<string, unknown>): AgendaProposal[] {
   const raw = result['agendaProposals']
   if (!Array.isArray(raw)) return []
   const proposals: AgendaProposal[] = []
-  for (const candidate of raw.slice(0, MAX_AGENDA_PROPOSALS)) {
+  // Cap VALID entries, not raw indexes — a run of malformed leading entries
+  // must not starve out well-formed ones behind it.
+  for (const candidate of raw) {
+    if (proposals.length >= MAX_AGENDA_PROPOSALS) break
     const parsed = agendaProposalSchema.safeParse(candidate)
-    if (parsed.success && sanitizeAgendaText(parsed.data.goal, AGENDA_GOAL_MAX) !== '') {
-      proposals.push(parsed.data)
-    }
+    if (!parsed.success) continue
+    const goal = sanitizeAgendaText(parsed.data.goal, AGENDA_GOAL_MAX)
+    if (goal === '') continue
+    proposals.push({
+      ...parsed.data,
+      goal,
+      ...(parsed.data.destination !== undefined
+        ? { destination: sanitizeAgendaText(parsed.data.destination, AGENDA_PLACE_MAX) }
+        : {}),
+    })
   }
   return proposals
 }
