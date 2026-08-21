@@ -77,7 +77,7 @@ export const SYSTEM_VARIABLES: VariableDefinition[] = [
     category: 'system',
     description: 'Point of view',
     required: true,
-    enumValues: ['first', 'second', 'third'],
+    enumValues: ['first', 'second', 'third', 'hybrid'],
   },
   {
     name: 'tense',

@@ -105,6 +105,7 @@
     { id: 'first', label: '1st Person', example: '' },
     { id: 'second', label: '2nd Person', example: '' },
     { id: 'third', label: '3rd Person', example: '' },
+    { id: 'hybrid', label: 'Hybrid', example: '' },
   ]
 </script>
 

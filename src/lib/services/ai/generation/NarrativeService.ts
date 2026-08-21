@@ -12,7 +12,7 @@
  */
 
 import { streamNarrative, generateNarrative } from '../sdk/generate'
-import { ContextBuilder } from '$lib/services/context'
+import { ContextBuilder, responseLengthGuidance } from '$lib/services/context'
 import { getContentGuidelines } from './contentGuidelines'
 import { StyleReviewerService } from './StyleReviewerService'
 import { templateEngine } from '$lib/services/templates/engine'
@@ -630,6 +630,14 @@ export class NarrativeService {
       })
     }
 
+    // Prose style + length guidance are narrative-template-only, so they are
+    // scoped here (like contentGuidelines) rather than in forStory — which
+    // also covers the no-story fallback branch above.
+    ctx.add({
+      proseStyle: story?.settings?.proseStyle ?? 'cinematic',
+      responseLengthGuidance: responseLengthGuidance(story?.settings?.responseLength, mode),
+    })
+
     // Add runtime variables for template rendering
     // These are pre-formatted blocks that templates inject via {{ variable }}
 
@@ -678,7 +686,12 @@ export class NarrativeService {
 
     // Content guidelines based on the story's content rating.
     // Always set (empty string for 'standard') so templates can safely test it.
-    ctx.add({ contentGuidelines: getContentGuidelines(story?.settings?.contentRating) })
+    ctx.add({
+      contentGuidelines: getContentGuidelines(
+        story?.settings?.contentRating,
+        story?.settings?.nsfwFlavor,
+      ),
+    })
 
     // Render system prompt — use per-story override when set, otherwise fall back to pack template
     let systemPrompt: string
@@ -830,6 +843,18 @@ Your role:
 - Control all NPCs and the environment
 - NEVER write ${protagonistName}'s dialogue, decisions, or inner thoughts - I decide those
 - When I say "I do X", describe the results in third person (e.g., "I open the door" -> "${protagonistName} ${actionExample}...")
+
+I am the player controlling ${protagonistName}. You narrate what happens. Begin when I take my first action.`
+    }
+
+    if (pov === 'hybrid') {
+      return `You are the narrator of this interactive adventure. Write in ${tenseWord} tense, hybrid POV: narrate the world, NPCs, and ${protagonistName}'s outward actions in third person, but describe every physical sensation ${protagonistName} feels in second person ("you").
+
+Your role:
+- Describe scenes and characters in third person; when I say "I do X", show ${protagonistName} doing it (e.g., "I open the door" -> "${protagonistName} ${actionExample}...")
+- Whenever something touches, hurts, warms, or otherwise affects my character's body, shift to "you" for the sensation itself
+- Control all NPCs and the environment
+- NEVER write ${protagonistName}'s dialogue, decisions, or inner thoughts - I decide those
 
 I am the player controlling ${protagonistName}. You narrate what happens. Begin when I take my first action.`
     }

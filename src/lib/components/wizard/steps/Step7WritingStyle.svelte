@@ -21,6 +21,7 @@
     onBackgroundImagesEnabledChange: (v: boolean) => void
     onReferenceModeChange: (v: boolean) => void
     onBeModeChange: (v: boolean) => void
+    allowHybridPov?: boolean
   }
 
   let {
@@ -41,6 +42,7 @@
     onBackgroundImagesEnabledChange,
     onReferenceModeChange,
     onBeModeChange,
+    allowHybridPov,
   }: Props = $props()
 
   // Force "none" mode when image generation is disabled (wizard only)
@@ -72,6 +74,7 @@
       {backgroundImagesEnabled}
       {referenceMode}
       {beMode}
+      {allowHybridPov}
       {onPOVChange}
       {onTenseChange}
       {onToneChange}

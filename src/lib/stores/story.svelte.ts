@@ -11,6 +11,7 @@ import type {
   MemoryConfig,
   StoryMode,
   StorySettings,
+  POV,
   Entry,
   TimeTracker,
   EmbeddedImage,
@@ -218,7 +219,7 @@ class StoryStore {
     return this.characters.find((c) => c.relationship === 'self')
   }
 
-  get pov(): 'first' | 'second' | 'third' {
+  get pov(): POV {
     const mode = this.currentStory?.mode ?? 'adventure'
     const stored = this.currentStory?.settings?.pov ?? null
     // For creative-writing mode, respect the user's stored POV choice
@@ -5442,7 +5443,7 @@ class StoryStore {
     description?: string
     mode: StoryMode
     settings: {
-      pov: 'first' | 'second' | 'third'
+      pov: POV
       tense: 'past' | 'present'
       tone?: string
       themes?: string[]

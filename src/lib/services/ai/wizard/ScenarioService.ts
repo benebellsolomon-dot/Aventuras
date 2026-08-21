@@ -340,7 +340,9 @@ class ScenarioService {
         ? 'The reader will be this character, narrated in first person (I...).'
         : pov === 'second'
           ? 'The reader will be this character, narrated in second person (You...).'
-          : 'This is the main viewpoint character for a third person narrative.'
+          : pov === 'hybrid'
+            ? 'The reader will be this character, narrated in third person with their physical sensations described in second person (you).'
+            : 'This is the main viewpoint character for a third person narrative.'
 
     const modeContext =
       mode === 'adventure'
@@ -716,6 +718,13 @@ class ScenarioService {
           perspective: 'the protagonist\'s second-person perspective ("You see...", "You feel...")',
           perspectiveInstructions:
             'Use "you/your" for the protagonist. Address the reader/protagonist directly.',
+        }
+      case 'hybrid':
+        return {
+          instruction:
+            'POV: Hybrid — third person narration; physical sensations the protagonist feels in second person ("you").',
+          perspective: `through ${protagonistName}'s perspective`,
+          perspectiveInstructions: `Narrate in third person ("${protagonistName}", "he/she/they"), but describe sensations ${protagonistName} physically feels in second person ("you").`,
         }
       case 'third':
       default:

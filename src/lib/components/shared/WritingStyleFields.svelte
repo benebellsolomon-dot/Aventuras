@@ -37,6 +37,8 @@
     onBeGrowthCosmologyChange?: (v: string) => void
     onBePacingFlavorChange?: (v: string) => void
     onBeGrowthEligibleKindsChange?: (v: string[]) => void
+    /** Offer the hybrid POV option (adventure mode only — 3rd-person narration, 2nd-person sensations). */
+    allowHybridPov?: boolean
     disabledFields?: {
       pov?: boolean
       tense?: boolean
@@ -71,9 +73,17 @@
     onBeGrowthCosmologyChange,
     onBePacingFlavorChange,
     onBeGrowthEligibleKindsChange,
+    allowHybridPov,
     disabledFields,
     disabledReason,
   }: Props = $props()
+
+  // Hybrid stays visible for a story already set to it, even where not offered.
+  const povChoices = $derived(
+    allowHybridPov || selectedPOV === 'hybrid'
+      ? ['first', 'second', 'third', 'hybrid']
+      : ['first', 'second', 'third'],
+  )
 
   const GROWTH_KIND_CHOICES = [
     { value: 'catalyst', label: 'Catalyst', hint: "this world's growth driver" },
@@ -131,10 +141,10 @@
       <RadioGroup.Root
         value={selectedPOV}
         onValueChange={(v) => onPOVChange(v as POV)}
-        class="grid grid-cols-3 gap-2"
+        class={povChoices.length === 4 ? 'grid grid-cols-4 gap-2' : 'grid grid-cols-3 gap-2'}
         disabled={disabledFields?.pov}
       >
-        {#each ['first', 'second', 'third'] as pov (pov)}
+        {#each povChoices as pov (pov)}
           <Label
             for={`pov-${pov}`}
             class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-center justify-center rounded-md border-2 p-3 text-center"
@@ -154,6 +164,8 @@
           "I draw my sword..."
         {:else if selectedPOV === 'second'}
           "You draw your sword..."
+        {:else if selectedPOV === 'hybrid'}
+          "She hands over the clay — cold and gritty against your skin..."
         {:else}
           "He/She/They draw their sword..."
         {/if}

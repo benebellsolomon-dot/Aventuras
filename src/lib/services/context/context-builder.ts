@@ -56,6 +56,37 @@ const BE_PRESENCE_ENTRY_FETCH = 30
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
+ * Length guidance text for the story templates' Format section (research/59
+ * step 2). 'medium' preserves each mode's legacy hardcoded wording so stories
+ * with unset settings render an unchanged prompt. Narrative-template-only, so
+ * NarrativeService.buildPrompts adds it (matching contentGuidelines), not
+ * forStory — that also keeps the no-story fallback path covered.
+ */
+export function responseLengthGuidance(
+  length: 'short' | 'medium' | 'long' | undefined,
+  mode: string,
+): string {
+  if (mode === 'creative-writing') {
+    switch (length) {
+      case 'short':
+        return 'Around 250 words per response'
+      case 'long':
+        return '600-900 words per response'
+      default:
+        return 'Up to 500 words per response'
+    }
+  }
+  switch (length) {
+    case 'short':
+      return 'Around 150 words per response'
+    case 'long':
+      return '400-600 words per response, across 4-8 paragraphs'
+    default:
+      return 'Around 250 words per response'
+  }
+}
+
+/**
  * Candidate names the pending user action names outright, case-insensitively
  * and on word boundaries (so "Mira" does not match "Miranda's letter").
  */

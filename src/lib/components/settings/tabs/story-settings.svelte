@@ -39,12 +39,46 @@
     'runtimeVars_protagonist',
     'contentRating',
     'contentGuidelines',
+    'proseStyle',
+    'responseLengthGuidance',
   ])
 
   const CONTENT_RATINGS: Array<{ value: ContentRating; label: string; desc: string }> = [
     { value: 'standard', label: 'Standard', desc: 'Default behavior, no extra content guidance' },
     { value: 'mature', label: 'Mature', desc: 'Adult themes on-page with scene discretion' },
     { value: 'explicit', label: 'Explicit', desc: 'Fully explicit scenes, no fade-to-black' },
+  ]
+
+  const PROSE_STYLES = [
+    {
+      value: 'cinematic',
+      label: 'Cinematic',
+      desc: 'Observable-only realism: show, never tell, no lyrical flourish',
+    },
+    {
+      value: 'literary',
+      label: 'Literary',
+      desc: 'Evocative, atmospheric prose with emotional flourish',
+    },
+  ]
+
+  const RESPONSE_LENGTHS = [
+    { value: 'short', label: 'Short', desc: '~150 words' },
+    { value: 'medium', label: 'Medium', desc: '~250 words' },
+    { value: 'long', label: 'Long', desc: '400-600 words' },
+  ]
+
+  const NSFW_FLAVORS = [
+    {
+      value: 'scene',
+      label: 'Scene-triggered',
+      desc: 'Explicit delivery only when a scene turns intimate',
+    },
+    {
+      value: 'always',
+      label: 'Always on',
+      desc: 'Sensual physical description woven into every scene',
+    },
   ]
 
   const VARIABLE_REFERENCE = [
@@ -79,6 +113,8 @@
       vars: [
         { name: 'contentRating', desc: "The story's content rating (standard/mature/explicit)" },
         { name: 'contentGuidelines', desc: 'Content guidance block for the current rating' },
+        { name: 'proseStyle', desc: "The story's prose style (cinematic/literary)" },
+        { name: 'responseLengthGuidance', desc: 'Length guidance text for the Format section' },
       ],
     },
     {
@@ -209,6 +245,7 @@
   </div>
 
   <WritingStyleFields
+    allowHybridPov={(story.currentStory?.mode ?? 'adventure') === 'adventure'}
     selectedPOV={storySettings.pov ?? 'second'}
     selectedTense={storySettings.tense ?? 'present'}
     tone={storySettings.tone ?? ''}
@@ -242,6 +279,58 @@
     disabledReason="Cannot be changed mid-story. Set during story creation."
   />
 
+  <!-- ── Prose Style ──────────────────────────────────────────────────────── -->
+  <div class="border-t pt-4">
+    <Label class="text-sm font-medium">Prose Style</Label>
+    <p class="text-muted-foreground mt-1 mb-3 text-xs">
+      The narrative voice used by the story templates. Applies from the next generation.
+    </p>
+    <RadioGroup.Root
+      value={storySettings.proseStyle ?? 'cinematic'}
+      onValueChange={(v) =>
+        story.updateStorySettings({ proseStyle: v === 'literary' ? 'literary' : undefined })}
+      class="grid grid-cols-1 gap-2 sm:grid-cols-2"
+    >
+      {#each PROSE_STYLES as style (style.value)}
+        <Label
+          for={`prose-style-${style.value}`}
+          class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-start justify-center gap-1 rounded-md border-2 p-3"
+        >
+          <RadioGroup.Item value={style.value} id={`prose-style-${style.value}`} class="sr-only" />
+          <span class="font-medium">{style.label}</span>
+          <span class="text-muted-foreground text-xs font-normal">{style.desc}</span>
+        </Label>
+      {/each}
+    </RadioGroup.Root>
+  </div>
+
+  <!-- ── Response Length ──────────────────────────────────────────────────── -->
+  <div class="border-t pt-4">
+    <Label class="text-sm font-medium">Response Length</Label>
+    <p class="text-muted-foreground mt-1 mb-3 text-xs">
+      Target narration length per response. Applies from the next generation.
+    </p>
+    <RadioGroup.Root
+      value={storySettings.responseLength ?? 'medium'}
+      onValueChange={(v) =>
+        story.updateStorySettings({
+          responseLength: v === 'short' || v === 'long' ? v : undefined,
+        })}
+      class="grid grid-cols-3 gap-2"
+    >
+      {#each RESPONSE_LENGTHS as len (len.value)}
+        <Label
+          for={`response-length-${len.value}`}
+          class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-start justify-center gap-1 rounded-md border-2 p-3"
+        >
+          <RadioGroup.Item value={len.value} id={`response-length-${len.value}`} class="sr-only" />
+          <span class="font-medium">{len.label}</span>
+          <span class="text-muted-foreground text-xs font-normal">{len.desc}</span>
+        </Label>
+      {/each}
+    </RadioGroup.Root>
+  </div>
+
   <!-- ── Content Rating ───────────────────────────────────────────────────── -->
   <div class="border-t pt-4">
     <Label class="text-sm font-medium">Content Rating</Label>
@@ -269,6 +358,33 @@
         </Label>
       {/each}
     </RadioGroup.Root>
+
+    {#if (storySettings.contentRating ?? 'standard') !== 'standard'}
+      <div class="mt-3">
+        <Label class="text-muted-foreground mb-2 block text-xs">Adult-content flavor</Label>
+        <RadioGroup.Root
+          value={storySettings.nsfwFlavor ?? 'scene'}
+          onValueChange={(v) =>
+            story.updateStorySettings({ nsfwFlavor: v === 'always' ? 'always' : undefined })}
+          class="grid grid-cols-1 gap-2 sm:grid-cols-2"
+        >
+          {#each NSFW_FLAVORS as flavor (flavor.value)}
+            <Label
+              for={`nsfw-flavor-${flavor.value}`}
+              class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-start justify-center gap-1 rounded-md border-2 p-3"
+            >
+              <RadioGroup.Item
+                value={flavor.value}
+                id={`nsfw-flavor-${flavor.value}`}
+                class="sr-only"
+              />
+              <span class="font-medium">{flavor.label}</span>
+              <span class="text-muted-foreground text-xs font-normal">{flavor.desc}</span>
+            </Label>
+          {/each}
+        </RadioGroup.Root>
+      </div>
+    {/if}
   </div>
 
   <!-- ── RPG Display (Phase 5 W3) ─────────────────────────────────────────── -->

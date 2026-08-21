@@ -23,7 +23,7 @@ const db = {
 vi.mock('$lib/services/database', () => ({ database: db }))
 vi.mock('$lib/services/templates/engine', () => ({ templateEngine: { render: () => '' } }))
 
-const { ContextBuilder } = await import('./context-builder')
+const { ContextBuilder, responseLengthGuidance } = await import('./context-builder')
 
 const character = (name: string, relationship: string | null, tier: number): Character =>
   ({
@@ -188,5 +188,25 @@ describe('ContextBuilder BE body-state scoping', () => {
     })
     expect(await blockFor()).toBe('')
     expect(db.getRecentStoryEntries).not.toHaveBeenCalled()
+  })
+})
+
+describe('responseLengthGuidance', () => {
+  it('preserves each mode legacy wording when unset or medium', () => {
+    expect(responseLengthGuidance(undefined, 'adventure')).toBe('Around 250 words per response')
+    expect(responseLengthGuidance('medium', 'adventure')).toBe('Around 250 words per response')
+    expect(responseLengthGuidance(undefined, 'creative-writing')).toBe(
+      'Up to 500 words per response',
+    )
+    expect(responseLengthGuidance('medium', 'creative-writing')).toBe(
+      'Up to 500 words per response',
+    )
+  })
+
+  it('maps short and long per mode', () => {
+    expect(responseLengthGuidance('short', 'adventure')).toContain('150')
+    expect(responseLengthGuidance('long', 'adventure')).toContain('400-600')
+    expect(responseLengthGuidance('short', 'creative-writing')).toContain('250')
+    expect(responseLengthGuidance('long', 'creative-writing')).toContain('600-900')
   })
 })

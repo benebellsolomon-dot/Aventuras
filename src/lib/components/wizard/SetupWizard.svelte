@@ -113,7 +113,14 @@
       {#if wizard.currentStep === 1}
         <Step1Mode
           selectedMode={wizard.narrative.selectedMode}
-          onModeChange={(mode) => (wizard.narrative.selectedMode = mode)}
+          onModeChange={(mode) => {
+            wizard.narrative.selectedMode = mode
+            // Hybrid POV is adventure-only; leaving it set would store an
+            // unsupported combination that silently degrades to third person.
+            if (mode === 'creative-writing' && wizard.narrative.selectedPOV === 'hybrid') {
+              wizard.narrative.selectedPOV = 'third'
+            }
+          }}
         />
       {:else if wizard.currentStep === 2}
         <StepPackSelection
@@ -359,6 +366,7 @@
         />
       {:else if wizard.currentStep === 8}
         <Step7WritingStyle
+          allowHybridPov={wizard.narrative.selectedMode === 'adventure'}
           selectedPOV={wizard.narrative.selectedPOV}
           selectedTense={wizard.narrative.selectedTense}
           tone={wizard.narrative.tone}

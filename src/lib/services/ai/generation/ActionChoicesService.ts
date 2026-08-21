@@ -117,7 +117,7 @@ export class ActionChoicesService extends BaseAIService {
     const povInstruction =
       context.pov === 'first'
         ? 'Use first person (I, me, my) for all action choices.'
-        : context.pov === 'second'
+        : context.pov === 'second' || context.pov === 'hybrid'
           ? 'Use second person (you, your) for all action choices.'
           : 'Use third person for all action choices.'
 

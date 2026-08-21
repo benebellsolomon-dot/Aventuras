@@ -185,6 +185,7 @@
   <!-- Writing Style -->
   <ScrollArea class="h-full pr-4">
     <WritingStyleFields
+      allowHybridPov={selectedMode === 'adventure'}
       {selectedPOV}
       {selectedTense}
       {tone}

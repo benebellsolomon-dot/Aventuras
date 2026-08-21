@@ -362,7 +362,7 @@ class AIService {
     narrativeResponse: string,
     lorebookEntries?: Entry[],
     promptContext?: PromptContext,
-    pov?: 'first' | 'second' | 'third',
+    pov?: POV,
     storyId?: string,
   ): Promise<ActionChoicesResult> {
     log('generateActionChoices called', {

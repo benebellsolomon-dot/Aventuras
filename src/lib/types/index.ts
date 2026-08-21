@@ -7,7 +7,9 @@
 import type { EffectTag } from '$lib/services/be/effects'
 
 export type StoryMode = 'adventure' | 'creative-writing'
-export type POV = 'first' | 'second' | 'third'
+// 'hybrid' (adventure mode only): third-person limited narration, but everything
+// the protagonist physically feels rendered in second person (FF5.2 port, research/58 P3).
+export type POV = 'first' | 'second' | 'third' | 'hybrid'
 export type Tense = 'past' | 'present'
 
 // Visual descriptors for character appearance (used for image generation)
@@ -157,6 +159,10 @@ export interface StorySettings {
   bePacingFlavor?: string // BE engine: free-text pacing note interpolated into the genre rules
   beGrowthEligibleKinds?: string[] // BE engine: which event kinds may land growth (subset of catalyst/contact/attempt); empty/unset = all
   contentRating?: ContentRating // Content guidance level injected into narrative prompts (default: standard)
+  // FF5.2 prose package (research/58 D1/D4, research/59):
+  proseStyle?: 'cinematic' | 'literary' // Narrative voice: observable-only cinematic realism (default) vs lyrical literary
+  responseLength?: 'short' | 'medium' | 'long' // Narration length guidance (default: medium, matches legacy ~250 words)
+  nsfwFlavor?: 'scene' | 'always' // Explicit-content lens: scene-triggered (default) vs woven into every scene; ignored at standard rating
   postHistoryInstructions?: string // Liquid-enabled directives injected after story history, just before generation
   // RPG layer display settings (Phase 5 W3) — DISPLAY-only, never injected into
   // the prompt (a prompt change would fragment the cache).

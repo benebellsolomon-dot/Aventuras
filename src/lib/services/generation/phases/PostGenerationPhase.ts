@@ -25,6 +25,7 @@ import type {
   Location,
   Item,
   StoryBeat,
+  POV,
 } from '$lib/types'
 import type { Suggestion, ActionChoice } from '$lib/services/ai/sdk/schemas'
 import { TranslationService } from '$lib/services/ai/utils/TranslationService'
@@ -32,7 +33,7 @@ import { TranslationService } from '$lib/services/ai/utils/TranslationService'
 /** Prompt context for macro expansion */
 export interface PromptContext {
   mode: 'adventure' | 'creative-writing'
-  pov: 'first' | 'second' | 'third'
+  pov: POV
   tense: 'past' | 'present'
   protagonistName: string
   genre?: string
@@ -65,7 +66,7 @@ export interface PostGenerationDependencies {
     narrativeResponse: string,
     lorebookEntries: Entry[],
     promptContext: PromptContext,
-    pov: 'first' | 'second' | 'third',
+    pov: POV,
   ) => Promise<{ choices: ActionChoice[] }>
   translateActionChoices: (
     choices: ActionChoice[],
@@ -83,7 +84,7 @@ export interface PostGenerationInput {
   promptContext: PromptContext
   worldState: PostWorldState
   narrativeResponse: string
-  pov: 'first' | 'second' | 'third'
+  pov: POV
   translationSettings: TranslationSettings
   abortSignal?: AbortSignal
 }
