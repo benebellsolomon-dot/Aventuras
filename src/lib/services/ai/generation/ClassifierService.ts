@@ -32,6 +32,10 @@ import {
 } from '../sdk/schemas/classifier'
 import { buildExtendedClassificationSchema } from '../sdk/schemas/runtime-variables'
 import { buildBeEventInstructions, extendClassificationSchemaWithBeEvents } from '$lib/services/be'
+import {
+  buildAgendaInstructions,
+  extendClassificationSchemaWithAgendas,
+} from '$lib/services/worldsim'
 import type { RuntimeVariable, RuntimeEntityType } from '$lib/services/packs/types'
 
 const log = createLogger('Classifier')
@@ -107,6 +111,19 @@ export class ClassifierService extends BaseAIService {
       schema = extended
     }
 
+    // Agenda stories additionally extract off-screen goal proposals (research/61,
+    // same schema-extension contract as beEvents).
+    const agendaMode = context.story.settings?.npcAgendas === true
+    if (agendaMode) {
+      const extended = extendClassificationSchemaWithAgendas(schema)
+      if (extended === schema) {
+        log(
+          'WARNING: agendaProposals schema extension no-op — agenda extraction disabled this turn',
+        )
+      }
+      schema = extended
+    }
+
     // Format existing entities for the prompt
     const existingCharacters = this.formatExistingCharacters(context.existingCharacters)
     const existingLocations = context.existingLocations.map((l) => l.name).join(', ') || '(none)'
@@ -128,6 +145,7 @@ export class ClassifierService extends BaseAIService {
     const customVariableInstructions = [
       runtimeVars.length > 0 ? this.buildCustomVarInstructions(runtimeVarsByType) : '',
       beMode ? buildBeEventInstructions(context.story.settings?.beGrowthCosmology) : '',
+      agendaMode ? buildAgendaInstructions() : '',
     ]
       .filter(Boolean)
       .join('\n\n')

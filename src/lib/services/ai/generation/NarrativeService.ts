@@ -43,6 +43,7 @@ import type {
 import type { StyleReviewResult } from './StyleReviewerService'
 import type { TimelineFillResult } from '../retrieval/TimelineFillService'
 import { buildCheckResultBlock, type CheckRecord } from '$lib/services/rpg'
+import type { TurnDirectives } from '$lib/services/worldsim'
 
 const log = createLogger('Narrative')
 
@@ -454,6 +455,10 @@ export interface NarrativeOptions {
   /** Resolved RPG check for this turn — rendered as the immutable [CHECK
    * RESULT] block dead last in the user prompt (research/47 Step 6). */
   pendingCheck?: CheckRecord | null
+  /** Pre-generation world-liveliness blocks (research/61): [OFF-SCREEN] +
+   * [WORLD EVENT], rendered in the user prompt tail BEFORE [CHECK RESULT]
+   * (which keeps the closest-to-generation slot). Empty strings render nothing. */
+  turnDirectives?: TurnDirectives | null
 }
 
 /**
@@ -493,6 +498,7 @@ export class NarrativeService {
       signal,
       timelineFillResult,
       pendingCheck,
+      turnDirectives,
     } = options
 
     log('stream', {
@@ -523,6 +529,7 @@ export class NarrativeService {
       inlineImageMode,
       postHistoryBlock,
       pendingCheck ?? null,
+      turnDirectives ?? null,
     )
 
     try {
@@ -754,6 +761,7 @@ export class NarrativeService {
     inlineImageMode: boolean = false,
     postHistoryBlock: string = '',
     pendingCheck: CheckRecord | null = null,
+    turnDirectives: TurnDirectives | null = null,
   ): string {
     // Use all entries passed - these are already the visible (non-summarized) entries
     // Truncation/context management happens upstream via the memory system
@@ -796,6 +804,16 @@ export class NarrativeService {
 
     if (postHistoryBlock) {
       prompt += `[Narrative Directives]\n${postHistoryBlock}\n\n`
+    }
+
+    // World-liveliness blocks (research/61): per-turn volatile, so they live
+    // here in the user prompt tail — never the system prompt (cache rule) —
+    // and BEFORE the check block, which keeps the authority slot.
+    if (turnDirectives?.offScreenBlock) {
+      prompt += `${turnDirectives.offScreenBlock}\n\n`
+    }
+    if (turnDirectives?.worldEventBlock) {
+      prompt += `${turnDirectives.worldEventBlock}\n\n`
     }
 
     // Resolved-check block goes DEAD LAST (research/47 Step 6): the volatile,

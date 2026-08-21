@@ -8,7 +8,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { readBodyState } from '$lib/services/be'
+import { readBodyState, relOf, writeBodyState, defaultBodyState } from '$lib/services/be'
+import { readNpcAgenda, writeNpcAgenda, type NpcAgenda } from '$lib/services/worldsim'
 import { defaultRpgSheet } from '$lib/services/rpg'
 
 import {
@@ -1074,5 +1075,302 @@ describe('store harness — check-backed growth (growthIntent)', () => {
         expect(bodyWritesFor('char-elara')).toBe(0)
       })
     })
+  })
+})
+
+describe('store harness — off-screen agendas (E4, research/61)', () => {
+  beforeEach(() => {
+    settingsMock.experimentalFeatures.stateTracking = false
+    settingsMock.experimentalFeatures.rollbackOnDelete = false
+    reset(db)
+    story.currentStory = makeStory({ settings: { npcAgendas: true } }) as never
+  })
+
+  const agendaOf = (name: string): NpcAgenda | null => {
+    const char = story.characters.find((c) => c.name === name)
+    return readNpcAgenda((char?.metadata as Record<string, unknown> | null) ?? null)
+  }
+
+  /** A prior classified narration entry — the presence history the active cast reads. */
+  const priorNarration = (id: string, names: string[]) => ({
+    id,
+    type: 'narration',
+    worldStateDelta: {
+      classificationResult: { scene: { presentCharacterNames: names } },
+    },
+  })
+
+  const mundane = (overrides: Partial<NpcAgenda> = {}): NpcAgenda => ({
+    goal: 'making her usual rounds',
+    kind: 'mundane',
+    step: 0,
+    maxSteps: 3,
+    ...overrides,
+  })
+
+  it('toggle off: no agenda machinery runs at all', async () => {
+    story.currentStory = makeStory({ settings: {} }) as never
+    story.characters = [makeCharacter('Mira'), makeCharacter('Nyssa')] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Nyssa'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Nyssa'] } }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toBeNull()
+  })
+
+  it('backfills a deterministic mundane agenda for an off-screen active-cast girl; present girls get none', async () => {
+    story.characters = [makeCharacter('Mira'), makeCharacter('Nyssa')] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Nyssa'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Nyssa'] } }) as never,
+      'entry-1',
+    )
+
+    const mira = agendaOf('Mira')
+    expect(mira).toMatchObject({ kind: 'mundane', step: 0 })
+    expect(agendaOf('Nyssa')).toBeNull()
+  })
+
+  it('accepts a proposal into an empty slot; an ACTIVE non-mundane agenda is never overwritten (it ticks instead)', async () => {
+    story.characters = [
+      makeCharacter('Mira'),
+      makeCharacter('Nyssa', {
+        metadata: writeNpcAgenda(null, mundane({ kind: 'research', goal: 'deep in the archive' })),
+      }),
+      makeCharacter('Opal'),
+    ] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Nyssa', 'Opal'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: ['Opal'] },
+        agendaProposals: [
+          {
+            character: 'Mira',
+            goal: 'visiting her sister',
+            kind: 'travel',
+            maxSteps: 2,
+            destination: 'the harbor town',
+          },
+          {
+            character: 'Nyssa',
+            goal: 'this must not land',
+            kind: 'reconcile',
+            maxSteps: 4,
+          },
+        ],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toEqual({
+      goal: 'visiting her sister',
+      kind: 'travel',
+      step: 0,
+      maxSteps: 2,
+      destination: 'the harbor town',
+      done: false,
+    })
+    // Nyssa's active non-mundane agenda survived the proposal and advanced one step.
+    expect(agendaOf('Nyssa')).toMatchObject({ kind: 'research', step: 1 })
+  })
+
+  it('a grounded proposal replaces a stale ACTIVE mundane agenda', async () => {
+    story.characters = [
+      makeCharacter('Mira', { metadata: writeNpcAgenda(null, mundane({ step: 1 })) }),
+      makeCharacter('Opal'),
+    ] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Opal'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: ['Opal'] },
+        agendaProposals: [
+          { character: 'Mira', goal: 'chasing the rumor', kind: 'research', maxSteps: 3 },
+        ],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toMatchObject({ kind: 'research', goal: 'chasing the rumor', step: 0 })
+  })
+
+  it('a classifier presence hiccup pauses the off-screen world — no ticks, and finished slots are NOT cleared', async () => {
+    story.characters = [
+      makeCharacter('Mira', { metadata: writeNpcAgenda(null, mundane({ step: 1 })) }),
+      makeCharacter('Nyssa', {
+        metadata: writeNpcAgenda(null, mundane({ kind: 'research', step: 3, done: true })),
+      }),
+    ] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Nyssa'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: [] } }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toMatchObject({ step: 1 })
+    // The BE fallback would call everyone "present"; the agenda pass must not
+    // read that as an on-screen return and delete her finished agenda.
+    expect(agendaOf('Nyssa')).toMatchObject({ kind: 'research', done: true })
+  })
+
+  it('a finished agenda refreshes to a mundane one on the next off-screen turn, keeping her whereabouts', async () => {
+    story.characters = [
+      makeCharacter('Mira', {
+        metadata: writeNpcAgenda(
+          null,
+          mundane({ kind: 'travel', step: 2, maxSteps: 2, done: true, location: 'the harbor' }),
+        ),
+      }),
+      makeCharacter('Opal'),
+    ] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Opal'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Opal'] } }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toMatchObject({ kind: 'mundane', step: 0, location: 'the harbor' })
+  })
+
+  it('a solo beat (empty presence, real classify) still ticks and accepts proposals', async () => {
+    // The classifier legitimately returns an empty presence list when the
+    // protagonist is alone — that must read as "everyone is off-screen", not
+    // as a failed classify (fix-diff HIGH: the first-cut pause swallowed the
+    // departure proposal, the highest-value input the feature consumes).
+    story.characters = [
+      makeCharacter('Mira'),
+      makeCharacter('Nyssa', {
+        metadata: writeNpcAgenda(null, mundane({ kind: 'research', step: 0, maxSteps: 3 })),
+      }),
+    ] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Nyssa'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({
+        scene: { presentCharacterNames: [] },
+        agendaProposals: [
+          {
+            character: 'Mira',
+            goal: 'off to the harbor',
+            kind: 'travel',
+            maxSteps: 2,
+            destination: 'the harbor',
+          },
+        ],
+      }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toMatchObject({ kind: 'travel', goal: 'off to the harbor' })
+    expect(agendaOf('Nyssa')).toMatchObject({ kind: 'research', step: 1 })
+  })
+
+  it('a girl outside the active cast freezes: no tick, no backfill, no write', async () => {
+    story.characters = [
+      makeCharacter('Mira', { metadata: writeNpcAgenda(null, mundane({ step: 1 })) }),
+      makeCharacter('Petra'),
+      makeCharacter('Opal'),
+    ] as never
+    // No presence history at all — the active cast is only this turn's signal.
+    story.entries = [] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Opal'] } }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toMatchObject({ step: 1 }) // unticked
+    expect(agendaOf('Petra')).toBeNull() // no backfill
+  })
+
+  it('reconcile completion feeds the rel engine as banked warmth — sparks land, the cadence stays frozen', async () => {
+    story.currentStory = makeStory({ settings: { npcAgendas: true, beMode: true } }) as never
+    const reconcile = mundane({
+      kind: 'reconcile',
+      goal: 'working up to an apology',
+      step: 1,
+      maxSteps: 2,
+    })
+    story.characters = [
+      makeCharacter('Mira', {
+        metadata: writeNpcAgenda(
+          writeBodyState(null, { ...defaultBodyState(), quirks: [] }),
+          reconcile,
+        ),
+      }),
+    ] as never
+    story.entries = [priorNarration('p1', ['Mira'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Someone Else'] } }) as never,
+      'entry-1',
+    )
+
+    expect(agendaOf('Mira')).toMatchObject({ kind: 'reconcile', step: 2, done: true })
+    const state = readBodyState(
+      (story.characters.find((c) => c.name === 'Mira')?.metadata as Record<string, unknown>) ??
+        null,
+    )
+    const rel = relOf(state!)
+    // Warm intensity 2 → +2 sparks, banked; ct frozen (off-screen, ticksEnabled
+    // false) so nothing converts and bond holds at the default.
+    expect(rel.sparks).toBe(2)
+    expect(rel.ct).toBe(0)
+    expect(rel.bond).toBe(4)
+  })
+
+  it('travel completion rewrites her whereabouts; her return clears the finished slot', async () => {
+    const travel = mundane({
+      kind: 'travel',
+      goal: 'traveling to the harbor',
+      step: 1,
+      maxSteps: 2,
+      destination: 'the harbor',
+    })
+    story.characters = [
+      makeCharacter('Mira', { metadata: writeNpcAgenda(null, travel) }),
+      makeCharacter('Opal'),
+    ] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Opal'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Opal'] } }) as never,
+      'entry-1',
+    )
+    expect(agendaOf('Mira')).toMatchObject({ done: true, location: 'the harbor' })
+
+    // She walks back on-screen: the finished slot clears (arrival fired).
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Mira', 'Opal'] } }) as never,
+      'entry-2',
+    )
+    expect(agendaOf('Mira')).toBeNull()
+  })
+
+  it('agenda writes ride the turn batch: buffered before the delta, committed atomically', async () => {
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.characters = [makeCharacter('Mira'), makeCharacter('Opal')] as never
+    story.entries = [priorNarration('p1', ['Mira', 'Opal'])] as never
+
+    await story.applyClassificationResult(
+      makeClassificationResult({ scene: { presentCharacterNames: ['Opal'] } }) as never,
+      'entry-1',
+    )
+
+    const methods = db.methodsCalled()
+    const charWriteIdx = methods.indexOf('updateCharacter')
+    const deltaWriteIdx = methods.indexOf('updateStoryEntry')
+    const commitIdx = methods.indexOf('commitWriteBatch')
+    expect(charWriteIdx).toBeGreaterThanOrEqual(0)
+    expect(deltaWriteIdx).toBeGreaterThan(charWriteIdx)
+    expect(commitIdx).toBeGreaterThan(deltaWriteIdx)
+    expect(agendaOf('Mira')).not.toBeNull()
   })
 })

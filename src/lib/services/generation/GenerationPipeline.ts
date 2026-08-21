@@ -20,6 +20,7 @@ import type { StyleReviewResult } from '$lib/services/ai/generation/StyleReviewe
 import type { ActivationTracker } from '$lib/services/ai/retrieval/EntryRetrievalService'
 import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
 import type { CheckRecord } from '$lib/services/rpg'
+import { computeTurnDirectives } from '$lib/services/worldsim'
 import {
   PreGenerationPhase,
   RetrievalPhase,
@@ -173,6 +174,21 @@ export class GenerationPipeline {
       }
       if (ctx.abortSignal?.aborted) return { ...r, aborted: true }
 
+      // World-liveliness directives (research/61): pure pre-generation
+      // derivation over persisted state — seeded on the user-action entry id
+      // (the CheckPhase contract, so a regenerate keeps the same event). Both
+      // settings unset ⇒ both blocks empty ⇒ prompt byte-identical to today.
+      const turnDirectives = computeTurnDirectives({
+        storyId: ctx.story.id,
+        entryId: ctx.userAction.entryId,
+        settings: ctx.story.settings,
+        characters: ctx.worldState.characters,
+        // allEntries, not visibleEntries: the store's agenda pass reads the
+        // full entry list, and a chapter summarization must not shrink the
+        // presence window only on the render side (fix-diff MEDIUM).
+        entries: ctx.allEntries,
+      })
+
       r.narrative = yield* this.narrativePhase.execute({
         visibleEntries: ctx.visibleEntries,
         worldState: ctx.worldState,
@@ -181,6 +197,7 @@ export class GenerationPipeline {
         styleReview: cfg.styleReview,
         abortSignal: ctx.abortSignal,
         pendingCheck: r.check,
+        turnDirectives,
       })
       if (!r.narrative || ctx.abortSignal?.aborted) return { ...r, aborted: true }
 

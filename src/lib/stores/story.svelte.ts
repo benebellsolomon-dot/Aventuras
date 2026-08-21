@@ -51,6 +51,7 @@ import {
   parseGrowthEligibleKinds,
   promoteGrowthIntent,
   readBodyState,
+  recentPresenceUnion,
   reduceCharacterBody,
   seedBaselineFromText,
   sniffTierFromText,
@@ -83,6 +84,18 @@ import {
   type CheckBand,
   type CheckRecord,
 } from '$lib/services/rpg'
+import {
+  agendaCompletionBondEvent,
+  agendaCompletionLocation,
+  agendaFromProposal,
+  agendaProposalsFromResult,
+  clearNpcAgenda,
+  mundaneAgenda,
+  readNpcAgenda,
+  tickAgenda,
+  writeNpcAgenda,
+  type NpcAgenda,
+} from '$lib/services/worldsim'
 import { buildSpellEntryData, type SpellGeneration } from '$lib/services/ai/sdk/schemas/spell'
 import { extractInlineCustomVars } from '$lib/services/ai/sdk/schemas/runtime-variables'
 import type { ClassificationResult } from '$lib/services/ai/sdk/schemas/classifier'
@@ -2977,16 +2990,53 @@ class StoryStore {
         await this.applyTimeProgression(result.scene.timeProgression)
       }
 
+      // Growth-intent target resolution happens ONCE, here, before EVERY
+      // consumer — the agenda pass, the reducer, the sheet apply and the
+      // persisted checkLog must all agree on who this action was aimed at
+      // (review lens 3: a raw checkRecord in one pass and the inferred one in
+      // the other made the two presence derivations disagree, so a girl could
+      // tick BOTH her body engine and her off-screen agenda in one turn).
+      let resolvedCheck =
+        this.currentStory.settings?.beMode === true
+          ? this.withInferredGrowthTarget(checkRecord, result)
+          : checkRecord
+
+      // E4 off-screen agendas (research/61): proposal accept + deterministic
+      // off-screen ticking + completion effects. Runs for ANY story with the
+      // toggle on, BEFORE the BE pass so completion bond events ride this
+      // turn's reduce (outside beMode they are structurally dropped — the rel
+      // engine lives in bodyState). Same rollback-visibility contract as BE.
+      let agendaBondEvents: ReadonlyMap<string, BondEvent[]> | null = null
+      if (this.currentStory.settings?.npcAgendas === true) {
+        agendaBondEvents = await this.applyAgendaTurn(
+          result,
+          entryId,
+          trackingEnabled,
+          charactersBefore,
+          createdCharacterIds,
+          resolvedCheck,
+        )
+        // The agenda pass may have copy-on-written the check's target (fresh
+        // id): checkRecordTargets is id-only when targetId is set, so a stale
+        // id would silently void the growth/spell apply (fix-diff MEDIUM).
+        // Re-resolve by name when the id no longer exists.
+        if (
+          resolvedCheck?.targetId &&
+          !this.characters.some((c) => c.id === resolvedCheck?.targetId)
+        ) {
+          const targetName = resolvedCheck.target?.toLowerCase()
+          const remapped = targetName
+            ? this.characters.find((c) => c.name.toLowerCase() === targetName)
+            : undefined
+          if (remapped) resolvedCheck = { ...resolvedCheck, targetId: remapped.id }
+        }
+      }
+
       // BE engine (Phase A): deterministic body-state reduction. Runs after every
       // entity loop and BEFORE the delta is built/saved so its writes are
       // rollback-visible (research/31 §2.2). beLog/checkLog are declared in the
       // method scope above so hasChanges can still read them after the transaction.
       if (this.currentStory.settings?.beMode === true) {
-        // Growth-intent target resolution happens ONCE, here, before either
-        // consumer: an untargeted growth check whose subject is unambiguous gets
-        // her filled in, so the reducer, the sheet apply and the persisted
-        // checkLog all agree on who this action was aimed at.
-        const resolvedCheck = this.withInferredGrowthTarget(checkRecord, result)
         const beResult = await this.applyBeEvents(
           result,
           entryId,
@@ -2998,6 +3048,7 @@ class StoryStore {
           resolvedCheck,
           itemsBefore,
           createdItemIds,
+          agendaBondEvents,
         )
         beLog = beResult.beLog
         // RPG layer: protagonist sheet apply (essence/regen/leveling/drift) —
@@ -3397,6 +3448,198 @@ class StoryStore {
    * caller's before-state arrays so BE-only changes are rollback-visible
    * (31b §3.3 widened capture). Returns the outcome log for the delta.
    */
+  /**
+   * E4 — one turn of the off-screen agenda engine (research/61). Sequenced
+   * BEFORE applyBeEvents so completion effects ride this turn's reduce.
+   *
+   * Deterministic by construction: proposal accept (the engine owns the slot —
+   * a proposal lands only where no ACTIVE agenda sits), off-screen +1 ticking
+   * bounded to the active cast (recent presence union), seeded mundane
+   * backfill, completion effects. Presence comes through the SAME
+   * effectivePresence derivation the BE pass uses — with the same
+   * include-when-in-doubt fallback, which here means a signal-less turn ticks
+   * NOBODY: on a classifier hiccup the off-screen world pauses; it never
+   * fast-forwards.
+   *
+   * Returns completion bond events keyed by character id for the BE pass
+   * (ordinary capped warm/strain — never `potent`, never direct bond writes).
+   */
+  private async applyAgendaTurn(
+    result: ClassificationResult,
+    entryId: string | undefined,
+    trackingEnabled: boolean,
+    charactersBefore: CharacterBeforeState[],
+    createdCharacterIds: string[],
+    checkRecord: CheckRecord | null,
+  ): Promise<ReadonlyMap<string, BondEvent[]>> {
+    const completionEvents = new SvelteMap<string, BondEvent[]>()
+    const storyId = this.currentStory?.id
+    if (!storyId) return completionEvents
+    // Same skip contract as applyBeEvents: no entry means no stable seed for
+    // the mundane backfill and no delta carrier for rollback.
+    if (!entryId) {
+      log('applyAgendaTurn: no entryId, skipping agenda turn this apply')
+      return completionEvents
+    }
+
+    // The dead and the departed never run errands (review lens 2/3).
+    const nonSelf = this.characters.filter(
+      (c) => c.relationship !== 'self' && c.status !== 'deceased' && c.status !== 'inactive',
+    )
+    // Presence WITHOUT the tracked-names fallback: with the classifier's
+    // prompt, an empty presence list is a NORMAL output for a solo beat (the
+    // protagonist is never listed), so emptiness alone does not mean the
+    // classify failed. Distinguish the two by whether the result carries ANY
+    // signal: a failed classify returns the empty-everything stub, while a
+    // real solo beat still classifies entities/scene/proposals. Only the true
+    // hiccup pauses everything — no ticks, no clears, no backfills — because
+    // the BE pass's everyone-present fallback would otherwise CLEAR every
+    // finished slot cast-wide (review lens 1/2 + fix-diff HIGH: the first-cut
+    // pause also swallowed solo beats and their departure proposals).
+    const present = effectivePresence({
+      presentCharacterNames: result.scene?.presentCharacterNames,
+      classification: result as unknown as Record<string, unknown>,
+      checkTargetName: checkRecord ? (this.resolveCheckTarget(checkRecord)?.name ?? null) : null,
+      trackedNames: [],
+    })
+    const proposals = agendaProposalsFromResult(result as unknown as Record<string, unknown>)
+    const updates = result.entryUpdates
+    const hasClassifySignal =
+      present.size > 0 ||
+      proposals.length > 0 ||
+      updates.characterUpdates.length > 0 ||
+      updates.locationUpdates.length > 0 ||
+      updates.itemUpdates.length > 0 ||
+      updates.storyBeatUpdates.length > 0 ||
+      updates.newCharacters.length > 0 ||
+      updates.newLocations.length > 0 ||
+      updates.newItems.length > 0 ||
+      updates.newStoryBeats.length > 0 ||
+      Boolean(result.scene?.currentLocationName) ||
+      (result.scene?.timeProgression !== undefined && result.scene.timeProgression !== 'none')
+    if (!hasClassifySignal) {
+      log('applyAgendaTurn: signal-less classify — off-screen world pauses this turn')
+      return completionEvents
+    }
+    // Active cast: recent presence union + this turn's signal. Bounds ticking,
+    // backfill AND proposal acceptance so a character out of the story's orbit
+    // freezes instead of accruing a metadata write every turn forever.
+    const activeCast = recentPresenceUnion(this.entries)
+    for (const name of present) activeCast.add(name)
+
+    // First proposal per character wins; resolution mirrors the event loops.
+    const proposalByCharacterId = new SvelteMap<string, NpcAgenda>()
+    for (const proposal of proposals) {
+      const target = this.characters.find(
+        (c) => c.name.toLowerCase() === proposal.character.trim().toLowerCase(),
+      )
+      if (!target || target.relationship === 'self') continue
+      if (!proposalByCharacterId.has(target.id)) {
+        proposalByCharacterId.set(target.id, agendaFromProposal(proposal))
+      }
+    }
+
+    const sameAgenda = (a: NpcAgenda, b: NpcAgenda): boolean =>
+      a.goal === b.goal &&
+      a.kind === b.kind &&
+      a.step === b.step &&
+      a.maxSteps === b.maxSteps &&
+      (a.location ?? null) === (b.location ?? null) &&
+      (a.destination ?? null) === (b.destination ?? null) &&
+      (a.done === true) === (b.done === true)
+
+    for (const character of nonSelf) {
+      const agenda = readNpcAgenda(character.metadata)
+      const proposal = proposalByCharacterId.get(character.id)
+      const key = normalizePresenceName(character.name)
+      const isPresent = present.has(key)
+      const inActiveCast = activeCast.has(key)
+
+      // A grounded classifier goal beats an empty slot, a finished agenda, or
+      // a generic mundane routine — but NEVER an active non-mundane agenda
+      // (review lens 3: a stale "catching up on rest" must not block "left
+      // for the harbor" when the prose just said so). Cast-bounded like every
+      // other write: out-of-orbit characters accept nothing (review lens 1).
+      const proposalWins =
+        proposal !== undefined &&
+        inActiveCast &&
+        (!agenda || agenda.done || agenda.kind === 'mundane')
+
+      // undefined = no write this turn; null = clear the slot.
+      let next: NpcAgenda | null | undefined
+      // Completion effect, keyed AFTER copy-on-write (review lens 1/2: the
+      // pre-COW id misses the BE pass's post-COW lookup and the effect is
+      // silently dropped on a branch's first turn).
+      let completionBondEvent: BondEvent | null = null
+
+      if (isPresent) {
+        // On-screen: never advance (FF: verify without advancing). A done
+        // agenda has delivered its arrival coloring by now — clear the slot,
+        // or refill it when the classifier saw her leaving again.
+        if (agenda?.done) next = proposalWins ? proposal : null
+        else if (proposalWins) next = proposal
+        // An active non-mundane agenda on-screen is kept.
+      } else if (proposalWins) {
+        next = proposal
+      } else if (agenda && !agenda.done) {
+        if (inActiveCast) {
+          const ticked = tickAgenda(agenda)
+          if (ticked.completed) {
+            // Travel completion rewrites her known whereabouts; rel effects
+            // ride the BE reduce (structurally dropped outside beMode).
+            const arrivedAt = agendaCompletionLocation(ticked.next)
+            next = arrivedAt ? { ...ticked.next, location: arrivedAt } : ticked.next
+            completionBondEvent = agendaCompletionBondEvent(ticked.next, character.name)
+          } else {
+            next = ticked.next
+          }
+        }
+        // Outside the active cast she freezes: no tick, no write.
+      } else if (inActiveCast && agenda?.done) {
+        // A done agenda refreshes on the next off-screen turn (review lens
+        // 1/2/3: keeping it until an on-screen return made ghosts immortal).
+        // The "finished" arrival coloring gets exactly the one prompt build
+        // between completion and this refresh; her whereabouts carry over.
+        const fresh = mundaneAgenda(`${storyId}:${entryId}:agenda:${character.id}`)
+        next = agenda.location ? { ...fresh, location: agenda.location } : fresh
+      } else if (inActiveCast && !agenda) {
+        // Deterministic mundane backfill (FF: "if no clear goal, assign a
+        // mundane one").
+        next = mundaneAgenda(`${storyId}:${entryId}:agenda:${character.id}`)
+      }
+
+      if (next === undefined) continue
+      if (next !== null && agenda && sameAgenda(next, agenda)) continue
+
+      this.captureCharacterBeforeState(
+        character,
+        trackingEnabled,
+        charactersBefore,
+        createdCharacterIds,
+      )
+      await this.wrapUpdate('NPC agenda', character.name, async () => {
+        const { entity: ownedChar, wasCowed } = await this.cowCharacter(character)
+        const metadata =
+          next === null
+            ? clearNpcAgenda(ownedChar.metadata)
+            : writeNpcAgenda(ownedChar.metadata, next)
+        await database.updateCharacter(ownedChar.id, { metadata })
+        this.characters = this.characters.map((c) =>
+          c.id === ownedChar.id ? { ...c, metadata } : c,
+        )
+        // The POST-cow id is the one applyBeEvents will iterate with.
+        if (completionBondEvent) completionEvents.set(ownedChar.id, [completionBondEvent])
+        if (wasCowed && trackingEnabled) {
+          createdCharacterIds.push(ownedChar.id)
+          const idx = charactersBefore.findIndex((cb) => cb.id === character.id)
+          if (idx !== -1) charactersBefore.splice(idx, 1)
+        }
+      })
+    }
+
+    return completionEvents
+  }
+
   private async applyBeEvents(
     result: ClassificationResult,
     entryId: string | undefined,
@@ -3408,6 +3651,9 @@ class StoryStore {
     // un-rollbackable item writes into a throwaway, with no signal at all.
     itemsBefore: ItemBeforeState[],
     createdItemIds: string[],
+    // Agenda completion effects this turn (research/61) — engine-authored,
+    // ordinary capped events; null when the agenda engine is off.
+    agendaBondEvents: ReadonlyMap<string, BondEvent[]> | null = null,
   ): Promise<{ beLog: BeLogRecord[]; crossings: string[] }> {
     const beLog: BeLogRecord[] = []
     // Milestone crossings this turn (`${characterId}:${massKg}`) — the RPG
@@ -3470,6 +3716,23 @@ class StoryStore {
       const bucket = exposureEventsByCharacterId.get(target.id) ?? []
       bucket.push(event)
       exposureEventsByCharacterId.set(target.id, bucket)
+    }
+    // Agenda completion effects (research/61): appended after the classifier's
+    // events, before the spell channel — ordinary capped warm/strain events,
+    // never `potent`. They arrive keyed by character id (already resolved,
+    // post-COW) and deliberately do NOT imply presence: an off-screen
+    // completion must not flip her ticksEnabled or pollute the presence union
+    // below. Known drop (research/61): a never-BE-seeded girl skips the
+    // reducer entirely, so her completion effect is lost — same fate classifier
+    // bondEvents already have for her.
+    if (agendaBondEvents) {
+      for (const [characterId, events] of agendaBondEvents) {
+        if (events.length === 0) continue
+        bondEventsByCharacterId.set(characterId, [
+          ...(bondEventsByCharacterId.get(characterId) ?? []),
+          ...events,
+        ])
+      }
     }
     // Classifier-proposed conditions resolve the same way (Spec 1 Task 4).
     const conditionsByCharacterId = new SvelteMap<string, BodyCondition[]>()

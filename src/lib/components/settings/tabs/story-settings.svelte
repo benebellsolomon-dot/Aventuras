@@ -9,6 +9,7 @@
   import { Button } from '$lib/components/ui/button'
   import { Label } from '$lib/components/ui/label'
   import * as RadioGroup from '$lib/components/ui/radio-group'
+  import { Switch } from '$lib/components/ui/switch'
   import type { ContentRating } from '$lib/types'
 
   // Static — defined at module scope so they aren't re-created per component instance
@@ -79,6 +80,12 @@
       label: 'Always on',
       desc: 'Sensual physical description woven into every scene',
     },
+  ]
+
+  const WORLD_SIM_FREQUENCIES = [
+    { value: 'off', label: 'Off', desc: 'No background events' },
+    { value: 'sparse', label: 'Sparse', desc: 'A background event on roughly a third of turns' },
+    { value: 'lively', label: 'Lively', desc: 'A background event rolls every turn' },
   ]
 
   const VARIABLE_REFERENCE = [
@@ -385,6 +392,49 @@
         </RadioGroup.Root>
       </div>
     {/if}
+  </div>
+
+  <!-- ── World Liveliness (research/61) ───────────────────────────────────── -->
+  <div class="border-t pt-4">
+    <Label class="text-sm font-medium">World Events</Label>
+    <p class="text-muted-foreground mt-1 mb-3 text-xs">
+      Seeded background events (interruptions, mood shifts, off-screen ripples) woven into narration
+      as advisory texture. Applies from the next generation.
+    </p>
+    <RadioGroup.Root
+      value={storySettings.worldSimFrequency ?? 'off'}
+      onValueChange={(v) =>
+        story.updateStorySettings({
+          worldSimFrequency: v === 'sparse' || v === 'lively' ? v : undefined,
+        })}
+      class="grid grid-cols-3 gap-2"
+    >
+      {#each WORLD_SIM_FREQUENCIES as freq (freq.value)}
+        <Label
+          for={`world-sim-${freq.value}`}
+          class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-start justify-center gap-1 rounded-md border-2 p-3"
+        >
+          <RadioGroup.Item value={freq.value} id={`world-sim-${freq.value}`} class="sr-only" />
+          <span class="font-medium">{freq.label}</span>
+          <span class="text-muted-foreground text-xs font-normal">{freq.desc}</span>
+        </Label>
+      {/each}
+    </RadioGroup.Root>
+
+    <div class="mt-4 flex items-center justify-between gap-4">
+      <div>
+        <Label for="npc-agendas" class="text-sm font-medium">Off-screen NPC agendas</Label>
+        <p class="text-muted-foreground mt-1 text-xs">
+          Named characters pursue goals while off-screen and return changed by them. Applies from
+          the next turn.
+        </p>
+      </div>
+      <Switch
+        id="npc-agendas"
+        checked={storySettings.npcAgendas ?? false}
+        onCheckedChange={(v) => story.updateStorySettings({ npcAgendas: v ? true : undefined })}
+      />
+    </div>
   </div>
 
   <!-- ── RPG Display (Phase 5 W3) ─────────────────────────────────────────── -->

@@ -229,4 +229,6 @@ export type ClassificationResult = z.infer<typeof classificationResultSchema> & 
   _runtimeVarDefs?: RuntimeVariable[]
   /** BE transformation events (present only when the story's beMode schema extension is active). */
   beEvents?: BeEvent[]
+  /** Off-screen agenda proposals (present only when the npcAgendas schema extension is active). */
+  agendaProposals?: unknown[]
 }

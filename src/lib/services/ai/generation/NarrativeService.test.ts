@@ -25,11 +25,12 @@ vi.mock('../sdk/generate', () => ({
 }))
 
 import {
+  NarrativeService,
   buildCurrentClothingReinforcementBlock,
   buildCurrentLocationReinforcementBlock,
   buildInlineImageInstructions,
 } from './NarrativeService'
-import type { Character, Location } from '$lib/types'
+import type { Character, Location, StoryEntry } from '$lib/types'
 
 function char(name: string, opts: { clothing?: string; currentClothing?: string } = {}): Character {
   return {
@@ -133,5 +134,56 @@ describe('buildInlineImageInstructions', () => {
     const result = buildInlineImageInstructions('booru', [char('Lucy', { clothing: 'robe' })])
     const occurrences = result.split('CURRENT BODY STATE').length - 1
     expect(occurrences).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('buildUserPrompt — turn-directive placement (research/61)', () => {
+  const service = new NarrativeService()
+  // TS-private, runtime-accessible: the placement contract is exactly what the
+  // review demanded a pin for, and the method is pure string assembly.
+  const build = (
+    postHistoryBlock: string,
+    turnDirectives: { offScreenBlock: string; worldEventBlock: string } | null,
+  ): string =>
+    (
+      service as unknown as {
+        buildUserPrompt: (
+          entries: StoryEntry[],
+          mode: 'adventure' | 'creative-writing',
+          inlineImageMode: boolean,
+          postHistoryBlock: string,
+          pendingCheck: null,
+          turnDirectives: { offScreenBlock: string; worldEventBlock: string } | null,
+        ) => string
+      }
+    ).buildUserPrompt(
+      [{ id: 'e1', type: 'user_action', content: 'look around' } as unknown as StoryEntry],
+      'adventure',
+      false,
+      postHistoryBlock,
+      null,
+      turnDirectives,
+    )
+
+  it('no directives → byte-identical to the pre-Phase-3 prompt (cache guard)', () => {
+    const before = build('house rules', null)
+    const withEmpty = build('house rules', { offScreenBlock: '', worldEventBlock: '' })
+    expect(withEmpty).toBe(before)
+    expect(before).not.toContain('[OFF-SCREEN')
+  })
+
+  it('renders [OFF-SCREEN] then [WORLD EVENT] after [Narrative Directives], before the tail', () => {
+    const prompt = build('house rules', {
+      offScreenBlock: '[OFF-SCREEN — the world keeps moving]\n- Mira — away: resting.',
+      worldEventBlock: '[WORLD EVENT — background texture, advisory]\nA knock at the door.',
+    })
+    const directives = prompt.indexOf('[Narrative Directives]')
+    const offScreen = prompt.indexOf('[OFF-SCREEN')
+    const worldEvent = prompt.indexOf('[WORLD EVENT')
+    const tail = prompt.indexOf('Continue the narrative:')
+    expect(directives).toBeGreaterThanOrEqual(0)
+    expect(offScreen).toBeGreaterThan(directives)
+    expect(worldEvent).toBeGreaterThan(offScreen)
+    expect(tail).toBeGreaterThan(worldEvent)
   })
 })

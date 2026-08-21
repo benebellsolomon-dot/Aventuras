@@ -83,6 +83,7 @@ import type {
 import { EntryRetrievalService, getEntryRetrievalConfigFromSettings } from './retrieval'
 import type { TimelineFillResult, EntryRetrievalResult, ActivationTracker } from './retrieval'
 import type { CheckRecord } from '$lib/services/rpg'
+import type { TurnDirectives } from '$lib/services/worldsim'
 import type {
   AgenticRetrievalResult,
   RetrievalContext as AgenticRetrievalContext,
@@ -220,6 +221,7 @@ class AIService {
     signal?: AbortSignal,
     timelineFillResult?: TimelineFillResult | null,
     pendingCheck?: CheckRecord | null,
+    turnDirectives?: TurnDirectives | null,
   ): AsyncIterable<StreamChunk> {
     log('streamNarrative called', {
       entriesCount: entries.length,
@@ -251,6 +253,7 @@ class AIService {
       signal,
       timelineFillResult,
       pendingCheck,
+      turnDirectives,
     })
   }
 

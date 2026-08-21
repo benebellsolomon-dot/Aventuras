@@ -78,6 +78,36 @@ export function selectScenePresent<T extends { name: string }>(
 }
 
 /**
+ * The ACTIVE CAST bound (research/61): the union of every presence list across
+ * the lookback window's narration entries — everyone the classifier placed in
+ * a scene recently. Unlike readScenePresence (most recent list only), this
+ * accumulates across entries; it bounds which characters the agenda engine
+ * ticks and renders, so a character who drifted out of the story's orbit
+ * freezes instead of accruing writes forever. Empty set when no entry in the
+ * window carried a list — callers treat that as "no active cast", never as
+ * "everyone".
+ */
+export function recentPresenceUnion(
+  entries: PresenceEntrySource[],
+  lookback: number = PRESENCE_LOOKBACK,
+): Set<string> {
+  const union = new Set<string>()
+  let checked = 0
+  for (let i = entries.length - 1; i >= 0 && checked < lookback; i--) {
+    const entry = entries[i]
+    if (entry.type !== 'narration' || !entry.worldStateDelta) continue
+    checked += 1
+    const result = entry.worldStateDelta.classificationResult as ClassificationScene | null
+    const names = result?.scene?.presentCharacterNames
+    if (!Array.isArray(names)) continue
+    for (const name of names) {
+      if (typeof name === 'string' && name.trim().length > 0) union.add(normalize(name))
+    }
+  }
+  return union
+}
+
+/**
  * Classifier arrays whose entries carry a `character` name. Every one of them
  * describes something that HAPPENED to her in this response (a growth event, an
  * observed attitude/arousal read, a condition the scene established, a bond

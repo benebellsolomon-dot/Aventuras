@@ -133,6 +133,7 @@ export {
   effectivePresence,
   normalizePresenceName,
   readScenePresence,
+  recentPresenceUnion,
   referencedCharacterNames,
   selectScenePresent,
   type EffectivePresenceInput,

@@ -6,6 +6,7 @@ import {
   effectivePresence,
   normalizePresenceName,
   readScenePresence,
+  recentPresenceUnion,
   referencedCharacterNames,
   selectScenePresent,
 } from './presence'
@@ -57,6 +58,30 @@ describe('readScenePresence', () => {
       narration([]),
     ]
     expect(readScenePresence(entries)).toEqual(new Set(['mira']))
+  })
+})
+
+describe('recentPresenceUnion (the active-cast bound, research/61)', () => {
+  it('unions presence across the window, normalized', () => {
+    const union = recentPresenceUnion([
+      narration([' Mira ']),
+      narration(['Lucy']),
+      narration(['Sable', 'Lucy']),
+    ])
+    expect(union).toEqual(new Set(['mira', 'lucy', 'sable']))
+  })
+
+  it('is empty when nothing in the window carries a list — never "everyone"', () => {
+    expect(recentPresenceUnion([])).toEqual(new Set())
+    expect(recentPresenceUnion([userAction, narration(), narration([])])).toEqual(new Set())
+  })
+
+  it('forgets characters older than the lookback window', () => {
+    const entries = [
+      narration(['Mira']),
+      ...Array.from({ length: PRESENCE_LOOKBACK }, () => narration(['Lucy'])),
+    ]
+    expect(recentPresenceUnion(entries)).toEqual(new Set(['lucy']))
   })
 })
 
