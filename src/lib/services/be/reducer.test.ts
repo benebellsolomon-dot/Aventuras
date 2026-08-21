@@ -399,14 +399,24 @@ describe('cast-guaranteed growth (resolve-then-narrate)', () => {
     expect(result.log.at(-1)?.outcome).toBe('muzzled')
   })
 
-  test('an active cooldown still gates a cast', () => {
+  // FIXTURE UPDATED (earned-growth banking): a cooldown still gates a cast —
+  // nothing lands this turn — but the earned delta no longer EVAPORATES. It
+  // stages into pendingGrowth and lands as the cooldown clears, so the outcome
+  // word moved from 'cooldown' (dropped) to 'banked' (deferred). The
+  // still-tier-10 assertion is the part that had to stay true.
+  test('an active cooldown defers a cast into the bank instead of dropping it', () => {
     const state = { ...defaultBodyState(10), cooldown: 2 }
     const result = reduceCharacterBody(state, [growthEvent({ guaranteed: true })], NO_TICK, 'any')
     expect(result.state.tier).toBe(10)
-    expect(result.log.at(-1)?.outcome).toBe('cooldown')
+    expect(result.log.at(-1)?.outcome).toBe('banked')
+    expect(result.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
   })
 
-  test('one growth per turn: a landed ambient event still cools down a later cast', () => {
+  // FIXTURE UPDATED (earned-growth banking): same ruling one level out — the
+  // ambient crit still consumes the turn's single growth, and the cast that
+  // follows it still lands nothing NOW, but its delta joins the bank rather
+  // than being thrown away.
+  test('one growth per turn: a landed ambient event banks a later cast', () => {
     const critSeed = seedFor((roll) => roll + 2 >= 18)
     const result = reduceCharacterBody(
       defaultBodyState(10),
@@ -415,8 +425,10 @@ describe('cast-guaranteed growth (resolve-then-narrate)', () => {
       critSeed,
     )
     const outcomes = result.log.filter((e) => e.kind === 'catalyst').map((e) => e.outcome)
-    expect(outcomes).toEqual(['critical', 'cooldown'])
+    expect(outcomes).toEqual(['critical', 'banked'])
     expect(result.state.tier).toBe(11) // one growth landed this turn, not two
+    // The ambient crit staged +1 (anticipation split); the cast added its +1.
+    expect(result.state.pendingGrowth).toEqual({ delta: 2, source: 'catalyst' })
   })
 
   test('the story size cap still clamps a cast', () => {
@@ -445,6 +457,42 @@ describe('cast-guaranteed growth (resolve-then-narrate)', () => {
     expect(result.log.at(-1)?.outcome).toBe('ineligible')
   })
 
+  test('a CRIT-band cast punches through the cooldown and re-arms it', () => {
+    // User ruling: back-to-back crits land. Success/partial bank instead.
+    const state = { ...defaultBodyState(10), cooldown: 2 }
+    const result = reduceCharacterBody(
+      state,
+      [growthEvent({ guaranteed: true, critPierce: true })],
+      NO_TICK,
+      'any',
+    )
+    expect(result.state.tier).toBe(11)
+    expect(result.log.at(-1)).toMatchObject({ outcome: 'success', delta: 1 })
+    expect(result.state.cooldown).toBe(NO_TICK.growthCooldownBeats)
+  })
+
+  test('crit punch-through still obeys the lock and the size cap', () => {
+    const pierce = growthEvent({ intensity: 3, guaranteed: true, critPierce: true })
+
+    const locked = reduceCharacterBody(
+      { ...defaultBodyState(10), locked: true, cooldown: 2 },
+      [pierce],
+      NO_TICK,
+      'any',
+    )
+    expect(locked.state.tier).toBe(10)
+    expect(locked.log.at(-1)?.outcome).toBe('muzzled')
+
+    const capped = reduceCharacterBody(
+      { ...defaultBodyState(10), cooldown: 2 },
+      [pierce],
+      { ...NO_TICK, sizeCapTier: 10 },
+      'any',
+    )
+    expect(capped.state.tier).toBe(10)
+    expect(capped.log.at(-1)?.delta).toBe(0)
+  })
+
   test('slow_burn still stages a cast, and the bank drains at the metered rate', () => {
     const state = { ...defaultBodyState(10), quirks: ['slow_burn'] }
     const turn1 = reduceCharacterBody(
@@ -460,5 +508,121 @@ describe('cast-guaranteed growth (resolve-then-narrate)', () => {
     const turn2 = reduceCharacterBody(turn1.state, [], NO_TICK, `${failSeed}:t2`)
     expect(turn2.state.tier).toBe(11)
     expect(turn2.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
+  })
+})
+
+/**
+ * Earned growth BANKS on cooldown (the last narration-vs-engine seam).
+ *
+ * The live failure: the player crit a growth check, the guaranteed catalyst hit
+ * the cooldown gate (she grew the previous turn), the reducer scored delta 0 and
+ * dropped it — while the narrator, seeing only "Critical Success", wrote a
+ * room-filling eruption. The engine now keeps what the player earned instead of
+ * throwing it away; the pre-flight verdict (preview.ts) keeps the prose honest
+ * about WHEN it shows up.
+ */
+describe('earned growth banks on cooldown', () => {
+  const onCooldown = (overrides: Partial<BodyState> = {}): BodyState => ({
+    ...defaultBodyState(10),
+    cooldown: 2,
+    ...overrides,
+  })
+
+  test('the banked delta lands through the existing meter on a later turn', () => {
+    const turn1 = reduceCharacterBody(
+      onCooldown(),
+      [growthEvent({ guaranteed: true })],
+      NO_TICK,
+      'bank',
+    )
+    expect(turn1.state.tier).toBe(10)
+    expect(turn1.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
+    expect(turn1.state.cooldown).toBe(1) // ticked, not re-armed: nothing landed
+
+    // Next turn the cooldown clears and step 3 releases the bank — no new event.
+    const turn2 = reduceCharacterBody(turn1.state, [], NO_TICK, 'bank:t2')
+    expect(turn2.state.tier).toBe(11)
+    expect(turn2.state.pendingGrowth).toBeUndefined()
+    expect(turn2.log.find((e) => e.kind === 'pending')?.note).toContain('anticipation lands +1')
+  })
+
+  test('the turn log says the growth banked, and by how much', () => {
+    const { log } = reduceCharacterBody(
+      onCooldown(),
+      [growthEvent({ intensity: 3, guaranteed: true })],
+      NO_TICK,
+      'bank',
+    )
+    expect(log.at(-1)).toMatchObject({ outcome: 'banked', delta: 0 })
+    expect(log.at(-1)?.note).toContain('banked (+2 staged')
+  })
+
+  test('a bank is not a dry beat — it must not also buy pity pressure', () => {
+    const banked = reduceCharacterBody(
+      onCooldown(),
+      [growthEvent({ guaranteed: true })],
+      NO_TICK,
+      'bank',
+    )
+    const ambient = reduceCharacterBody(onCooldown(), [growthEvent()], NO_TICK, 'bank')
+    expect(banked.state.growthPressure).toBe(0)
+    expect(ambient.state.growthPressure).toBeGreaterThan(0)
+  })
+
+  test('an AMBIENT cooldown-blocked event still drops, byte-identical', () => {
+    const { state, log } = reduceCharacterBody(onCooldown(), [growthEvent()], NO_TICK, 'ambient')
+    expect(log.at(-1)).toEqual({
+      character: 'Lucy',
+      kind: 'catalyst',
+      outcome: 'cooldown',
+      delta: 0,
+      tierAfter: 10,
+    })
+    expect(state.pendingGrowth).toBeUndefined()
+  })
+
+  test('the size cap wins over the bank — never stage growth she could not land', () => {
+    const capped: BeStoryConfig = { ...NO_TICK, sizeCapTier: 10 }
+    const { state, log } = reduceCharacterBody(
+      onCooldown(),
+      [growthEvent({ intensity: 3, guaranteed: true })],
+      capped,
+      'bank',
+    )
+    expect(state.pendingGrowth).toBeUndefined()
+    expect(log.at(-1)).toMatchObject({ outcome: 'cooldown', delta: 0 })
+
+    // One tier of headroom banks exactly one tier, not the crit's two.
+    const room: BeStoryConfig = { ...NO_TICK, sizeCapTier: 11 }
+    const partial = reduceCharacterBody(
+      onCooldown(),
+      [growthEvent({ intensity: 3, guaranteed: true })],
+      room,
+      'bank',
+    )
+    expect(partial.state.pendingGrowth).toEqual({ delta: 1, source: 'catalyst' })
+  })
+
+  test('the lock still muzzles before the bank is ever reached', () => {
+    const { state, log } = reduceCharacterBody(
+      onCooldown({ locked: true }),
+      [growthEvent({ guaranteed: true })],
+      NO_TICK,
+      'bank',
+    )
+    expect(state.pendingGrowth).toBeUndefined()
+    expect(log.at(-1)?.outcome).toBe('muzzled')
+  })
+
+  test('an ineligible kind still refuses before the bank is ever reached', () => {
+    const contactOnly: BeStoryConfig = { ...NO_TICK, growthEligibleKinds: ['contact'] }
+    const { state, log } = reduceCharacterBody(
+      onCooldown(),
+      [growthEvent({ guaranteed: true })],
+      contactOnly,
+      'bank',
+    )
+    expect(state.pendingGrowth).toBeUndefined()
+    expect(log.at(-1)?.outcome).toBe('ineligible')
   })
 })

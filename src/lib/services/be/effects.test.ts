@@ -172,6 +172,20 @@ describe('translateSpellEffects — channel routing (Phase 4 Step 2)', () => {
     for (const event of others.events) expect(event.guaranteed).toBeUndefined()
   })
 
+  it('only the CRIT band marks growth as punching through the cooldown', () => {
+    // User ruling: a crit lands even on a recovering body; success and partial
+    // bank instead. The flag is explicit because intensity cannot carry it — a
+    // success-band cast of an intensity-3 spell also emits intensity 3.
+    const g: EffectTag[] = [{ kind: 'growth', intensity: 2 }]
+    expect(translateSpellEffects(g, 'crit', T).events[0].critPierce).toBe(true)
+    for (const band of ['success', 'partial'] as const) {
+      expect(translateSpellEffects(g, band, T).events[0].critPierce).toBeUndefined()
+    }
+    // promoteGrowthIntent rides the same translator, so it inherits the ruling.
+    expect(promoteGrowthIntent([], 'crit', T)[0].critPierce).toBe(true)
+    expect(promoteGrowthIntent([], 'success', T)[0].critPierce).toBeUndefined()
+  })
+
   it('fill: drain → milking event, set → absolute softState', () => {
     const drain: EffectTag[] = [{ kind: 'fill', fillMode: 'drain', intensity: 2 }]
     const dout = translateSpellEffects(drain, 'success', T)

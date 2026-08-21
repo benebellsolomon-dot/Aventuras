@@ -7,9 +7,9 @@
  * user actions in SheetPanel (point spend / rest).
  */
 
-import type { CheckBand } from '$lib/services/be'
+import type { CheckBand, GrowthVerdict } from '$lib/services/be'
 
-export type { CheckBand }
+export type { CheckBand, GrowthVerdict }
 
 export type AttributeId = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
 
@@ -132,4 +132,19 @@ export interface CheckRecord {
    * narration and engine cannot diverge in either direction.
    */
   growthIntent?: boolean
+  /**
+   * Pre-flight verdict: what the reducer WILL do with this turn's earned growth,
+   * computed at check time against the target's current body state
+   * (be/preview.ts). Present only on a landed band with a resolved target girl
+   * and growth actually in play (growth intent, or a cast whose effects grow
+   * her) — absent everywhere else, so a non-growth check's prompt block is
+   * byte-identical to before.
+   *
+   * It exists because narration runs BEFORE the reduce and sees only the check
+   * band: told "Critical Success" and nothing else, the narrator wrote a
+   * room-filling growth eruption for a turn the cooldown gate scored at delta 0.
+   * buildCheckResultBlock renders everything but `lands` as an explicit "no
+   * visible growth this scene" directive.
+   */
+  growthVerdict?: GrowthVerdict
 }

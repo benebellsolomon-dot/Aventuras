@@ -77,6 +77,44 @@ describe('non_breast_growth', () => {
   })
 })
 
+describe('growth_magnitude — prose scaled rungs past her band', () => {
+  // The live failure, verbatim in shape: the narrator was told "Critical
+  // Success" on a turn the engine banked, and wrote her filling the room.
+  const LIVE_FAILURE =
+    'Lucy’s breasts surged outward until they pressed against the walls on either side. She was the room.'
+
+  test('the live failure fires at her real tier', () => {
+    const findings = detectDrift(LIVE_FAILURE, 'Lucy', at(25))
+    expect(findings.some((f) => f.kind === 'growth_magnitude')).toBe(true)
+    // No absolute size baked in — the note defers to the block rendered with it.
+    expect(findings.find((f) => f.kind === 'growth_magnitude')?.note).toContain('THIS block')
+  })
+
+  test('the same prose one rung below the claim is genre-normal hyperbole', () => {
+    expect(kinds(LIVE_FAILURE, at(80))).toEqual([])
+  })
+
+  test('the lower-rung claims need only a smaller girl to fire', () => {
+    const crushing = 'Lucy shifted, and her breasts crushed the table beneath them.'
+    expect(kinds(crushing, at(20))).toContain('growth_magnitude')
+    expect(kinds(crushing, at(60))).toEqual([])
+  })
+
+  test('an unattributed magnitude claim far from her name is left alone', () => {
+    const filler = 'The market stalls stretched on. '.repeat(10) // > 240 chars
+    expect(kinds(`Lucy smiled. ${filler} The crates filled the entire room.`, at(25))).toEqual([])
+  })
+
+  test('scale-free awe is never magnitude drift', () => {
+    expect(kinds('Lucy’s enormous breasts filled his hands, impossibly heavy.', at(25))).toEqual([])
+  })
+
+  test('at most one magnitude note per character per turn', () => {
+    const both = `${LIVE_FAILURE} They crushed the sofa as she sank onto it.`
+    expect(kinds(both, at(20)).filter((k) => k === 'growth_magnitude')).toHaveLength(1)
+  })
+})
+
 describe('growth_omitted (research/41)', () => {
   const staged = at(48, { lastGrowth: { delta: 1, tierBefore: 47 } })
 

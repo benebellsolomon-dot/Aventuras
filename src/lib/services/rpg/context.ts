@@ -9,7 +9,7 @@
 
 import { ATTRIBUTE_IDS, ATTRIBUTE_LABELS, SKILL_BY_ID, SKILLS } from './constants'
 import { attributeMod, skillRanks } from './derive'
-import type { CheckRecord, RpgSheet } from './types'
+import type { CheckRecord, GrowthVerdict, RpgSheet } from './types'
 
 export const PLAYER_SHEET_HEADER = '[PLAYER SHEET]'
 export const CHECK_RESULT_HEADER = '[CHECK RESULT — already resolved, immutable]'
@@ -81,6 +81,23 @@ const BAND_DIRECTIVES: Record<CheckRecord['band'], string> = {
 }
 
 /**
+ * Pre-flight growth verdict → narration directive. `lands` renders NOTHING (the
+ * band directive already licenses the growth, and adding a line there would
+ * churn the prompt for every ordinary growth turn); every other verdict is an
+ * explicit no-visible-growth instruction, because the narrator's only other
+ * signal is the band and a crit reads as permission to erupt.
+ */
+const GROWTH_VERDICT_DIRECTIVES: Readonly<Record<GrowthVerdict, string | null>> = {
+  lands: null,
+  blocked_recovery:
+    'GROWTH: her body is still settling from the last change — the power sinks in and BANKS for later. Describe absorbed, stored energy and the strain of holding it; her size does NOT visibly change this scene.',
+  at_cap:
+    'GROWTH: she is at her limit — no further growth is possible. Describe the power finding nowhere to go and the strain of it; her size does NOT change.',
+  blocked:
+    'GROWTH: something holds her body fixed and nothing takes. Describe the effort and the power refusing to bite; her size does NOT change.',
+}
+
+/**
  * The immutable resolved-check block appended to the user prompt on checked
  * turns. Carries the anti-fudge hard rule (research/46 §4).
  */
@@ -111,6 +128,13 @@ export function buildCheckResultBlock(record: CheckRecord): string {
         'This was a spell cast; its effects are already applied mechanically. Narrate exactly those effects — do not invent additional powers or omit the result.',
       )
     }
+    // Pre-flight growth verdict (be/preview.ts): the engine already knows
+    // whether this turn's earned growth can land on her, so the narrator is
+    // told BEFORE it writes rather than corrected a turn later.
+    const verdictDirective = record.growthVerdict
+      ? GROWTH_VERDICT_DIRECTIVES[record.growthVerdict]
+      : null
+    if (verdictDirective) lines.push(verdictDirective)
   }
   lines.push(
     'This outcome is an already-resolved fact. Softening a failure, skipping its consequences, or granting unearned success is a continuity error.',

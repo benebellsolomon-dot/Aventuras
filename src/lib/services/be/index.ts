@@ -55,6 +55,7 @@ export {
   cupLetter,
   groundImagePromptSize,
   imageSizeAnchor,
+  imageSizeAnchorRung,
   imageSizePhrase,
   sniffTierFromText,
   tierForCupLetter,
@@ -95,6 +96,7 @@ export {
   weightFeel,
 } from './measurements'
 export { reduceCharacterBody } from './reducer'
+export { previewGuaranteedGrowth, type GuaranteedGrowthPreviewInput } from './preview'
 export {
   CRIT_MARGIN,
   CRIT_NAT,

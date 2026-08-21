@@ -36,6 +36,7 @@ import {
   SUPPLY_TIER_MAX,
   fluidProfile,
 } from './constants'
+import { growthBankHeadroom } from './preview'
 import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
 import { capacityMlPerSide, measurements } from './measurements'
 import {
@@ -78,7 +79,9 @@ import type {
 const GROWTH_KINDS = new Set(['catalyst', 'contact', 'attempt'])
 
 /** Dry outcomes accrue escalator pressure. `ineligible` is deliberately absent —
- * pity-firing growth the story's canon forbids would recreate the research/41 bug. */
+ * pity-firing growth the story's canon forbids would recreate the research/41 bug.
+ * `banked` is absent for the mirror reason: an earned bank is growth deferred by
+ * one beat, not a dry beat, and must not also buy a pity roll. */
 const DRY_OUTCOMES = new Set<GrowthOutcome>(['fail', 'partial', 'cooldown', 'muzzled'])
 
 function decayConditions(conditions: ReadonlyArray<BodyCondition>): BodyCondition[] {
@@ -417,16 +420,71 @@ export function reduceCharacterBody(
       return
     }
 
+    // The guaranteed marker has to be read BEFORE the cooldown gate now: an
+    // earned event resolves that gate differently from an ambient one.
+    const guaranteed = event.guaranteed === true
+
     if (cooldown > 0) {
-      dryBeats += 1
-      log.push({
-        character: event.character,
-        kind: event.kind,
-        outcome: 'cooldown',
-        delta: 0,
-        tierAfter: tier,
-      })
-      return
+      // Crit punch-through (user ruling): a CRITICAL check lands now, cooldown
+      // or not. Everything below the gate runs unchanged for it — including
+      // landGrowth, which re-arms the cooldown from this beat. Only the crit
+      // band gets this; the marker is set explicitly upstream, never inferred.
+      const pierces = guaranteed && event.critPierce === true
+      if (!pierces) {
+        if (guaranteed) {
+          // EARNED growth on cooldown BANKS instead of vanishing (the live
+          // failure: crit → catalyst → cooldown → delta 0 → "crit, no stats
+          // again"). The band-scaled delta stages into the SAME pendingGrowth
+          // carrier slow_burn uses, so step 3 meters it out at
+          // MAX_GROWTH_LAND_PER_TURN as the cooldown clears — no new machinery,
+          // no way to dump it all at once.
+          const bankOutcome = resolveGrowthOutcome(GUARANTEED_GROWTH_ROLL, intensity)
+          const bankDelta = GROWTH_DELTA_BY_OUTCOME[bankOutcome] ?? 0
+          // The cap wins over the bank: never stage growth she could not have
+          // landed anyway (already-staged delta counts against the headroom).
+          const staged = Math.min(
+            bankDelta,
+            growthBankHeadroom(tier, pendingGrowth?.delta ?? 0, config.sizeCapTier),
+          )
+          if (staged > 0) {
+            pendingGrowth = { delta: (pendingGrowth?.delta ?? 0) + staged, source: event.kind }
+            // NOT a dry beat: an earned bank is growth deferred, not growth
+            // denied, so it must not ALSO accrue pity pressure toward a second
+            // free roll. (Ambient cooldown beats keep accruing it — that is
+            // what the escalator is for.)
+            log.push({
+              character: event.character,
+              kind: event.kind,
+              outcome: 'banked',
+              delta: 0,
+              tierAfter: tier,
+              note: `cast @i${intensity} (guaranteed) → banked (+${staged} staged, lands as the cooldown clears)`,
+            })
+          } else {
+            // At the story's size ceiling: there is nothing to bank, so this
+            // degrades to exactly today's cooldown drop.
+            dryBeats += 1
+            log.push({
+              character: event.character,
+              kind: event.kind,
+              outcome: 'cooldown',
+              delta: 0,
+              tierAfter: tier,
+              note: 'at the size cap — nothing to bank',
+            })
+          }
+          return
+        }
+        dryBeats += 1
+        log.push({
+          character: event.character,
+          kind: event.kind,
+          outcome: 'cooldown',
+          delta: 0,
+          tierAfter: tier,
+        })
+        return
+      }
     }
 
     // A cast-originated growth event does NOT roll: the successful RPG check was
@@ -440,7 +498,6 @@ export function reduceCharacterBody(
     // it cannot shift any co-occurring ambient event's outcome. Index positions
     // are untouched (nothing is removed from `events`), so ambient replay is
     // byte-identical.
-    const guaranteed = event.guaranteed === true
     const roll = guaranteed ? GUARANTEED_GROWTH_ROLL : seededRoll(`${seed}:${index}`)
     const outcome = resolveGrowthOutcome(roll, intensity)
     const bandDelta = GROWTH_DELTA_BY_OUTCOME[outcome] ?? 0

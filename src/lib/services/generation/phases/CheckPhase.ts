@@ -14,7 +14,16 @@
 import { createLogger } from '$lib/log'
 import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
 import type { RiskAssessResult } from '$lib/services/ai/sdk/schemas/riskassess'
-import { readBodyState } from '$lib/services/be'
+import {
+  DEFAULT_BE_STORY_CONFIG,
+  coerceEffectTags,
+  parseGrowthEligibleKinds,
+  previewGuaranteedGrowth,
+  readBodyState,
+  type BeStoryConfig,
+  type BodyState,
+  type GrowthVerdict,
+} from '$lib/services/be'
 import {
   buildTargetCheckModifiers,
   resolveCheck,
@@ -44,6 +53,58 @@ export interface CheckInput {
   actionType: ActionInputType
   /** The clicked choice's tag, when this turn came from an action choice. */
   choiceTag: ActionChoice | null
+}
+
+/** BE config exactly as StoryStore.applyBeEvents builds it, so the preview is
+ * gated by the same story cosmology the reducer will apply an hour later. */
+function beConfigFor(story: GenerationContext['story']): BeStoryConfig {
+  const eligibleKinds = parseGrowthEligibleKinds(story.settings?.beGrowthEligibleKinds)
+  const settingsFluid = story.settings?.beFluidType
+  return {
+    ...DEFAULT_BE_STORY_CONFIG,
+    enabled: true,
+    ...(typeof settingsFluid === 'string' && settingsFluid.trim()
+      ? { fluidType: settingsFluid.trim() }
+      : {}),
+    ...(eligibleKinds ? { growthEligibleKinds: eligibleKinds } : {}),
+  }
+}
+
+/** True when this cast's spell actually grows her — the cast channel's own gate
+ * (a buff/condition spell must not claim a growth verdict it never earns). */
+function castGrowsTarget(spellId: string, context: GenerationContext): boolean {
+  const entry = context.worldState.lorebookEntries.find(
+    (e) => e.id === spellId && e.type === 'spell',
+  )
+  if (!entry || entry.state.type !== 'spell') return false
+  return coerceEffectTags(entry.state.effects).some((effect) => effect.kind === 'growth')
+}
+
+/**
+ * The verdict, or null when this turn has no earned growth to preview.
+ *
+ * Gated the way the growth itself is gated downstream: a landed band (a fizzle
+ * applies nothing), a resolved target girl who carries body state, and growth
+ * actually in play — a growth-intent action, or a cast whose effects include
+ * `growth`. An untargeted growth-intent record travels on (the store fills the
+ * subject from the scene later); it just cannot be previewed, because there is
+ * no body to preview it against.
+ */
+function previewGrowthVerdict(
+  record: CheckRecord,
+  targetState: BodyState | null,
+  context: GenerationContext,
+): GrowthVerdict | null {
+  if (!targetState || record.insufficientEssence || record.band === 'fail') return null
+  const growsHer = record.spellId
+    ? castGrowsTarget(record.spellId, context)
+    : record.growthIntent === true
+  if (!growsHer) return null
+  return previewGuaranteedGrowth(targetState, beConfigFor(context.story), {
+    // Both guaranteed channels emit `catalyst`; a crit punches through cooldown.
+    kind: 'catalyst',
+    critPierce: record.band === 'crit',
+  })
 }
 
 export class CheckPhase {
@@ -125,7 +186,7 @@ export class CheckPhase {
     const targetState = target ? readBodyState(target.metadata) : null
     const modifiers = buildTargetCheckModifiers(targetState, skill as SkillId)
 
-    const record: CheckRecord = {
+    const resolved: CheckRecord = {
       ...resolveCheck({
         seed: `${story.id}:${context.userAction.entryId}:check`,
         sheet,
@@ -150,12 +211,18 @@ export class CheckPhase {
       // this one, is what keeps untargeted "grow the room" nonsense inert.
       ...(growthIntent ? { growthIntent: true } : {}),
     }
+    // Pre-flight growth verdict: resolve-then-narrate means the narrator is
+    // about to see this band and nothing else, so the engine answers "can she
+    // actually grow right now?" HERE, while the answer is still cheap.
+    const growthVerdict = previewGrowthVerdict(resolved, targetState, context)
+    const record: CheckRecord = growthVerdict ? { ...resolved, growthVerdict } : resolved
     log('check resolved', {
       skill,
       dc,
       nat: record.nat,
       total: record.total,
       band: record.band,
+      ...(growthVerdict ? { growthVerdict } : {}),
       ...(record.unknownSpellDropped ? { unknownSpellDropped: true, taggedSpellId: spellId } : {}),
     })
 

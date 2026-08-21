@@ -76,6 +76,20 @@ export const IMAGE_SIZE_ANCHOR_PHRASES: ReadonlyArray<string> = IMAGE_SIZE_ANCHO
   ([, anchor]) => anchor,
 )
 
+/**
+ * Rung index of a tier on the body-relative anchor ladder above — 0 at the
+ * first rung, −1 below it. The prose magnitude detector (drift.ts) measures a
+ * scene's size claims in these rungs, so the scale vocabulary the image layer
+ * renders and the scale the narrator is allowed to claim read off ONE table.
+ */
+export function imageSizeAnchorRung(tier: number): number {
+  const t = clampTier(tier)
+  for (let i = 0; i < IMAGE_SIZE_ANCHORS.length; i++) {
+    if (t >= IMAGE_SIZE_ANCHORS[i][0]) return IMAGE_SIZE_ANCHORS.length - 1 - i
+  }
+  return -1
+}
+
 export function imageSizeAnchor(tier: number): string | null {
   const t = clampTier(tier)
   for (const [minTier, anchor] of IMAGE_SIZE_ANCHORS) {

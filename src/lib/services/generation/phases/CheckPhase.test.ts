@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { seededRoll } from '$lib/services/be'
+import { defaultBodyState, seededRoll, writeBodyState, type BodyState } from '$lib/services/be'
 import { defaultRpgSheet, writeRpgSheet, type CheckRecord } from '$lib/services/rpg'
 import { CheckPhase } from './CheckPhase'
 import type { GenerationContext } from '../types'
 
 type ContextCharacter = GenerationContext['worldState']['characters'][number]
+type ContextEntry = GenerationContext['worldState']['lorebookEntries'][number]
 
 function makeContext(overrides: {
   beMode?: boolean
@@ -14,14 +15,29 @@ function makeContext(overrides: {
   rawInput?: string
   /** Extra non-protagonist rows, so target resolution has something to find. */
   girls?: string[]
+  /** Body state for every girl above — the pre-flight verdict needs a body. */
+  bodyState?: Partial<BodyState>
+  /** Story settings merged over the defaults (size cap, eligible kinds). */
+  settings?: Record<string, unknown>
+  lorebookEntries?: ContextEntry[]
 }): GenerationContext {
   const { beMode = true, hasProtagonist = true, content = 'Sneak past the guards' } = overrides
   const girls = (overrides.girls ?? []).map(
     (name) =>
-      ({ id: `char-${name.toLowerCase()}`, name, relationship: 'ally' }) as ContextCharacter,
+      ({
+        id: `char-${name.toLowerCase()}`,
+        name,
+        relationship: 'ally',
+        ...(overrides.bodyState
+          ? { metadata: writeBodyState(null, { ...defaultBodyState(20), ...overrides.bodyState }) }
+          : {}),
+      }) as ContextCharacter,
   )
   return {
-    story: { id: 'story-1', settings: { beMode } } as unknown as GenerationContext['story'],
+    story: {
+      id: 'story-1',
+      settings: { beMode, ...overrides.settings },
+    } as unknown as GenerationContext['story'],
     visibleEntries: [],
     allEntries: [],
     worldState: {
@@ -40,7 +56,7 @@ function makeContext(overrides: {
       storyBeats: [],
       chapters: [],
       memoryConfig: {} as GenerationContext['worldState']['memoryConfig'],
-      lorebookEntries: [],
+      lorebookEntries: overrides.lorebookEntries ?? [],
     },
     userAction: { entryId: 'entry-9', content, rawInput: overrides.rawInput ?? content },
   }
@@ -256,5 +272,177 @@ describe('CheckPhase — growthIntent threading (check-backed growth)', () => {
     })
     expect(assessRisk).toHaveBeenCalledOnce()
     expect(record).toBeNull()
+  })
+})
+
+/**
+ * Pre-flight growth verdict (the narration-vs-engine seam).
+ *
+ * The seed is fixed, so nat is 15 and the default sheet adds +0: DC 14 bands
+ * SUCCESS, DC 7 bands CRIT, DC 25 bands FAIL.
+ */
+describe('CheckPhase — pre-flight growth verdict', () => {
+  const CONTENT = 'Channel more essence to push her size even further'
+
+  const growthTag = (dc = 14) => ({
+    text: CONTENT,
+    type: 'action' as const,
+    skill: 'channeling' as const,
+    dc,
+    essenceCost: 1,
+    targetCharacter: 'Amelia',
+    growthIntent: true,
+  })
+
+  const growthCheck = async (context: GenerationContext, dc = 14): Promise<CheckRecord | null> => {
+    const phase = new CheckPhase({ assessRisk: vi.fn() })
+    const { record } = await run(phase, { context, actionType: 'do', choiceTag: growthTag(dc) })
+    return record
+  }
+
+  it('a clean target gets the lands verdict', async () => {
+    const record = await growthCheck(
+      makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: {} }),
+    )
+    expect(record?.growthVerdict).toBe('lands')
+  })
+
+  it('the live failure: a girl who grew last turn reads blocked_recovery', async () => {
+    const record = await growthCheck(
+      makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: { cooldown: 2 } }),
+    )
+    expect(record?.band).toBe('success')
+    expect(record?.growthVerdict).toBe('blocked_recovery')
+  })
+
+  it('a CRIT on that same cooldown lands instead (crit punches through)', async () => {
+    const record = await growthCheck(
+      makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: { cooldown: 2 } }),
+      7,
+    )
+    expect(record?.band).toBe('crit')
+    expect(record?.growthVerdict).toBe('lands')
+  })
+
+  it('a locked girl reads blocked', async () => {
+    // `at_cap` has no route through this phase — no story setting feeds
+    // sizeCapTier today — so preview.test.ts owns that verdict's coverage.
+    const locked = await growthCheck(
+      makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: { locked: true } }),
+    )
+    expect(locked?.growthVerdict).toBe('blocked')
+  })
+
+  it('a fail band previews nothing — a fizzle grows nobody', async () => {
+    const record = await growthCheck(
+      makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: { cooldown: 2 } }),
+      25,
+    )
+    expect(record?.band).toBe('fail')
+    expect(record?.growthVerdict).toBeUndefined()
+  })
+
+  it('no verdict without a resolved target girl — there is no body to preview', async () => {
+    const phase = new CheckPhase({ assessRisk: vi.fn() })
+    const { record } = await run(phase, {
+      context: makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: { cooldown: 2 } }),
+      actionType: 'do',
+      choiceTag: { ...growthTag(), targetCharacter: undefined },
+    })
+    expect(record?.growthIntent).toBe(true)
+    expect(record?.growthVerdict).toBeUndefined()
+  })
+
+  it('no verdict for a target who carries no body state yet', async () => {
+    const record = await growthCheck(makeContext({ content: CONTENT, girls: ['Amelia'] }))
+    expect(record?.target).toBe('Amelia')
+    expect(record?.growthVerdict).toBeUndefined()
+  })
+
+  it('a non-growth check never carries one', async () => {
+    const phase = new CheckPhase({ assessRisk: vi.fn() })
+    const { record } = await run(phase, {
+      context: makeContext({
+        content: 'Sneak past the guards',
+        girls: ['Amelia'],
+        bodyState: { cooldown: 2 },
+      }),
+      actionType: 'do',
+      choiceTag: {
+        text: 'Sneak past the guards',
+        type: 'action',
+        skill: 'stealth',
+        dc: 14,
+        targetCharacter: 'Amelia',
+      },
+    })
+    expect(record?.growthVerdict).toBeUndefined()
+  })
+
+  it('the story cosmology gates it: a catalyst-forbidding story reads blocked', async () => {
+    const record = await growthCheck(
+      makeContext({
+        content: CONTENT,
+        girls: ['Amelia'],
+        bodyState: {},
+        settings: { beGrowthEligibleKinds: ['contact'] },
+      }),
+    )
+    expect(record?.growthVerdict).toBe('blocked')
+  })
+})
+
+describe('CheckPhase — pre-flight verdict on a cast', () => {
+  const CONTENT = 'Cast Swell of the Vale on Amelia'
+
+  const spellEntry = (effects: Array<{ kind: string; intensity?: number }>) =>
+    ({
+      id: 'spell-1',
+      type: 'spell',
+      state: { type: 'spell', school: 'transmutation', essenceCost: 1, dc: 14, effects },
+    }) as unknown as GenerationContext['worldState']['lorebookEntries'][number]
+
+  const castCheck = async (
+    effects: Array<{ kind: string; intensity?: number }>,
+  ): Promise<CheckRecord | null> => {
+    const context = makeContext({
+      content: CONTENT,
+      girls: ['Amelia'],
+      bodyState: { cooldown: 2 },
+      lorebookEntries: [spellEntry(effects)],
+    })
+    // The sheet must KNOW the spell or resolveCheck drops the marker entirely.
+    const protagonist = context.worldState.characters[0]
+    protagonist.metadata = writeRpgSheet(null, {
+      ...defaultRpgSheet(),
+      knownSpells: ['spell-1'],
+    })
+    const phase = new CheckPhase({ assessRisk: vi.fn() })
+    const { record } = await run(phase, {
+      context,
+      actionType: 'do',
+      choiceTag: {
+        text: CONTENT,
+        type: 'action',
+        skill: 'transmutation',
+        dc: 14,
+        essenceCost: 1,
+        targetCharacter: 'Amelia',
+        spellId: 'spell-1',
+      },
+    })
+    return record
+  }
+
+  it('a growth spell on a recovering girl previews the bank', async () => {
+    const record = await castCheck([{ kind: 'growth', intensity: 2 }])
+    expect(record?.spellId).toBe('spell-1')
+    expect(record?.growthVerdict).toBe('blocked_recovery')
+  })
+
+  it('a spell with no growth effect claims no growth verdict', async () => {
+    const record = await castCheck([{ kind: 'bond', intensity: 2 }])
+    expect(record?.spellId).toBe('spell-1')
+    expect(record?.growthVerdict).toBeUndefined()
   })
 })

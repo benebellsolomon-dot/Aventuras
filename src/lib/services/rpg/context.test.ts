@@ -108,6 +108,29 @@ describe('buildCheckResultBlock', () => {
     expect(block).toContain(expectations[band])
   })
 
+  it('renders the pre-flight growth verdict as an explicit no-growth directive', () => {
+    // The seam this closes: narration sees the band and nothing else, so a crit
+    // on a cooldown turn read as permission to write a room-filling eruption.
+    const banked = buildCheckResultBlock(
+      record({ band: 'crit', growthVerdict: 'blocked_recovery' }),
+    )
+    expect(banked).toContain('still settling from the last change')
+    expect(banked).toContain('BANKS')
+    expect(banked).toContain('does NOT visibly change this scene')
+
+    const capped = buildCheckResultBlock(record({ growthVerdict: 'at_cap' }))
+    expect(capped).toContain('she is at her limit')
+
+    const blocked = buildCheckResultBlock(record({ growthVerdict: 'blocked' }))
+    expect(blocked).toContain('holds her body fixed')
+  })
+
+  it('a landing verdict adds nothing — the band directive already licenses it', () => {
+    expect(buildCheckResultBlock(record({ growthVerdict: 'lands' }))).toBe(
+      buildCheckResultBlock(record()),
+    )
+  })
+
   it('insufficient essence renders the not-attempted variant', () => {
     const block = buildCheckResultBlock(
       record({ insufficientEssence: true, nat: 0, essenceSpent: 0 }),

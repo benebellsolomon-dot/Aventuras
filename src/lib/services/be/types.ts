@@ -142,6 +142,19 @@ export interface BeEvent {
    * events are per-turn inputs, never persisted, so this needs no migration.
    */
   guaranteed?: boolean
+  /**
+   * Crit-band marker (user ruling): a CRITICAL check punches straight through
+   * the growth cooldown and lands now — back-to-back crits are the one thing
+   * that should feel unstoppable. Success/partial-band guaranteed events on
+   * cooldown BANK instead (reducer step 6). The lock and the size cap still
+   * bind; a crit never bypasses those.
+   *
+   * Threaded EXPLICITLY rather than inferred from intensity: intensity 3 is
+   * reachable from a success-band cast whose spell asked for intensity 3, so
+   * "intensity 3 means crit" would be a lie. Set only by translateSpellEffects
+   * (and therefore promoteGrowthIntent) on band === 'crit'.
+   */
+  critPierce?: boolean
 }
 
 /**
@@ -184,6 +197,20 @@ export type GrowthOutcome =
   | 'cooldown'
   | 'ineligible'
   | 'none'
+  /**
+   * An EARNED (guaranteed) growth event that hit the cooldown gate: instead of
+   * being dropped, its band-scaled delta staged into pendingGrowth and lands as
+   * the cooldown clears. Ambient cooldown-blocked events still resolve
+   * `cooldown` and still drop.
+   */
+  | 'banked'
+
+/**
+ * What a guaranteed (check-earned or cast) growth event WOULD do against a
+ * given body state, computed at check time so narration can be told the truth
+ * before it writes. See be/preview.ts.
+ */
+export type GrowthVerdict = 'lands' | 'blocked_recovery' | 'at_cap' | 'blocked'
 
 /**
  * One instrumentation record per handled event (research/34 D11): rides the entry's
@@ -218,6 +245,7 @@ export interface DriftFinding {
     | 'non_breast_growth'
     | 'growth_omitted'
     | 'lactation_drift'
+    | 'growth_magnitude'
   note: string
 }
 

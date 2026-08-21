@@ -202,6 +202,10 @@ export function translateSpellEffects(
           // is the intensity scaling above: crit lands bigger, partial smaller,
           // and BOTH land.
           guaranteed: true,
+          // Crit punches through an armed cooldown (user ruling); success and
+          // partial bank instead. Carried as its own flag rather than read off
+          // the intensity, which a success-band cast can also drive to 3.
+          ...(band === 'crit' ? { critPierce: true } : {}),
         })
         break
       case 'induction':

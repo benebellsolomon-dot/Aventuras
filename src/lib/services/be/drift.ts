@@ -8,8 +8,8 @@
  * reducer's step-9 driftNote and render as a [CONTINUITY] correction next turn.
  */
 
-import { cupLetter, tierForCupLetter } from './ladder'
-import { lactationOf, supplyLabel } from './lactation'
+import { cupLetter, imageSizeAnchorRung, tierForCupLetter } from './ladder'
+import { apparentTier, lactationOf, supplyLabel } from './lactation'
 import type { BodyState, DriftFinding } from './types'
 
 /** Era-1 attribution window: a mention within this many chars after the name. */
@@ -25,6 +25,64 @@ const SIMILE_REGISTRY: ReadonlyArray<{ pattern: RegExp; minTier: number; label: 
 const SIMILE_MARGIN = 12
 
 const CUP_MENTION = /\b([A-Z]{1,3})[- ]cups?\b/g
+
+/**
+ * Magnitude registry: prose that claims a SCALE, with the tier at which that
+ * claim is honest. The image layer already sanitizes invented magnitude out of
+ * booru prompts; this is the same idea pointed at prose, and it exists because
+ * the narrator, told only "Critical Success", wrote a room-filling eruption for
+ * a turn the engine scored at delta 0 — leaving the next scene stranded between
+ * a girl who "is the room" and a tracked tier in the twenties.
+ *
+ * Every entry is scale-specific, never a mood word: "enormous" and "she could
+ * barely see past them" are genre-normal at any rung and are deliberately absent.
+ */
+const MAGNITUDE_REGISTRY: ReadonlyArray<{ pattern: RegExp; minTier: number; label: string }> = [
+  {
+    pattern:
+      /\b(?:fill(?:s|ed|ing)?|took up|takes?\s+up|taking up|consum(?:ed|es|ing))\b[^.!?]{0,30}\b(?:the\s+)?(?:entire\s+|whole\s+)?(?:room|chamber|hall|building)\b/i,
+    minTier: 120,
+    label: 'room-filling',
+  },
+  {
+    pattern:
+      /\b(?:press(?:ed|es|ing)?|push(?:ed|es|ing)?|reach(?:ed|es|ing)?|shov(?:ed|es|ing))\b[^.!?]{0,40}\b(?:against|into|to)\b[^.!?]{0,25}\b(?:both\s+|opposite\s+|far\s+)?walls?\b/i,
+    minTier: 120,
+    label: 'wall-to-wall',
+  },
+  {
+    pattern: /\b(?:she|they)\s+(?:was|were|is|are)\s+the\s+(?:room|chamber|building|house)\b/i,
+    minTier: 120,
+    label: '"she is the room"',
+  },
+  {
+    pattern:
+      /\b(?:crush(?:ed|es|ing)?|shatter(?:ed|s|ing)?|splinter(?:ed|s|ing)?|flatten(?:ed|s|ing)?)\b[^.!?]{0,40}\b(?:the\s+|her\s+)?(?:couch|sofa|bed|table|desk|chair|cart|wagon)\b/i,
+    minTier: 80,
+    label: 'furniture-crushing mass',
+  },
+  {
+    pattern:
+      /\b(?:breasts?|bust|they|them)\b[^.!?]{0,40}\b(?:immobiliz(?:ed|ing)|pinn(?:ed|ing)\s+her\s+(?:in place|down|to the (?:floor|ground|bed)))\b/i,
+    minTier: 80,
+    label: 'immobilized by size',
+  },
+  {
+    pattern:
+      /\bher\s+head\b[^.!?]{0,30}\b(?:barely|no longer|hardly|scarcely)\s+(?:visible|showed|shows)\b/i,
+    minTier: 80,
+    label: 'head barely visible',
+  },
+]
+
+/**
+ * How far above her apparent band a claim must sit before it is drift, counted
+ * in the image layer's body-relative anchor rungs. Hyperbole within a rung —
+ * and one rung of it — is genre-normal; two is the prose describing a different
+ * character. Conservative on purpose: this note steers the NEXT scene's scale,
+ * and over-firing would flatten legitimate awe.
+ */
+const MAGNITUDE_RUNG_MARGIN = 2
 
 // "grew/growing" only counts with a size adjective — bare "grew" false-positives
 // on ambient prose ("her shoulders grew tense", "legs grew tired"); the
@@ -180,6 +238,21 @@ export function detectDrift(narrative: string, name: string, state: BodyState): 
       kind: 'non_breast_growth',
       note: `the prose grew ${name}'s ${nonBreast[1]} — only her breasts change size; silently drop other-part growth`,
     })
+  }
+
+  // 3b. Magnitude overshoot: the prose claims a scale rungs above her band.
+  // Measured against her APPARENT tier (engorged/pressure-prone swell included,
+  // the same number the image layer renders), so a genuinely swollen girl gets
+  // the benefit of that swell before anything fires.
+  const herRung = imageSizeAnchorRung(apparentTier(state))
+  for (const entry of MAGNITUDE_REGISTRY) {
+    if (imageSizeAnchorRung(entry.minTier) - herRung < MAGNITUDE_RUNG_MARGIN) continue
+    if (!matchAttributed(entry.pattern, text, offsets)) continue
+    findings.push({
+      kind: 'growth_magnitude',
+      note: `the last scene wrote ${name} at ${entry.label} scale, far past her tracked band — silently narrate her at the size THIS block gives her and keep the scene's scale there`,
+    })
+    break // one magnitude note per character per turn
   }
 
   // 4. Omission (research/41): a staged growth directive that the prose ignored.
