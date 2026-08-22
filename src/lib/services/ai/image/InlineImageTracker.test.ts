@@ -183,3 +183,51 @@ describe('InlineImageTracker flush settles in-flight starts', () => {
     expect(mocks.createEmbeddedImage).not.toHaveBeenCalled()
   })
 })
+
+describe('InlineImageTracker explicit-beat routing (research/64 option B)', () => {
+  it('routes a rating="explicit" tag to the explicit profile and keeps general tags on the primary', async () => {
+    mocks.imageGeneration.explicitProfileId = 'profile-nsfw'
+    mocks.imageGeneration.explicitSize = '832x1216'
+    mocks.getImageProfile.mockImplementation((id: string) =>
+      id === 'profile-nsfw'
+        ? { model: 'wai-illustrious-sdxl', providerType: 'nanogpt' }
+        : { model: 'wavespeed-ai/krea-v2/turbo-lora', providerType: 'nanogpt' },
+    )
+    try {
+      const tracker = new InlineImageTracker(
+        'story-1',
+        'entry-1',
+        () => [{ name: 'Amelia' } as Character],
+        () => false,
+      )
+      const explicitTag =
+        '<pic prompt="two lovers on the bed, nothing on" characters="Amelia" rating="explicit"></pic>'
+      const generalTag =
+        '<pic prompt="a quiet kitchen at dawn, bread cooling" characters="" rating="general"></pic>'
+      tracker.processChunk(`One. ${explicitTag} Two. ${generalTag}`, false)
+      await tracker.flushToDatabase()
+
+      const profiles = mocks.generateImage.mock.calls.map(
+        (c) => (c[0] as { profileId: string }).profileId,
+      )
+      expect(profiles).toContain('profile-nsfw')
+      expect(profiles).toContain('profile-1')
+      // The routed beat carries the explicit profile's model into the booru writer.
+      expect(mocks.resolveBooruScenePrompt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scenePrompt: 'two lovers on the bed, nothing on',
+          model: 'wai-illustrious-sdxl',
+        }),
+      )
+      expect(mocks.resolveBooruScenePrompt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scenePrompt: 'a quiet kitchen at dawn, bread cooling',
+          model: 'wavespeed-ai/krea-v2/turbo-lora',
+        }),
+      )
+    } finally {
+      delete mocks.imageGeneration.explicitProfileId
+      delete mocks.imageGeneration.explicitSize
+    }
+  })
+})

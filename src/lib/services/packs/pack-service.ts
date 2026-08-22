@@ -50,7 +50,9 @@ import type { PresetPack, FullPack } from './types'
 // Turbo renders every detail of a ~1450-char prompt), no quality words /
 // weights / negatives, quoted in-image text, concrete emotion, beat-scoped
 // content discipline (research/64).
-const SERVICE_TEMPLATE_SYNC_VERSION = 12
+// v13: both scene-analysis templates ask for a per-scene `rating` (general /
+// sensitive / explicit) — drives explicit-beat image routing (research/64 B).
+const SERVICE_TEMPLATE_SYNC_VERSION = 13
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

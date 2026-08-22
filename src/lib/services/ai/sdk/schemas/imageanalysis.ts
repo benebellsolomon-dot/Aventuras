@@ -7,6 +7,8 @@
 
 import { z } from 'zod'
 
+import { looseOptionalEnumField } from './tolerant-fields'
+
 /**
  * Schema for a single imageable scene identified in narrative text.
  */
@@ -27,6 +29,12 @@ export const imageableSceneSchema = z.object({
     .array(z.string())
     .default([])
     .describe('Character names depicted (up to 3, first is primary)'),
+  /** Beat content rating — drives explicit-beat image routing (research/64). Tolerant enum. */
+  rating: looseOptionalEnumField(
+    'scene.rating',
+    ['general', 'sensitive', 'explicit'],
+    'Content rating of THIS moment: general (everyday), sensitive (suggestive — cleavage, underwear, lingerie), explicit (nudity or sexual content). Judge the depicted moment, not the story.',
+  ),
   generatePortrait: z
     .boolean()
     .default(false)

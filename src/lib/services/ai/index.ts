@@ -67,6 +67,7 @@ import {
 } from './image'
 import type { InlineImageContext, ImageAnalysisContext } from './image'
 import { generateImage as registryGenerateImage } from './image/providers/registry'
+import { resolveRatingRoute } from './image/ratingRouting'
 import { assembleInlineImage } from './image/inlineAssembly'
 import { resolveBooruScenePrompt } from './image/booruPromptWriter'
 import { type ResolvedLora } from './image/loraBinding'
@@ -121,6 +122,10 @@ export interface ImageGenerationServiceSettings {
   // Reference model settings (for image-to-image with portrait references)
   referenceProfileId: string | null // API profile for image-to-image with portrait references
   referenceSize: string // Reference image size
+  /** Image profile for EXPLICIT beats (rating routing, research/64). Null = same as primary. */
+  explicitProfileId?: string | null
+  /** Size for explicit-beat images (falls back to `size`). */
+  explicitSize?: string
 
   // General story image settings
   styleId: string // Selected image style template
@@ -1040,15 +1045,20 @@ class AIService {
   ): Promise<void> {
     const imageId = crypto.randomUUID()
 
-    // Determine profile and model
-    let profileId = imageSettings.profileId
+    // Determine profile and model. Explicit beats route to the explicit profile
+    // when configured (research/64 option B); portraits are never routed.
+    const route = resolveRatingRoute(scene.generatePortrait ? null : scene.rating, imageSettings)
+    let profileId = route.profileId
     let modelToUse = getImageProfile(profileId ?? '')?.model ?? ''
-    let sizeToUse = imageSettings.size
+    let sizeToUse = route.size
     let referenceImageUrls: string[] | undefined
     let styleId: string | undefined = imageSettings.styleId
+    if (route.routed) {
+      log('Explicit scene routed to the explicit image profile', { profileId, model: modelToUse })
+    }
 
     // If reference mode and scene has characters, look for reference images
-    if (referenceMode && scene.characters.length > 0 && !scene.generatePortrait) {
+    if (!route.routed && referenceMode && scene.characters.length > 0 && !scene.generatePortrait) {
       const portraitUrls: string[] = []
 
       for (const charName of scene.characters.slice(0, 3)) {

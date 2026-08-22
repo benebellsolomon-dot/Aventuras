@@ -81,6 +81,7 @@ Its text encoder is a language model (Krea 2 / Flux class): it reads ONE flowing
 - **sourceText:** Exact phrase from narrative (3-15 words, VERBATIM with all punctuation and *markup*)
 - **sceneType:** action|item|character|environment
 - **priority:** 1-10
+- **rating:** general | sensitive | explicit — the content rating of THIS depicted moment (general = everyday; sensitive = suggestive, cleavage, underwear, lingerie; explicit = nudity or sexual content). A field, never words in the prompt.
 
 ## Prompt Structure (follow this EXACT section order — do not rearrange)
 1. **Subject first** - open with the character: age bracket, race/species if not human, skin tone, eye color, hair (color, length, style), build, facial expression. Name the expression from the character's OWN emotional state in this beat (delighted, grieving, furious, terrified, embarrassed and blushing, aroused, coolly composed) — concretely, never a generic "neutral expression".
@@ -180,6 +181,7 @@ Image models don't know who "Elena" or "Marcus" are. Character names are ONLY fo
 - **Prompt:** Concise visual description - NO character names, only visual traits
 - **sourceText:** Exact phrase from narrative (3-15 words, VERBATIM)
 - **sceneType:** action|item|character|environment
+- **rating:** general | sensitive | explicit — the content rating of THIS depicted moment (general = everyday; sensitive = suggestive; explicit = nudity or sexual content). A field, never words in the prompt.
 - **priority:** 1-10
 - **characters:** Array of character names (first character is primary). ALWAYS include the **exact** names of characters you were given.
 - **generatePortrait:** true for portrait generation, false otherwise

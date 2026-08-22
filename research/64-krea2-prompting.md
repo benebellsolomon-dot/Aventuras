@@ -23,6 +23,13 @@
 - **`image-prompt-analysis` service template** (post-hoc scene path): same encoder note, subject-first order (camera moved after action; style LAST), 600–1000 / max 1400, concrete-emotion and quoted-text rules, beat-scoped content rule 9. **Service template sync v12.**
 - Provider side was already right for Turbo: prose models get no `guidance_scale`/`num_inference_steps` (NanoGPT/wavespeed defaults = Turbo's 8-step no-CFG), no negative prompt, `n: 1`, LoRAs pass through.
 
+## 3b. Option B shipped — rating-based image routing (Ben's ruling)
+
+- **Rating signal:** the `<pic>` tag gained a REQUIRED `rating="general|sensitive|explicit"` attribute in BOTH dialect instruction blocks (an attribute, never prompt words — the prose rating prefix stays gone); `extractPicTags` parses it tolerantly (`parseBeatRating`: case/aliases — nsfw/adult → explicit, suggestive/questionable → sensitive) and falls back to a booru rating tag opening the prompt. Analyzed scenes carry a tolerant `rating` field (`imageableSceneSchema`, both analysis templates ask for it; **sync v13**).
+- **Routing:** `image/ratingRouting.ts` `resolveRatingRoute(rating, imageSettings)` → the **Explicit-Beat Profile** (`imageGeneration.explicitProfileId`, size `explicitSize`, falls back to the primary size) when the beat is `explicit` and a profile is set; otherwise the primary. Applied in all three generation paths (streaming tracker, post-hoc inline service, analyzed scenes) right after the primary pick and BEFORE the portrait-reference override — a routed beat skips img2img references (identity rides the booru banks on that path); portraits are never routed. Because the booru writer and dialect are keyed on the resolved MODEL, an explicit beat routed to an Illustrious profile automatically gets the full booru pipeline (writer, tag budget, negatives, size hoist) while everything else stays on Krea prose.
+- **Settings UI:** Settings → Images → General: "Explicit-Beat Profile (optional)" + "Explicit Image Size" (+ Clear). Recommended: a second NanoGPT image profile on `wai-illustrious-sdxl` (the model the booru writer was calibrated on; `nsfw: true` on NanoGPT), size 832x1216.
+- **Tests:** `ratingRouting.test.ts`, `inlineImageParser.test.ts`, a tracker routing case (explicit tag → explicit profile + its model reaches the booru writer; general tag → primary). Suite 1372 → 1380.
+
 ## 4. Open (round 2, in priority order)
 
 1. **NSFW on the stock encoder** — Ben testing. **Round-2 result so far: NSFW MASTER alone at 1.0 / 1.5 / 2.0 FAILS** (scale on a content LoRA does not beat the layer-9/10 filter). Next rungs, from the MyAIForce six-method comparison + Civitai metadata:

@@ -5,6 +5,8 @@
  * Similar to the st-image-auto-generation SillyTavern plugin approach.
  */
 
+import { parseBeatRating, ratingFromPromptPrefix } from '$lib/services/ai/image/ratingRouting'
+
 export interface ParsedPicTag {
   /** Full original tag text */
   originalTag: string
@@ -16,6 +18,11 @@ export interface ParsedPicTag {
   prompt: string
   /** Character names for portrait reference */
   characters: string[]
+  /**
+   * Beat content rating from the tag's `rating` attribute (falling back to a
+   * booru rating tag opening the prompt). Drives explicit-beat image routing.
+   */
+  rating: 'general' | 'sensitive' | 'explicit' | null
 }
 
 /**
@@ -61,6 +68,9 @@ export function extractPicTags(content: string): ParsedPicTag[] {
       .map((c) => c.trim())
       .filter((c) => c)
 
+    const rating =
+      parseBeatRating(matchAttribute(attributes, 'rating')) ?? ratingFromPromptPrefix(prompt)
+
     // Only include tags with valid prompts
     if (prompt && prompt.length >= 10) {
       tags.push({
@@ -69,6 +79,7 @@ export function extractPicTags(content: string): ParsedPicTag[] {
         endIndex: match.index + fullMatch.length,
         prompt,
         characters,
+        rating,
       })
     }
   }

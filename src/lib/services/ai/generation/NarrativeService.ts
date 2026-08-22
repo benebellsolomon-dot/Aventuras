@@ -57,11 +57,12 @@ const INLINE_IMAGE_INSTRUCTIONS_PROSE = `<InlineImages>
 You can embed images directly in your narrative using the <pic> tag. Images will be generated automatically where you place these tags.
 
 **TAG FORMAT:**
-<pic prompt="[dense visual description]" characters="[character names]"></pic>
+<pic prompt="[dense visual description]" characters="[character names]" rating="general|sensitive|explicit"></pic>
 
 **ATTRIBUTES:**
 - \`prompt\` (REQUIRED): a complete visual description for image generation, written as if you were describing the finished picture to someone who cannot see it. NOT a reference to the text. **MUST ALWAYS BE IN ENGLISH** regardless of the narrative language.
 - \`characters\` (optional): Comma-separated names of characters appearing in the image (for portrait reference).
+- \`rating\` (REQUIRED): the content rating of THIS depicted moment — "general" (everyday scenes), "sensitive" (suggestive: cleavage, underwear, lingerie), or "explicit" (nudity or sexual content). It is an ATTRIBUTE that routes the image to the right model — never write rating words inside the prompt text.
 
 **HOW THE IMAGE MODEL READS YOUR PROMPT (this decides what works):**
 The image model's text encoder is a language model (Krea 2 / Flux class). It reads the prompt as flowing English describing an image — colors, shapes, sizes, textures, quantities, and the spatial relationships of people and objects. So:
@@ -98,10 +99,10 @@ SECTION 4 — Environment and light (always last): setting, time of day, then NA
 
 **EXAMPLES (note the order — count and subjects, then action, camera, environment and light):**
 The dragon descended from the storm clouds, its obsidian scales gleaming with each flash of lightning.
-<pic prompt="a massive black dragon descending from dark storm clouds, wings fully spread, gleaming rain-wet obsidian scales, glowing amber eyes, jaws parted mid-roar. Wide shot from a dramatic low angle. Lightning splits the sky behind it, rain streaking through the frame, ruined battlements far below, a dark oppressive storm over everything" characters=""></pic>
+<pic prompt="a massive black dragon descending from dark storm clouds, wings fully spread, gleaming rain-wet obsidian scales, glowing amber eyes, jaws parted mid-roar. Wide shot from a dramatic low angle. Lightning splits the sky behind it, rain streaking through the frame, ruined battlements far below, a dark oppressive storm over everything" characters="" rating="general"></pic>
 
 Elena drew her blade, firelight dancing along the steel edge as she faced the creature.
-<pic prompt="one woman: a young woman warrior with long braided red hair, green eyes, fair freckled skin, an athletic build and medium breasts, wearing fitted leather armor scuffed at the shoulder, her jaw set and eyes narrowed in grim determination, drawing a glowing sword in a low stance, weight on her back foot. Medium shot with a slight dutch angle. A torch-lit medieval great hall behind her, warm firelight reflecting off the blade and the planes of her face, deep flickering shadows between the pillars, embers drifting in the air" characters="Elena"></pic>
+<pic prompt="one woman: a young woman warrior with long braided red hair, green eyes, fair freckled skin, an athletic build and medium breasts, wearing fitted leather armor scuffed at the shoulder, her jaw set and eyes narrowed in grim determination, drawing a glowing sword in a low stance, weight on her back foot. Medium shot with a slight dutch angle. A torch-lit medieval great hall behind her, warm firelight reflecting off the blade and the planes of her face, deep flickering shadows between the pillars, embers drifting in the air" characters="Elena" rating="general"></pic>
 
 **CRITICAL RULES:**
 - **PROMPTS MUST BE IN ENGLISH** - Image generation models only understand English prompts. Always write the prompt attribute in English, even if the surrounding narrative is in another language.
@@ -121,11 +122,12 @@ const INLINE_IMAGE_INSTRUCTIONS_BOORU = `<InlineImages>
 You can embed images directly in your narrative using the <pic> tag. Images will be generated automatically where you place these tags. The image model is a booru-tag anime model: prompts are comma-separated Danbooru-style tags, NOT prose sentences.
 
 **TAG FORMAT:**
-<pic prompt="[comma-separated booru tags]" characters="[character names]"></pic>
+<pic prompt="[comma-separated booru tags]" characters="[character names]" rating="general|sensitive|explicit"></pic>
 
 **ATTRIBUTES:**
 - \`prompt\` (REQUIRED): Comma-separated booru tags describing the full scene. **MUST ALWAYS BE IN ENGLISH** regardless of the narrative language.
 - \`characters\` (optional): Comma-separated names of characters appearing in the image (for portrait reference).
+- \`rating\` (REQUIRED): the content rating of THIS depicted moment — "general", "sensitive" (suggestive), or "explicit" (nudity or sexual content) — the same rating that opens the prompt's tag list. It routes the image to the right model.
 
 **USAGE GUIDELINES:**
 - Place <pic> tags AFTER the prose that describes the scene they illustrate

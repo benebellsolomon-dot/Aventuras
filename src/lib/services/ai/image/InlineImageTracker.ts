@@ -15,6 +15,7 @@
  */
 
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
+import { resolveRatingRoute } from './ratingRouting'
 import {
   generateImage as registryGenerateImage,
   supportsImageGeneration,
@@ -117,13 +118,19 @@ export class InlineImageTracker {
 
     const imageId = crypto.randomUUID()
 
-    // Determine profile and model
-    let profileId = imageSettings.profileId
+    // Determine profile and model. Explicit beats route to the explicit profile
+    // when configured (research/64 option B) and skip the portrait-reference
+    // override.
+    const route = resolveRatingRoute(tag.rating, imageSettings)
+    let profileId = route.profileId
     let modelToUse = settings.getImageProfile(profileId ?? '')?.model ?? ''
     let referenceImageUrls: string[] | undefined
+    if (route.routed) {
+      log('Explicit beat routed to the explicit image profile', { profileId, model: modelToUse })
+    }
 
     // Check for portrait mode with character references
-    if (referenceMode && tag.characters.length > 0) {
+    if (!route.routed && referenceMode && tag.characters.length > 0) {
       const portraitUrls: string[] = []
       const characters = this.getCharacters()
 
@@ -212,7 +219,7 @@ export class InlineImageTracker {
       prompt: fullPrompt,
       subjectCount: tag.characters.length,
       model: modelToUse,
-      fallback: imageSettings.size,
+      fallback: route.size,
     })
 
     log('Starting async image generation', {

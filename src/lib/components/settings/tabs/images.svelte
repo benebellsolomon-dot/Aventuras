@@ -113,12 +113,13 @@
     reference: 'referenceProfileId',
     background: 'backgroundProfileId',
     sprite: 'spriteProfileId',
+    explicit: 'explicitProfileId',
   } as const satisfies Record<string, keyof typeof settings.systemServicesSettings.imageGeneration>
 
   // Handle profile change
   function onProfileChange(
     profileId: string,
-    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite' | 'explicit',
   ) {
     settings.systemServicesSettings.imageGeneration[profileIdKey[type]] = profileId
     settings.saveSystemServicesSettings()
@@ -126,7 +127,7 @@
 
   // Get the currently selected image profile for a type
   function getSelectedImageProfile(
-    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite' | 'explicit',
   ): ImageProfile | undefined {
     const profileId = settings.systemServicesSettings.imageGeneration[profileIdKey[type]]
     return profileId ? settings.getImageProfile(profileId) : undefined
@@ -264,12 +265,15 @@
    * Get supported sizes for a specific profile type/ID
    */
   function getSupportedSizes(
-    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite' | 'testing',
+    type: 'standard' | 'portrait' | 'reference' | 'background' | 'sprite' | 'testing' | 'explicit',
   ) {
     let profileId: string | null = null
     switch (type) {
       case 'standard':
         profileId = settings.systemServicesSettings.imageGeneration.profileId
+        break
+      case 'explicit':
+        profileId = settings.systemServicesSettings.imageGeneration.explicitProfileId ?? null
         break
       case 'portrait':
         profileId = settings.systemServicesSettings.imageGeneration.portraitProfileId
@@ -336,6 +340,7 @@
 
   // Derived supported sizes — computed once per reactive change, not twice per Autocomplete render
   const standardSizes = $derived(getSupportedSizes('standard'))
+  const explicitSizes = $derived(getSupportedSizes('explicit'))
   const referenceSizes = $derived(getSupportedSizes('reference'))
   const portraitSizes = $derived(getSupportedSizes('portrait'))
   const bgSupportedSizes = $derived(getSupportedSizes('background'))
@@ -1087,6 +1092,68 @@
                   </div>
                 {/if}
               </div>
+            </div>
+
+            <!-- Explicit-beat routing (research/64 option B) -->
+            <div class="space-y-2 pt-2">
+              <Label>Explicit-Beat Profile (optional)</Label>
+              <Autocomplete
+                items={settings.imageProfiles}
+                selected={getSelectedImageProfile('explicit')}
+                onSelect={(v) => onProfileChange((v as ImageProfile).id, 'explicit')}
+                itemLabel={(p: ImageProfile) =>
+                  `${p.name} (${providerTypes.find((t) => t.value === p.providerType)?.label || p.providerType}${p.model ? ` · ${p.model}` : ''})`}
+                itemValue={(p: ImageProfile) => p.id}
+                placeholder="Same as regular profile"
+              />
+              <p class="text-muted-foreground text-xs">
+                Beats the narrator rates <code>explicit</code> (nudity or sexual content) render on
+                this profile instead of the regular one — e.g. keep a Krea 2 profile for everything
+                and send explicit beats to an NSFW-capable booru model. Portrait-reference img2img
+                is skipped for routed beats.
+                {#if settings.systemServicesSettings.imageGeneration.explicitProfileId}
+                  <button
+                    type="button"
+                    class="ml-1 underline"
+                    onclick={() => {
+                      settings.systemServicesSettings.imageGeneration.explicitProfileId = null
+                      settings.saveSystemServicesSettings()
+                    }}>Clear</button
+                  >
+                {/if}
+              </p>
+              {#if settings.systemServicesSettings.imageGeneration.explicitProfileId}
+                <div class="space-y-2">
+                  <Label>Explicit Image Size</Label>
+                  <Autocomplete
+                    items={explicitSizes}
+                    selected={explicitSizes.find(
+                      (s) =>
+                        s.value === settings.systemServicesSettings.imageGeneration.explicitSize,
+                    ) ||
+                      (settings.systemServicesSettings.imageGeneration.explicitSize
+                        ? {
+                            value: settings.systemServicesSettings.imageGeneration.explicitSize,
+                            label: settings.systemServicesSettings.imageGeneration.explicitSize,
+                          }
+                        : undefined)}
+                    onSelect={(v) => {
+                      settings.systemServicesSettings.imageGeneration.explicitSize = (
+                        v as { value: string }
+                      ).value
+                      settings.saveSystemServicesSettings()
+                    }}
+                    allowCustom={true}
+                    onCustomSelect={(v) => {
+                      settings.systemServicesSettings.imageGeneration.explicitSize = v
+                      settings.saveSystemServicesSettings()
+                    }}
+                    itemLabel={(s: { label: string }) => s.label}
+                    itemValue={(s: { value: string }) => s.value}
+                    placeholder="Select size"
+                  />
+                </div>
+              {/if}
             </div>
           </div>
 

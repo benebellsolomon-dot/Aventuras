@@ -21,6 +21,7 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady, emitImageAnalysisFailed } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
+import { resolveRatingRoute } from './ratingRouting'
 import { assembleInlineImage } from './inlineAssembly'
 import { resolveBooruScenePrompt } from './booruPromptWriter'
 import { pickImageSize } from './aspectRatio'
@@ -114,14 +115,20 @@ export class InlineImageGenerationService {
   ): Promise<void> {
     const imageId = crypto.randomUUID()
 
-    // Determine which profile and model to use
-    let profileId = imageSettings.profileId
+    // Determine which profile and model to use. Explicit beats route to the
+    // explicit profile when one is configured (research/64 option B) and skip
+    // the portrait-reference override — identity rides the booru banks there.
+    const route = resolveRatingRoute(tag.rating, imageSettings)
+    let profileId = route.profileId
     let modelToUse = settings.getImageProfile(profileId ?? '')?.model ?? ''
-    let sizeToUse = imageSettings.size
+    let sizeToUse = route.size
     let referenceImageUrls: string[] | undefined
+    if (route.routed) {
+      log('Explicit beat routed to the explicit image profile', { profileId, model: modelToUse })
+    }
 
     // If portrait mode is enabled and tag specifies characters, look for their portraits
-    if (context.referenceMode && tag.characters.length > 0) {
+    if (!route.routed && context.referenceMode && tag.characters.length > 0) {
       const portraitUrls: string[] = []
       const charactersWithPortraits: string[] = []
       const charactersWithoutPortraits: string[] = []

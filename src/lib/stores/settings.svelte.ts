@@ -567,6 +567,8 @@ export function getDefaultImageGenerationSettings(): ImageGenerationServiceSetti
     maxImagesPerMessage: 3,
     portraitProfileId: null,
     referenceProfileId: null,
+    explicitProfileId: null, // Explicit beats route here when set (research/64 option B)
+    explicitSize: '1024x1024',
     promptProfileId: null, // Use default profile for scene analysis
     promptModel: '', // Empty = use profile default
     promptTemperature: 0.3,
