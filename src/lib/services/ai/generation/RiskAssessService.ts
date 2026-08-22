@@ -31,7 +31,14 @@ export class RiskAssessService extends BaseAIService {
       const ctx = await ContextBuilder.forStory(storyId)
       ctx.add({ userActionText })
       const { system, user: prompt } = await ctx.render('risk-assess')
-      const result = await this.generate(riskAssessResultSchema, system, prompt, 'risk-assess')
+      // BaseAIService.generate widens the tolerant (preprocess/catch) fields to
+      // `unknown`; the schema's own z.infer matches RiskAssessResult (test-pinned).
+      const result = (await this.generate(
+        riskAssessResultSchema,
+        system,
+        prompt,
+        'risk-assess',
+      )) as RiskAssessResult
       // A "risky" verdict without a usable skill/dc cannot resolve — treat as safe.
       if (!result.risky || !result.skill || !result.dc) return result.risky ? NOT_RISKY : result
       return result

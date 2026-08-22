@@ -7,6 +7,8 @@
 
 import { z } from 'zod'
 
+import { looseEnumField } from './tolerant-fields'
+
 /**
  * Schema for a single story suggestion.
  */
@@ -14,10 +16,12 @@ export const suggestionSchema = z.object({
   /** The suggestion text - a narrative direction or plot beat */
   text: z.string().describe('The suggestion text'),
   /** Type of suggestion: action, dialogue, revelation, or twist */
-  type: z
-    .enum(['action', 'dialogue', 'revelation', 'twist'])
-    .catch('action')
-    .describe('Type of suggestion'),
+  type: looseEnumField(
+    'type',
+    ['action', 'dialogue', 'revelation', 'twist'],
+    'action',
+    'Type of suggestion',
+  ),
 })
 
 /**

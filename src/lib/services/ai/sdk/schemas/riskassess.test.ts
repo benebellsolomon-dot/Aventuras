@@ -25,19 +25,33 @@ describe('riskAssessResultSchema (research/47 Step 5)', () => {
     expect(riskAssessResultSchema.parse({ risky: false })).not.toHaveProperty('growthIntent')
   })
 
-  it('rejects a non-boolean growthIntent and strips unknown neighbours', () => {
-    expect(riskAssessResultSchema.safeParse({ risky: true, growthIntent: 1 }).success).toBe(false)
+  it('normalises boolean words for growthIntent, drops junk, strips unknown neighbours', () => {
+    // Pre-1b a non-boolean growthIntent voided the whole verdict (→ not risky).
+    expect(riskAssessResultSchema.parse({ risky: true, growthIntent: 'true' }).growthIntent).toBe(
+      true,
+    )
+    expect(riskAssessResultSchema.parse({ risky: true, growthIntent: 1 }).growthIntent).toBe(true)
+    expect(riskAssessResultSchema.parse({ risky: true, growthIntent: 'maybe' })).not.toHaveProperty(
+      'growthIntent',
+      expect.anything(),
+    )
     expect(riskAssessResultSchema.parse({ risky: true, guaranteed: true })).not.toHaveProperty(
       'guaranteed',
     )
   })
 
-  it('rejects unknown skills and out-of-range dc', () => {
-    expect(
-      riskAssessResultSchema.safeParse({ risky: true, skill: 'piloting', dc: 12 }).success,
-    ).toBe(false)
-    expect(
-      riskAssessResultSchema.safeParse({ risky: true, skill: 'stealth', dc: 55 }).success,
-    ).toBe(false)
+  it('drops unknown skills and out-of-range dc instead of voiding the verdict (research/63 round 1b)', () => {
+    // Pre-1b this was a hard reject; the service caught the parse failure and
+    // returned NOT_RISKY, so a schema-blind model ("Perception") silently lost
+    // every typed-action check. Now the unusable field drops and the service's
+    // own "risky without skill/dc → safe" rule decides.
+    expect(riskAssessResultSchema.parse({ risky: true, skill: 'piloting', dc: 12 })).toEqual({
+      risky: true,
+      dc: 12,
+    })
+    expect(riskAssessResultSchema.parse({ risky: true, skill: 'stealth', dc: 55 })).toEqual({
+      risky: true,
+      skill: 'stealth',
+    })
   })
 })

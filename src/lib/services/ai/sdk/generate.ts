@@ -248,6 +248,8 @@ interface ResolvedConfig {
   model: LanguageModelV3
   providerOptions: ProviderOptions | undefined
   supportsStructuredOutput: boolean
+  /** Render the schema into the prompt even though response_format is sent (see structuredOutputUnenforced). */
+  promptSchemaAlongside: boolean
   useThinkTag: boolean
 }
 
@@ -290,6 +292,8 @@ function resolveConfig(presetId: string, serviceId: string, debugId?: string): R
   }
 
   const fetchedModel = settings.getProfileModels(profileId).find((m) => m.id === preset.model)
+  const promptSchemaAlongside =
+    supportsStructuredOutput && capabilities?.structuredOutputUnenforced === true
 
   const model = createModelFromProfile({
     profile,
@@ -316,6 +320,7 @@ function resolveConfig(presetId: string, serviceId: string, debugId?: string): R
       fetchedModel,
     ),
     supportsStructuredOutput,
+    promptSchemaAlongside,
     useThinkTag,
   }
 }
@@ -399,6 +404,7 @@ function buildStructuredMiddleware(
   useThinkTag: boolean,
   reasoningEnabled: boolean,
   thinkingNudge: boolean,
+  promptSchemaAlongside = false,
 ): LanguageModelV3Middleware[] {
   // retryOn429Middleware is intentionally outermost: it re-invokes the whole
   // inner chain (including patchResponseMiddleware) on each retry. Do not
@@ -411,15 +417,20 @@ function buildStructuredMiddleware(
   if (useThinkTag) {
     base.push(thinkTagMiddleware)
   }
-  if (!supportsStructuredOutput) {
+  // The schema goes into the prompt when the provider can't take response_format
+  // at all, AND alongside response_format when the provider forwards it to
+  // models that don't enforce its constraints (structuredOutputUnenforced).
+  if (!supportsStructuredOutput || promptSchemaAlongside) {
+    const keepResponseFormat = supportsStructuredOutput
     if (useThinkTag && reasoningEnabled && thinkingNudge) {
       base.push(
         promptSchemaMiddleware({
           instruction: `Respond with your reasoning inside <think> and </think> tags first. Then, output strictly valid JSON compatible with the TypeScript type Response from the following:\n\n{schema}\n\nOutput ONLY the JSON object after the </think> tag, no other text or markdown.`,
+          keepResponseFormat,
         }),
       )
     } else {
-      base.push(promptSchemaMiddleware())
+      base.push(promptSchemaMiddleware({ keepResponseFormat }))
     }
   }
 
@@ -450,14 +461,22 @@ export async function generateStructured<T extends z.ZodType>(
 ): Promise<z.infer<T>> {
   const { presetId, schema, system, prompt, signal } = options
   const config = resolveConfig(presetId, serviceId)
-  const { preset, providerType, model, providerOptions, supportsStructuredOutput, useThinkTag } =
-    config
+  const {
+    preset,
+    providerType,
+    model,
+    providerOptions,
+    supportsStructuredOutput,
+    promptSchemaAlongside,
+    useThinkTag,
+  } = config
 
   log('generateStructured', {
     presetId,
     model: preset.model,
     providerType,
     supportsStructuredOutput,
+    promptSchemaAlongside,
   })
 
   const attempt = async (forcePromptSchema: boolean, systemText: string): Promise<z.infer<T>> => {
@@ -469,6 +488,7 @@ export async function generateStructured<T extends z.ZodType>(
           useThinkTag,
           !!preset.reasoningEffort && preset.reasoningEffort !== 'off',
           !!preset.thinkingNudgePrompt,
+          forcePromptSchema ? false : promptSchemaAlongside,
         ),
       }),
       system: systemText,
@@ -600,10 +620,23 @@ export function streamStructured<T extends z.ZodType>(
   const { presetId, schema, system, prompt, signal } = options
   const debugId = crypto.randomUUID()
   const config = resolveConfig(presetId, serviceId, debugId)
-  const { preset, providerType, model, providerOptions, supportsStructuredOutput, useThinkTag } =
-    config
+  const {
+    preset,
+    providerType,
+    model,
+    providerOptions,
+    supportsStructuredOutput,
+    promptSchemaAlongside,
+    useThinkTag,
+  } = config
 
-  log('streamStructured', { presetId, model: preset.model, providerType, supportsStructuredOutput })
+  log('streamStructured', {
+    presetId,
+    model: preset.model,
+    providerType,
+    supportsStructuredOutput,
+    promptSchemaAlongside,
+  })
   const startTime = Date.now()
 
   return streamText({
@@ -614,6 +647,7 @@ export function streamStructured<T extends z.ZodType>(
         useThinkTag,
         !!preset.reasoningEffort && preset.reasoningEffort !== 'off',
         !!preset.thinkingNudgePrompt,
+        promptSchemaAlongside,
       ),
     }),
     system,

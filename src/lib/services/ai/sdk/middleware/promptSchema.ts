@@ -130,6 +130,13 @@ function injectSchemaIntoPrompt(
 export interface PromptSchemaMiddlewareOptions {
   instruction?: string
   typeName?: string
+  /**
+   * Keep `response_format` on the request as well as rendering the schema into
+   * the prompt. For aggregator providers that forward `response_format` to
+   * upstream models which don't reliably honour its constraints (NanoGPT,
+   * research/63): JSON mode still helps, but the model must also SEE the type.
+   */
+  keepResponseFormat?: boolean
 }
 
 export function promptSchemaMiddleware(
@@ -158,7 +165,7 @@ export function promptSchemaMiddleware(
       return {
         ...params,
         prompt: injectSchemaIntoPrompt(params.prompt, instruction),
-        responseFormat: undefined,
+        responseFormat: options.keepResponseFormat ? responseFormat : undefined,
       }
     },
   }

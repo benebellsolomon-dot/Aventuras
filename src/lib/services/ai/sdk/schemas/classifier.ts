@@ -9,6 +9,8 @@ import { z } from 'zod'
 import type { RuntimeVariable } from '$lib/services/packs/types'
 import type { BeEvent } from '$lib/services/be'
 
+import { looseEnumField, looseOptionalEnumField } from './tolerant-fields'
+
 // ============================================================================
 // Visual Descriptors Schema
 // ============================================================================
@@ -54,10 +56,13 @@ export type VisualDescriptors = z.infer<typeof visualDescriptorsSchema>
 export const characterUpdateSchema = z.object({
   name: z.string().describe('Exact name of existing character to update'),
   changes: z.object({
-    status: z
-      .enum(['active', 'inactive', 'deceased'])
-      .describe('active=present, inactive=away, deceased=dead')
-      .optional(),
+    // Tolerant enums (research/63 round 1b): a cased/off-list status must drop
+    // the FIELD, not void the whole turn's classification.
+    status: looseOptionalEnumField(
+      'characterUpdates.status',
+      ['active', 'inactive', 'deceased'],
+      'active=present, inactive=away, deceased=dead',
+    ),
     relationship: z.string().describe('New relationship to protagonist').optional(),
     newTraits: z.array(z.string()).describe('Personality traits to add').optional(),
     removeTraits: z.array(z.string()).describe('Traits no longer applicable').optional(),
@@ -75,10 +80,11 @@ export const newCharacterSchema = z.object({
   visualDescriptors: visualDescriptorsSchema
     .describe('Complete visual appearance - ALL categories should be filled')
     .optional(),
-  status: z
-    .enum(['active', 'inactive', 'deceased'])
-    .describe('active if present in scene')
-    .optional(),
+  status: looseOptionalEnumField(
+    'newCharacters.status',
+    ['active', 'inactive', 'deceased'],
+    'active if present in scene',
+  ),
 })
 
 // ============================================================================
@@ -130,10 +136,11 @@ export const newItemSchema = z.object({
 export const storyBeatUpdateSchema = z.object({
   title: z.string().describe('Exact title of existing beat'),
   changes: z.object({
-    status: z
-      .enum(['pending', 'active', 'completed', 'failed'])
-      .describe('completed when resolved, failed if impossible')
-      .optional(),
+    status: looseOptionalEnumField(
+      'storyBeatUpdates.status',
+      ['pending', 'active', 'completed', 'failed'],
+      'completed when resolved, failed if impossible',
+    ),
     description: z.string().describe('Updated description').optional(),
   }),
 })
@@ -146,14 +153,16 @@ export const newStoryBeatSchema = z.object({
       'REQUIRED context — one or two sentences: what happened or needs to happen, who is involved, what it is for',
     )
     .optional(),
-  type: z
-    .enum(['milestone', 'quest', 'revelation', 'event', 'plot_point'])
-    .describe('milestone, quest, revelation, event, or plot_point')
-    .optional(),
-  status: z
-    .enum(['pending', 'active', 'completed', 'failed'])
-    .describe('pending=upcoming, active=in-progress, completed=done')
-    .optional(),
+  type: looseOptionalEnumField(
+    'newStoryBeats.type',
+    ['milestone', 'quest', 'revelation', 'event', 'plot_point'],
+    'milestone, quest, revelation, event, or plot_point',
+  ),
+  status: looseOptionalEnumField(
+    'newStoryBeats.status',
+    ['pending', 'active', 'completed', 'failed'],
+    'pending=upcoming, active=in-progress, completed=done',
+  ),
 })
 
 // ============================================================================
@@ -185,10 +194,14 @@ export const sceneSchema = z.object({
     .array(z.string())
     .describe('Names of characters physically present')
     .default([]),
-  timeProgression: z
-    .enum(['none', 'minutes', 'hours', 'days'])
-    .describe('none=instant, minutes=conversations, hours=travel, days=sleep')
-    .default('none'),
+  // Tolerant + defaulted: an off-list value falls back to 'none' instead of
+  // voiding the turn (research/63 round 1b).
+  timeProgression: looseEnumField(
+    'scene.timeProgression',
+    ['none', 'minutes', 'hours', 'days'],
+    'none',
+    'none=instant, minutes=conversations, hours=travel, days=sleep',
+  ).default('none'),
 })
 
 // ============================================================================

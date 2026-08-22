@@ -7,7 +7,9 @@
 
 import { z } from 'zod'
 
-import { DC_MAX, DC_MIN, ESSENCE_COST_MAX, SKILL_IDS, type SkillId } from '$lib/services/rpg'
+import { DC_MAX, DC_MIN, ESSENCE_COST_MAX, type SkillId } from '$lib/services/rpg'
+
+import { boundedIntField, looseBooleanField, looseEnumField, skillIdField } from './tolerant-fields'
 
 /**
  * Schema for a single action choice.
@@ -19,31 +21,27 @@ import { DC_MAX, DC_MIN, ESSENCE_COST_MAX, SKILL_IDS, type SkillId } from '$lib/
 export const actionChoiceSchema = z.object({
   /** The action text for the player */
   text: z.string().describe('The action text for the player'),
-  /** Type: action, dialogue, examine, or move. Tolerant: an off-list value
-   * coerces to 'action' instead of voiding the whole response (D5 playtest:
-   * a single enum miss killed every choice on providers that don't enforce
-   * json-schema constraints). */
-  type: z
-    .enum(['action', 'dialogue', 'examine', 'move'])
-    .catch('action')
-    .describe('Type: action, dialogue, examine, or move'),
-  /** Skill governing this choice's check — only on genuinely risky choices. */
-  skill: z
-    .enum(SKILL_IDS)
-    .optional()
-    .catch(undefined)
-    .describe('Skill id for a risky choice; omit for safe choices'),
+  /** Type: action, dialogue, examine, or move. Tolerant: case-normalised, and an
+   * off-list value coerces to 'action' instead of voiding the whole response
+   * (D5 playtest: a single enum miss killed every choice on providers that
+   * don't enforce json-schema constraints). */
+  type: looseEnumField(
+    'type',
+    ['action', 'dialogue', 'examine', 'move'],
+    'action',
+    'Type: action, dialogue, examine, or move',
+  ),
+  /** Skill governing this choice's check — only on genuinely risky choices.
+   * Case/decoration-tolerant (rpg-fields): "Perception" and "athletics (STR)"
+   * resolve; an unknown skill drops with a dev log instead of silently. */
+  skill: skillIdField('Skill id for a risky choice; omit for safe choices'),
   /** Difficulty class for the check (with skill; omitted = no check). */
-  dc: z
-    .number()
-    .int()
-    .min(DC_MIN)
-    .max(DC_MAX)
-    .optional()
-    .catch(undefined)
-    .describe(
-      'Difficulty class for a risky choice; default LOW (8-11 easy, 14 moderate), reserve 17+ for dangerous or expert feats. Set by fictional difficulty, not to force failure.',
-    ),
+  dc: boundedIntField(
+    'dc',
+    DC_MIN,
+    DC_MAX,
+    'Difficulty class for a risky choice; default LOW (8-11 easy, 14 moderate), reserve 17+ for dangerous or expert feats. Set by fictional difficulty, not to force failure.',
+  ),
   /** The girl this action targets — enables bond/quirk check modifiers. */
   targetCharacter: z
     .string()
@@ -51,14 +49,12 @@ export const actionChoiceSchema = z.object({
     .catch(undefined)
     .describe('Exact name of the character this action targets, when it targets one'),
   /** Catalytic essence cost when the choice channels the player's power. */
-  essenceCost: z
-    .number()
-    .int()
-    .min(0)
-    .max(ESSENCE_COST_MAX)
-    .optional()
-    .catch(undefined)
-    .describe('Essence cost 1-3 when the choice channels catalytic power'),
+  essenceCost: boundedIntField(
+    'essenceCost',
+    0,
+    ESSENCE_COST_MAX,
+    'Essence cost 1-3 when the choice channels catalytic power',
+  ),
   /** Spell lorebook entry id when this choice casts a known spell (Phase 4). */
   spellId: z
     .string()
@@ -72,13 +68,10 @@ export const actionChoiceSchema = z.object({
    * successful check on such an action grows her deterministically (the check IS
    * the dice); a failed one suppresses the classifier's mirrored growth.
    */
-  growthIntent: z
-    .boolean()
-    .optional()
-    .catch(undefined)
-    .describe(
-      "True only when the action's explicit purpose is to grow or transform the target's body (channeling essence into her, a transformation working, feeding her a growth potion). Set targetCharacter alongside it whenever you can name her; never withhold this flag for lack of a name.",
-    ),
+  growthIntent: looseBooleanField(
+    'growthIntent',
+    "True only when the action's explicit purpose is to grow or transform the target's body (channeling essence into her, a transformation working, feeding her a growth potion). Set targetCharacter alongside it whenever you can name her; never withhold this flag for lack of a name.",
+  ),
 })
 
 /**

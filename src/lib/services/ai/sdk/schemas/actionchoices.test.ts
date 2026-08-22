@@ -60,9 +60,17 @@ describe('actionChoiceSchema (research/47 Step 4)', () => {
     ).not.toHaveProperty('growthIntent')
   })
 
-  it('coerces a non-boolean growthIntent to unset and strips unknown neighbours', () => {
+  it('normalises boolean words for growthIntent, drops junk, strips unknown neighbours', () => {
+    // Round 1b: "true"/1 are what a schema-blind model writes — they now resolve;
+    // only an un-foldable value drops (to unset, never voiding the choice).
     expect(
-      actionChoiceSchema.parse({ text: 'x', type: 'action', growthIntent: 'yes' }).growthIntent,
+      actionChoiceSchema.parse({ text: 'x', type: 'action', growthIntent: 'true' }).growthIntent,
+    ).toBe(true)
+    expect(
+      actionChoiceSchema.parse({ text: 'x', type: 'action', growthIntent: 1 }).growthIntent,
+    ).toBe(true)
+    expect(
+      actionChoiceSchema.parse({ text: 'x', type: 'action', growthIntent: 'maybe' }).growthIntent,
     ).toBeUndefined()
     // Unknown keys are stripped, so a model cannot smuggle engine-only markers
     // (e.g. the reducer's `guaranteed`) in through the choice tag.

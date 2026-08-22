@@ -35,6 +35,16 @@ export interface ProviderCapabilities {
    */
   reasoningExtraction?: 'think-tag'
   modelCapabilityFetching?: boolean
+  /**
+   * The provider accepts `response_format` (per-model `structuredOutput` flags
+   * are honest about JSON mode) but the upstream models do not reliably
+   * enforce the json-schema CONSTRAINTS — enums, integer ranges, required
+   * fields (D5 playtest, research/63: minimax answered in markdown, GLM 5.2
+   * and DeepSeek V4 wrote "Perception"/"dc": "12" and filled objects by
+   * position). When set, structured calls ALSO render the schema into the
+   * prompt (keeping response_format), so the model sees the type it must match.
+   */
+  structuredOutputUnenforced?: true
 }
 
 export interface ImageDefaults {
@@ -165,6 +175,7 @@ export const PROVIDERS: Record<ProviderType, ProviderConfig> = {
       structuredOutput: false,
       reasoning: true,
       modelCapabilityFetching: true,
+      structuredOutputUnenforced: true,
     },
     imageDefaults: {
       defaultModel: 'z-image-turbo',
