@@ -11,6 +11,7 @@
  * Pure; `applyRpgTurn` in the story store is the single writer.
  */
 
+import { sanitizeDebtText } from '$lib/services/worldsim'
 import { SKILL_BY_ID, SKILL_IDS } from './constants'
 import type { CheckModifier, RpgSheet, RpgTitle, SkillId } from './types'
 
@@ -20,6 +21,8 @@ export const RPG_TITLE_BONUS = 1
 export const RPG_TITLE_NAME_MAX = 24
 export const RPG_TITLE_REASON_MAX = 120
 export const RPG_TITLE_MAX_SKILLS = 3
+/** Titles stacking on ONE skill cap here (security review F3: eight +1s on a favourite skill defeats the DC rubric). */
+export const RPG_TITLE_MAX_STACK = 2
 
 export type { RpgTitle }
 
@@ -31,21 +34,15 @@ export interface RpgTitleLoad {
 }
 
 /**
- * Prompt-surface sanitizer (the worldsim debt-text rules, local to avoid a
- * cross-service import): control/format codepoints out, []/#/` neutralized,
- * whitespace collapsed, capped.
+ * Prompt-surface sanitizer — the worldsim debt-text rules (control/format/
+ * invisible-tag codepoints out, []/#/` neutralized, whitespace collapsed,
+ * capped). Delegated, not copied: the first cut hand-rolled a narrower class
+ * that missed the U+E0000 tag block (security review F1) — title names reach
+ * the SYSTEM prompt, so they get the full class. Called inside functions only
+ * (never captured at module scope — worldsim sits on the be↔worldsim cycle).
  */
 export function sanitizeTitleText(value: unknown, max: number): string {
-  if (typeof value !== 'string') return ''
-  return value
-    .replace(/[\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u2028-\u202e\u2060-\u2064\ufeff]/g, '')
-    .replace(/\[/g, '(')
-    .replace(/\]/g, ')')
-    .replace(/[`#]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, max)
-    .trim()
+  return typeof value === 'string' ? sanitizeDebtText(value, max) : ''
 }
 
 /** Idempotency key: case/whitespace-insensitive name. */
@@ -114,6 +111,10 @@ export function awardTitles(
     if (!title) continue
     const key = normalizeTitleName(title.name)
     if (seen.has(key)) continue
+    // A title whose every skill is already covered adds nothing but a stack —
+    // refuse it (the same accomplishment under a new name is not a new title).
+    const covered = new Set([...existing, ...awarded].flatMap((t) => t.skills))
+    if (title.skills.every((id) => covered.has(id))) continue
     seen.add(key)
     awarded.push(title)
   }
@@ -121,10 +122,11 @@ export function awardTitles(
   return { sheet: { ...sheet, titles: [...existing, ...awarded] }, awarded }
 }
 
-/** +1 per title whose skills cover the check skill. */
+/** +1 per title whose skills cover the check skill, at most RPG_TITLE_MAX_STACK of them. */
 export function buildTitleCheckModifiers(sheet: RpgSheet, skill: SkillId): CheckModifier[] {
   return sheetTitles(sheet)
     .filter((t) => t.skills.includes(skill))
+    .slice(0, RPG_TITLE_MAX_STACK)
     .map((t) => ({ label: `title: ${t.name}`, value: RPG_TITLE_BONUS }))
 }
 

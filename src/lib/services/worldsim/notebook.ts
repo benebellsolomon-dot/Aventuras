@@ -91,13 +91,9 @@ function normalizeNote(raw: z.infer<typeof noteSchema>): GmNote | null {
   const text = sanitizeDebtText(raw.text, GM_NOTE_TEXT_MAX)
   const id = raw.id.trim()
   if (text === '' || !GM_NOTE_ID_PATTERN.test(id)) return null
-  return {
-    ...(raw as unknown as GmNote),
-    id,
-    kind: coerceNoteKind(raw.kind),
-    text,
-    age: clampAge(raw.age),
-  }
+  // Literal, not spread: a 4-field record gains nothing from passthrough, and
+  // unknown keys would otherwise persist forever (security review F6).
+  return { id, kind: coerceNoteKind(raw.kind), text, age: clampAge(raw.age) }
 }
 
 /** Read the notebook off the SELF character's metadata; null = no state yet. */
@@ -162,7 +158,7 @@ export function advanceGmNotebook(input: GmNotebookAdvanceInput): GmNotebookStat
   const appended: GmNote[] = []
   for (const load of input.loads) {
     if (added >= GM_NOTES_MAX_ADDS_PER_TURN) break
-    if (nextId > GM_NOTE_NEXT_ID_MAX) break
+    if (nextId >= GM_NOTE_NEXT_ID_MAX) break
     const text = sanitizeDebtText(load.text, GM_NOTE_TEXT_MAX)
     if (text === '' || existingTexts.has(text.toLowerCase())) continue
     existingTexts.add(text.toLowerCase())

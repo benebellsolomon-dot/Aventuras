@@ -30,7 +30,9 @@
     if (!protagonist) return null
     return sheetOrDefault(protagonist.metadata)
   })
-  const titles = $derived(sheet ? sheetTitles(sheet) : [])
+  const titles = $derived(
+    sheet && story.currentStory?.settings?.rpgTitles === true ? sheetTitles(sheet) : [],
+  )
 
   let showAllSkills = $state(false)
 

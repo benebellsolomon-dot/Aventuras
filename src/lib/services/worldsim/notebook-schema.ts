@@ -11,10 +11,11 @@
 
 import { z } from 'zod'
 import { sanitizeDebtText } from './chekhov'
-import { GM_NOTE_TEXT_MAX, GM_NOTES_MAX_ADDS_PER_TURN } from './constants'
+import { GM_NOTES_MAX, GM_NOTE_TEXT_MAX, GM_NOTES_MAX_ADDS_PER_TURN } from './constants'
 import { GM_NOTE_ID_PATTERN, coerceNoteKind, type GmNote, type GmNoteLoad } from './notebook'
 
-export const GM_NOTES_MAX_DROPS_PER_TURN = 8
+/** A response can moot the whole list at once (cover blown wholesale). */
+export const GM_NOTES_MAX_DROPS_PER_TURN = GM_NOTES_MAX
 const GM_NOTE_ID_RENDER_MAX = 16
 
 export const gmNoteProposalSchema = z.object({

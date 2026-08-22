@@ -429,7 +429,12 @@ export class ContextBuilder {
           if (!entry || entry.state.type !== 'spell') return []
           return [`${entry.name} (${entry.state.school}, ⬡${entry.state.essenceCost})`]
         })
-        playerSheetBlock = buildPlayerSheetBlock(sheet, protagonist.name, knownSpellDisplays)
+        playerSheetBlock = buildPlayerSheetBlock(
+          sheet,
+          protagonist.name,
+          knownSpellDisplays,
+          story.settings?.rpgTitles === true,
+        )
         playerSheetSummary = buildPlayerSheetSummary(sheet)
         // Gated interactions (research/48 Step 8) append into the SAME var
         // (R9: no template edits).

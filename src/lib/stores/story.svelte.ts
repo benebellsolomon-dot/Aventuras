@@ -4589,7 +4589,10 @@ class StoryStore {
     // 2b. E7 earned titles (research/65): classifier-proposed, engine-decided —
     //     idempotent on name, one per turn, eight in all. Setting-gated so a
     //     toggle-off story never grows titles.
-    if (this.currentStory.settings?.rpgTitles === true) {
+    if (
+      this.currentStory.settings?.rpgTitles === true &&
+      this.currentStory.settings?.beMode === true
+    ) {
       const titleLoads = titlesEarnedFromResult(result as unknown as Record<string, unknown>)
       if (titleLoads.length > 0) {
         const awarded = awardTitles(sheet, titleLoads)

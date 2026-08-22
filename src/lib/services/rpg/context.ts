@@ -38,6 +38,8 @@ export function buildPlayerSheetBlock(
   protagonistName: string,
   /** Preformatted known-spell display strings (Phase 4), e.g. "Swell (transmutation, ⬡2)". */
   knownSpells: ReadonlyArray<string> = [],
+  /** E7: the Titles line renders only when the story's rpgTitles setting is on (the bonus is gated the same way). */
+  titlesEnabled = false,
 ): string {
   const mods = ATTRIBUTE_IDS.map(
     (id) => `${ATTRIBUTE_LABELS[id]} ${signed(attributeMod(sheet.attributes[id]))}`,
@@ -56,7 +58,7 @@ export function buildPlayerSheetBlock(
     lines.push(`Known spells: ${knownSpells.join('; ')}.`)
   }
   // E7 titles line renders ONLY when titles exist — same cache guard.
-  const titles = formatTitles(sheet)
+  const titles = titlesEnabled ? formatTitles(sheet) : ''
   if (titles) {
     lines.push(`Titles: ${titles} — each grants +1 on the skills it covers.`)
   }

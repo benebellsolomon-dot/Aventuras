@@ -69,6 +69,7 @@ export { buildTargetCheckModifiers } from './modifiers'
 export {
   RPG_TITLE_BONUS,
   RPG_TITLE_MAX_SKILLS,
+  RPG_TITLE_MAX_STACK,
   RPG_TITLE_NAME_MAX,
   RPG_TITLE_REASON_MAX,
   RPG_TITLES_MAX,
