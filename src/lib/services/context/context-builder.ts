@@ -24,8 +24,7 @@ import {
   type BeStateEntry,
   growthGateRequired,
   beStoryConfigFromSettings,
-  actGrowthCm,
-  tiersForCm,
+  previewActGrowth,
   coerceEffectTags,
 } from '$lib/services/be'
 import {
@@ -315,16 +314,23 @@ export class ContextBuilder {
           const state = readBodyState(character.metadata)
           if (!state) continue
           if (beConfig && character.relationship !== 'self') {
-            const cm = actGrowthCm(beConfig, state)
-            const { tiers } = tiersForCm(state.tier, cm, beConfig.sizeCapTier)
+            // ONE derivation with the reducer (previewActGrowth) — the same cm,
+            // tiers and mode the act will apply. A locked girl gets no line: her
+            // SIZE LOCKED line already says it all (the act is muzzled).
+            const act = previewActGrowth(beConfig, state)
             entries.push({
               name: character.name,
               state,
-              actGrowth: {
-                cm,
-                tierAfter: state.tier + tiers,
-                bankedCm: Math.max(0, state.growthBonusCm ?? 0),
-              },
+              ...(act.mode === 'locked'
+                ? {}
+                : {
+                    actGrowth: {
+                      cm: act.cm,
+                      tierAfter: act.tierAfter,
+                      bankedCm: act.bankedCm,
+                      mode: act.mode,
+                    },
+                  }),
             })
           } else {
             entries.push({ name: character.name, state })
@@ -455,11 +461,12 @@ export class ContextBuilder {
         const knownSpellDisplays = sheet.knownSpells.flatMap((id) => {
           const entry = spellById.get(id)
           if (!entry || entry.state.type !== 'spell') return []
-          if (
-            !offerGrowth &&
-            coerceEffectTags(entry.state.effects).some((effect) => effect.kind === 'growth')
-          ) {
-            return []
+          // Pure-growth spells are not offered; a mixed spell (growth + a
+          // condition, say) stays listed — its other effects are still real
+          // and its growth half banks into her next act.
+          if (!offerGrowth) {
+            const effects = coerceEffectTags(entry.state.effects)
+            if (effects.length > 0 && effects.every((effect) => effect.kind === 'growth')) return []
           }
           return [`${entry.name} (${entry.state.school}, ⬡${entry.state.essenceCost})`]
         })

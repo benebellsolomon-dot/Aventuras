@@ -83,6 +83,10 @@ export const GROWTH_BASELINE_CM_MAX = 30
 export const SPELL_GROWTH_CM_PER_INTENSITY = 1.5
 /** Ceiling on the banked modifier — a debt that pays out on the next act, never a runaway. */
 export const MAX_GROWTH_BONUS_CM = 10
+/** Hard ceiling on tiers one act may land (a 30 cm baseline at small sizes is ~20 tiers; a corrupt carrier must never loop). */
+export const MAX_TIERS_PER_ACT = 12
+/** Ceiling on the sub-tier carry (it is < one tier by construction; a corrupt value is clamped here). */
+export const MAX_GROWTH_CARRY_CM = 5
 /** Note for cast/check growth banked into her next act (cosmology stories — casts never count as the act). */
 export const GROWTH_BONUS_NOTE = 'banked into her next act'
 

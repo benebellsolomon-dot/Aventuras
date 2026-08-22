@@ -140,6 +140,9 @@ export {
   bonusCmForIntensity,
   cmPerTierAt,
   fmtCm,
+  previewActGrowth,
+  safeBonusCm,
+  safeCarryCm,
   tiersForCm,
 } from './magnitude'
 export {

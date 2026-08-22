@@ -8,7 +8,12 @@
  * through the natural bust curve (the same curve the cup letter rides), with
  * the sub-tier remainder carried to the next act. Pure.
  */
-import { MAX_GROWTH_BONUS_CM, SPELL_GROWTH_CM_PER_INTENSITY } from './constants'
+import {
+  MAX_GROWTH_BONUS_CM,
+  MAX_GROWTH_CARRY_CM,
+  MAX_TIERS_PER_ACT,
+  SPELL_GROWTH_CM_PER_INTENSITY,
+} from './constants'
 import { bustDiffCm } from './curves'
 import { clampIntensity } from './roll'
 import type { BeStoryConfig, BodyState } from './types'
@@ -37,12 +42,18 @@ export function tiersForCm(
     if (sizeCapTier !== null && current >= sizeCapTier) {
       return { tiers: current - start, carryCm: 0 }
     }
+    // Per-act ceiling: the excess is discarded, never carried (a runaway
+    // baseline or a corrupt carrier must not loop or dump dozens of tiers).
+    if (current - start >= MAX_TIERS_PER_ACT) return { tiers: current - start, carryCm: 0 }
     const step = cmPerTierAt(current)
     if (!(step > 0) || spent + step > budget + EPSILON) break
     spent += step
     current += 1
   }
-  return { tiers: current - start, carryCm: Math.max(0, budget - spent) }
+  return {
+    tiers: current - start,
+    carryCm: Math.min(MAX_GROWTH_CARRY_CM, Math.max(0, budget - spent)),
+  }
 }
 
 /** cm a cast/check growth effect banks (band already folded into the intensity by translateSpellEffects). */
@@ -53,16 +64,53 @@ export const bonusCmForIntensity = (intensity: number): number =>
 export const bankBonusCm = (current: number | undefined, add: number): number =>
   Math.min(MAX_GROWTH_BONUS_CM, Math.max(0, current ?? 0) + Math.max(0, add))
 
+const finiteOr0 = (v: number | undefined): number => (Number.isFinite(v) ? (v as number) : 0)
+
+/** The banked cm as the engine trusts it: finite, 0..MAX_GROWTH_BONUS_CM. */
+export const safeBonusCm = (v: number | undefined): number =>
+  Math.min(MAX_GROWTH_BONUS_CM, Math.max(0, finiteOr0(v)))
+/** The carried cm as the engine trusts it: finite, 0..MAX_GROWTH_CARRY_CM. */
+export const safeCarryCm = (v: number | undefined): number =>
+  Math.min(MAX_GROWTH_CARRY_CM, Math.max(0, finiteOr0(v)))
+
 /** The cm the NEXT completed act would grow her: baseline + banked bonus + carried remainder. */
 export function actGrowthCm(
   config: Pick<BeStoryConfig, 'growthBaselineCm'>,
   state: Pick<BodyState, 'growthBonusCm' | 'growthCarryCm'>,
 ): number {
   return (
-    config.growthBaselineCm +
-    Math.max(0, state.growthBonusCm ?? 0) +
-    Math.max(0, state.growthCarryCm ?? 0)
+    config.growthBaselineCm + safeBonusCm(state.growthBonusCm) + safeCarryCm(state.growthCarryCm)
   )
+}
+
+/**
+ * What the act would do to her this scene — ONE derivation for the narrator's
+ * ACT GROWTH line and the reducer, so they cannot disagree. `cm` uses only
+ * the PRE-turn bank (a cast made this turn banks for the NEXT act).
+ */
+export function previewActGrowth(
+  config: Pick<BeStoryConfig, 'growthBaselineCm' | 'sizeCapTier'>,
+  state: Pick<BodyState, 'tier' | 'locked' | 'growthBonusCm' | 'growthCarryCm'>,
+): {
+  cm: number
+  tiers: number
+  tierAfter: number
+  bankedCm: number
+  mode: 'grows' | 'builds' | 'at_cap' | 'locked'
+} {
+  const cm = actGrowthCm(config, state)
+  const bankedCm = safeBonusCm(state.growthBonusCm)
+  if (state.locked) return { cm, tiers: 0, tierAfter: state.tier, bankedCm, mode: 'locked' }
+  const { tiers } = tiersForCm(state.tier, cm, config.sizeCapTier)
+  const atCap =
+    config.sizeCapTier !== null && state.tier + tiers >= config.sizeCapTier && tiers === 0
+  return {
+    cm,
+    tiers,
+    tierAfter: state.tier + tiers,
+    bankedCm,
+    mode: atCap ? 'at_cap' : tiers === 0 ? 'builds' : 'grows',
+  }
 }
 
 /** One decimal, for notes and prompts. */

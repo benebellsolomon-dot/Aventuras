@@ -206,3 +206,59 @@ Mira — M-cup (tier 20), large breasts.
     expect(swollen).not.toContain('Lactation:')
   })
 })
+
+describe('act-driven growth lines (research/66 §magnitude)', () => {
+  const base = () => freshState(6)
+  it('ACT GROWTH renders per mode; absent for legacy entries; the preamble gains the conditional note only then', () => {
+    const grows = buildBeStateBlock([
+      {
+        name: 'Amelia',
+        state: base(),
+        actGrowth: { cm: 2.5, tierAfter: 8, bankedCm: 0, mode: 'grows' },
+      },
+    ])
+    expect(grows).toContain(
+      "ACT GROWTH: if the story's growth act completes for Amelia in THIS scene, she grows exactly 2.5 cm",
+    )
+    expect(grows).toContain('ACT GROWTH lines are conditional')
+    const builds = buildBeStateBlock([
+      {
+        name: 'Amelia',
+        state: base(),
+        actGrowth: { cm: 0.5, tierAfter: 6, bankedCm: 0, mode: 'builds' },
+      },
+    ])
+    expect(builds).toContain('builds toward her next size')
+    expect(builds).toContain('NO visible size change')
+    const capped = buildBeStateBlock([
+      {
+        name: 'Amelia',
+        state: base(),
+        actGrowth: { cm: 2.5, tierAfter: 6, bankedCm: 0, mode: 'at_cap' },
+      },
+    ])
+    expect(capped).toContain('size limit')
+    const banked = buildBeStateBlock([
+      {
+        name: 'Amelia',
+        state: base(),
+        actGrowth: { cm: 5.5, tierAfter: 10, bankedCm: 3, mode: 'grows' },
+      },
+    ])
+    expect(banked).toContain('includes 3.0 cm banked')
+    const legacy = buildBeStateBlock([{ name: 'Amelia', state: base() }])
+    expect(legacy).not.toContain('ACT GROWTH')
+  })
+
+  it('after an act landed, the directive confirms canon instead of asking for growth again', () => {
+    const grown = { ...base(), tier: 8, lastGrowth: { delta: 2, tierBefore: 6, cm: 2.5 } }
+    const block = buildBeStateBlock([{ name: 'Amelia', state: grown }])
+    expect(block).toContain('GROWTH ALREADY RENDERED')
+    expect(block).toContain('do NOT grow her again')
+    expect(block).not.toContain('GROWTH JUST LANDED')
+    const legacyGrown = { ...base(), tier: 7, lastGrowth: { delta: 1, tierBefore: 6 } }
+    expect(buildBeStateBlock([{ name: 'Amelia', state: legacyGrown }])).toContain(
+      'GROWTH JUST LANDED',
+    )
+  })
+})

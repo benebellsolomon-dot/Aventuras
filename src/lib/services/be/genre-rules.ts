@@ -28,7 +28,7 @@ export function buildBeGenreRules(options: BeGenreRuleOptions): string {
   if (cosmology) {
     lines.push(
       `This world's growth cosmology (mechanism and flavor): ${cosmology}`,
-      'Absolute rule: growth happens ONLY when that act completes on the page, and each completed act grows her by exactly the cm the [BODY STATE] ACT GROWTH line states for her — spells, skills and magic never grow her directly; they bank into her next act. A [CHECK RESULT] GROWTH line that banks or conditions growth on the act outranks the authorization paragraph above.',
+      'Absolute rule: growth happens ONLY when that act completes on the page, and each completed act grows her by exactly the cm the [BODY STATE] ACT GROWTH line states for her — spells, skills and magic never grow her directly; they bank into her next act. ACT GROWTH lines are CONDITIONAL and are exempt from commit discipline: they authorize growth only in a response where you write the act completing; a [CHECK RESULT] GROWTH line that banks growth for the act outranks the authorization paragraph above.',
     )
   }
   if (pacing) lines.push(`Pacing flavor: ${pacing}`)

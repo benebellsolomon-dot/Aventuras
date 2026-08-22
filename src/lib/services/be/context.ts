@@ -36,7 +36,12 @@ export interface BeStateEntry {
    * would do to her THIS scene — stated up front so the narrator renders
    * exactly the cm the engine will apply if the act completes.
    */
-  actGrowth?: { cm: number; tierAfter: number; bankedCm: number }
+  actGrowth?: {
+    cm: number
+    tierAfter: number
+    bankedCm: number
+    mode: 'grows' | 'builds' | 'at_cap'
+  }
 }
 
 const HIGH_REGISTER_BANDS = new Set(['gigantic breasts', 'hyper breasts'])
@@ -48,10 +53,18 @@ const liters = (ml: number): string => (ml / 1000).toFixed(1)
 // prose, so the reducer resolves AFTER narration and lastGrowth surfaces this
 // directive in turn N+1 — the turn that RENDERS the outcome. Turn N narrates
 // only the attempt (the block's "never invent growth" + the genre rules'
-// report-the-attempt-not-the-outcome instruction guard the gap).
+// report-the-attempt-not-the-outcome instruction guard the gap). Exception:
+// act-driven growth (research/66 §magnitude) is rendered IN turn N because the
+// ACT GROWTH line asked for it up front; turn N+1 then only confirms canon.
 function growthDirective(name: string, state: BodyState): string {
   const growth = state.lastGrowth
   if (!growth) return ''
+  // Act-driven growth (research/66 §magnitude) was ALREADY rendered in the act's
+  // own scene (the ACT GROWTH line asked for it up front) — this turn only
+  // confirms the new size as canon; asking for it again would grow her twice.
+  if (growth.cm !== undefined) {
+    return `GROWTH ALREADY RENDERED: the ${fmtCm(growth.cm)} cm of growth you narrated last scene is now canon — ${name} is ${cupLetter(state.tier)}-cup now (was ${cupLetter(growth.tierBefore)}). Carry her new size forward; do NOT grow her again this beat.`
+  }
   // Mid-split: this turn's land is one stage of a larger surge — the ONSET line
   // (rendered separately) owns the "more is coming" half, so the directive must
   // not demand the full result NOR clamp against the coming remainder.
@@ -71,15 +84,21 @@ function growthDirective(name: string, state: BodyState): string {
   return `GROWTH JUST LANDED: ${name} grew one increment this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}${cmNote}). Narrate it as subtle and incremental — noticeable strain and warmth, NOT a dramatic transformation. Exactly this much and no further this beat.`
 }
 
-/** Cosmology stories: the act's exact cm, told BEFORE the narrator writes (research/66 §magnitude). */
+/** Cosmology stories: what the act does THIS scene, told BEFORE the narrator writes (research/66 §magnitude). */
 function actGrowthLine(
   name: string,
   state: BodyState,
   act: NonNullable<BeStateEntry['actGrowth']>,
 ): string {
+  if (act.mode === 'at_cap') {
+    return `ACT GROWTH: ${name} is at this story's size limit — even if the growth act completes for her this scene, her size does NOT change; render the power finding nowhere to go.`
+  }
+  if (act.mode === 'builds') {
+    return `ACT GROWTH: if the story's growth act completes for ${name} in THIS scene it builds toward her next size (${fmtCm(act.cm)} cm carried, below one visible step) — describe warmth, pressure, a promise of change, but NO visible size change; if the act does not complete, nothing builds.`
+  }
   const bank =
     act.bankedCm > 0 ? ` (includes ${fmtCm(act.bankedCm)} cm banked from spells/skills)` : ''
-  return `ACT GROWTH: if the story's growth act completes for ${name} in THIS scene, she grows exactly ${fmtCm(act.cm)} cm of bust (${cupLetter(state.tier)} → ${cupLetter(act.tierAfter)})${bank} — render that much and no more; if the act does not complete, her size does NOT change.`
+  return `ACT GROWTH: if the story's growth act completes for ${name} in THIS scene, she grows exactly ${fmtCm(act.cm)} cm of bust (${cupLetter(state.tier)} → ${cupLetter(act.tierAfter)})${bank} — render exactly that change in this response and no more; if the act does not complete, her size does NOT change.`
 }
 
 function characterLines(entry: BeStateEntry): string {
@@ -242,7 +261,12 @@ ${lines.join('\n')}`
 export function buildBeStateBlock(entries: BeStateEntry[]): string {
   if (entries.length === 0) return ''
   const body = entries.map(characterLines).join('\n')
+  // Cosmology stories: the ACT GROWTH lines are the one CONDITIONAL authorization —
+  // stated once here so "commit discipline" cannot read them as orders to grow.
+  const actNote = entries.some((e) => e.actGrowth)
+    ? " ACT GROWTH lines are conditional: growth happens ONLY if you write the story's growth act completing for her in THIS response — they are not an order to grow her, and on a turn without the act they change nothing."
+    : ''
   return `[BODY STATE — canonical and authoritative]
-The following body states are engine-tracked ground truth. Prose must respect them exactly: sizes, measurements, mass, posture, mobility and clothing reality. All measurements are metric (cm/kg/L) — use these exact numbers, never invent different ones. The cup letter is her size-identity (volume-anchored, the same for every shape); the bust cm is the shape-adjusted tape measurement — firm and gravity-defying shapes tape larger than the letter alone implies, and that is correct, not a contradiction. Bust size changes ONLY when a growth directive in this block says it changed — never invent growth, shrinkage, or ambient size drift. If world lore, story rules, or character text describe growth timing, cause, speed, or limits differently, THIS BLOCK WINS — lore supplies flavor and mechanism; this block alone decides when growth happens and how much.
+The following body states are engine-tracked ground truth. Prose must respect them exactly: sizes, measurements, mass, posture, mobility and clothing reality. All measurements are metric (cm/kg/L) — use these exact numbers, never invent different ones. The cup letter is her size-identity (volume-anchored, the same for every shape); the bust cm is the shape-adjusted tape measurement — firm and gravity-defying shapes tape larger than the letter alone implies, and that is correct, not a contradiction. Bust size changes ONLY when a growth directive in this block says it changed — never invent growth, shrinkage, or ambient size drift. If world lore, story rules, or character text describe growth timing, cause, speed, or limits differently, THIS BLOCK WINS — lore supplies flavor and mechanism; this block alone decides when growth happens and how much.${actNote}
 ${body}`
 }

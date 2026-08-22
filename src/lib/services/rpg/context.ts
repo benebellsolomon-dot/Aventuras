@@ -143,9 +143,13 @@ export function buildCheckResultBlock(record: CheckRecord): string {
     // Pre-flight growth verdict (be/preview.ts): the engine already knows
     // whether this turn's earned growth can land on her, so the narrator is
     // told BEFORE it writes rather than corrected a turn later.
-    const verdictDirective = record.growthVerdict
-      ? GROWTH_VERDICT_DIRECTIVES[record.growthVerdict]
-      : null
+    // Records written under the short-lived `conditional` verdict (research/66
+    // first cut) read as the act-driven bank: still a no-growth-now line.
+    const verdictKey: GrowthVerdict | undefined =
+      (record.growthVerdict as string | undefined) === 'conditional'
+        ? 'banks_for_act'
+        : record.growthVerdict
+    const verdictDirective = verdictKey ? GROWTH_VERDICT_DIRECTIVES[verdictKey] : null
     if (verdictDirective) lines.push(verdictDirective)
   }
   lines.push(
@@ -191,7 +195,9 @@ export function buildCheckTaggingInstruction(
     CHECK_TAGGING_RULE[rate],
     `Valid skill ids: ${skillList}.`,
     'DC rubric: 8 trivial-but-fumblable · 11 easy · 14 moderate · 17 hard · 20 very hard · 24 near-impossible. Judge from the fiction, not the player convenience.',
-    "If a choice channels the player's catalytic power (growth influence, transformation magic), also set `essenceCost` 1-3 by potency. Do not tag more than 3 of the choices.",
+    offerGrowth
+      ? "If a choice channels the player's catalytic power (growth influence, transformation magic), also set `essenceCost` 1-3 by potency. Do not tag more than 3 of the choices."
+      : "If a choice channels the player's catalytic power for some other end (transformation magic, a charm, a surge of milk), also set `essenceCost` 1-3 by potency. Do not tag more than 3 of the choices.",
     'When the action targets a specific character, set `targetCharacter` to her exact name — her trust and traits modify the check.',
     '`induce_lactation` and `milking` actions use the `milking` skill and must set `targetCharacter`.',
     'Set `spellId` ONLY for an explicit cast of a spell the player already knows, named in the choice text. Physical, sexual, social, and mundane actions are never casts — leave `spellId` off them. Never invent an id, and never point it at a spell the player has not learned.',

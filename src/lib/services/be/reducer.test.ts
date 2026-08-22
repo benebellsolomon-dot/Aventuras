@@ -735,7 +735,8 @@ describe('absolute growth rule — act-driven growth (cosmology trigger gate)', 
     expect(cast.state.growthBonusCm).toBeCloseTo(2 * SPELL_GROWTH_CM_PER_INTENSITY)
     expect(cast.log.at(-1)).toMatchObject({ outcome: 'banked', delta: 0 })
     expect(cast.log.at(-1)?.note).toContain(GROWTH_BONUS_NOTE)
-    // Same on a triggered turn: the cast banks, the act consumes the bank.
+    // A cast on the ACT turn itself banks for the NEXT act (the narrator was told
+    // "banks into her next act"): this act lands the baseline only, the bank stays.
     const castAndAct = reduceCharacterBody(
       base(),
       [growthEvent({ guaranteed: true, intensity: 2 })],
@@ -745,9 +746,26 @@ describe('absolute growth rule — act-driven growth (cosmology trigger gate)', 
       undefined,
       TRIGGERED,
     )
-    const cm = NO_TICK.growthBaselineCm + 2 * SPELL_GROWTH_CM_PER_INTENSITY
-    expect(castAndAct.state.tier).toBe(base().tier + expectedTiers(cm))
-    expect(castAndAct.state.growthBonusCm).toBeUndefined()
+    expect(castAndAct.state.tier).toBe(base().tier + expectedTiers(NO_TICK.growthBaselineCm))
+    expect(castAndAct.state.growthBonusCm).toBeCloseTo(2 * SPELL_GROWTH_CM_PER_INTENSITY)
+    // …and the next act consumes it.
+    const nextAct = reduceCharacterBody(
+      castAndAct.state,
+      [],
+      NO_TICK,
+      'next',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    const cm =
+      NO_TICK.growthBaselineCm +
+      2 * SPELL_GROWTH_CM_PER_INTENSITY +
+      (castAndAct.state.growthCarryCm ?? 0)
+    expect(nextAct.state.tier).toBe(
+      castAndAct.state.tier + tiersForCm(castAndAct.state.tier, cm, null).tiers,
+    )
+    expect(nextAct.state.growthBonusCm).toBeUndefined()
     // Farming: many casts cap at MAX_GROWTH_BONUS_CM.
     let farmed = base()
     for (let i = 0; i < 12; i++) {
@@ -765,11 +783,32 @@ describe('absolute growth rule — act-driven growth (cosmology trigger gate)', 
     expect(farmed.tier).toBe(base().tier)
   })
 
-  test('the size cap and the lock still bind an act; a locked act keeps bank and carry', () => {
+  test('the size cap and the lock still bind an act; both keep bank and carry', () => {
     const capped: BeStoryConfig = { ...NO_TICK, sizeCapTier: base().tier + 1 }
-    const r = reduceCharacterBody(base(), [], capped, 'cap', 'Lucy', undefined, TRIGGERED)
+    const r = reduceCharacterBody(
+      { ...base(), growthBonusCm: 3 },
+      [],
+      capped,
+      'cap',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
     expect(r.state.tier).toBe(base().tier + 1)
-    expect(r.log.find((e) => e.kind === 'act')?.note).toContain('at the size cap')
+    expect(r.state.growthBonusCm).toBeUndefined() // consumed by the act that reached the cap
+    // At the cap already: nothing lands and the bank is kept.
+    const atCap = reduceCharacterBody(
+      { ...base(), tier: base().tier + 1, growthBonusCm: 3 },
+      [],
+      capped,
+      'cap2',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    expect(atCap.state.tier).toBe(base().tier + 1)
+    expect(atCap.log.find((e) => e.kind === 'act')).toMatchObject({ outcome: 'ineligible' })
+    expect(atCap.state.growthBonusCm).toBe(3)
     const locked: BodyState = { ...base(), locked: true, growthBonusCm: 3 }
     const l = reduceCharacterBody(
       locked,
@@ -782,9 +821,51 @@ describe('absolute growth rule — act-driven growth (cosmology trigger gate)', 
     )
     expect(l.state.tier).toBe(base().tier)
     expect(l.log.find((e) => e.kind === 'act')).toMatchObject({ outcome: 'muzzled' })
-    // The lock outranks the gate: a cast on a locked girl is muzzled, not banked; her bank is kept.
     expect(l.log.find((e) => e.kind === 'catalyst')).toMatchObject({ outcome: 'muzzled' })
     expect(l.state.growthBonusCm).toBe(3)
+  })
+
+  test('a sub-tier baseline builds (carry) without a visible change and no lastGrowth; the carry lands later', () => {
+    const tiny: BeStoryConfig = { ...NO_TICK, growthBaselineCm: 0.5 }
+    const first = reduceCharacterBody(base(), [], tiny, 'tiny1', 'Lucy', undefined, TRIGGERED)
+    expect(first.state.tier).toBe(base().tier)
+    expect(first.state.lastGrowth).toBeUndefined()
+    expect(first.log.find((e) => e.kind === 'act')).toMatchObject({ outcome: 'none' })
+    expect(first.state.growthCarryCm).toBeCloseTo(0.5)
+    let state = first.state
+    for (let i = 0; i < 4; i++)
+      state = reduceCharacterBody(state, [], tiny, `tiny-${i}`, 'Lucy', undefined, TRIGGERED).state
+    expect(state.tier).toBeGreaterThan(base().tier)
+  })
+
+  test('key identity: a girl with a bank keeps it in place across an untriggered turn (no-op write stays possible)', () => {
+    const banked = reduceCharacterBody(
+      base(),
+      [growthEvent({ guaranteed: true })],
+      NO_TICK,
+      'k1',
+      'Lucy',
+      undefined,
+      GATED,
+    ).state
+    const again = reduceCharacterBody(banked, [], NO_TICK, 'k2', 'Lucy', undefined, GATED).state
+    expect(JSON.stringify(again)).toBe(
+      JSON.stringify({
+        ...banked,
+        cooldown: again.cooldown,
+        lastGrowth: undefined,
+        driftNote: undefined,
+      }),
+    )
+    // Legacy (no cosmology) clears stale carriers.
+    const cleared = reduceCharacterBody(
+      { ...base(), growthBonusCm: 4, growthCarryCm: 0.3 },
+      [],
+      NO_TICK,
+      'legacy',
+    ).state
+    expect(cleared.growthBonusCm).toBeUndefined()
+    expect(cleared.growthCarryCm).toBeUndefined()
   })
 
   test('no gate object = legacy behavior (stories without a cosmology roll as before)', () => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { clampGrowthBaselineCm } from '$lib/services/be'
   import * as RadioGroup from '$lib/components/ui/radio-group'
   import { Button } from '$lib/components/ui/button'
   import { Label } from '$lib/components/ui/label'
@@ -375,9 +376,9 @@
           The ABSOLUTE growth rule. When set, her body changes size only on a turn where this act
           completes in the narration — the classifier must quote that sentence verbatim and the
           engine verifies the quote. No event, spell, check, pressure, or previously banked growth
-          lands on any other turn (earned growth waits for the next such turn). With a cosmology set
-          the event-kind list below is ignored — the verified act decides. Leave empty for the
-          looser event-kind rule.
+          lands on any other turn — spells, skills and magic bank extra cm into her next act
+          instead. With a cosmology set the event-kind list is not used (the verified act decides).
+          Leave empty for the looser event-kind rule.
         </p>
       </div>
     {/if}
@@ -387,7 +388,7 @@
           label="Baseline growth per act (cm of bust)"
           id="be-growth-baseline-cm"
           type="number"
-          step="0.5"
+          step="0.25"
           min="0.25"
           max="30"
           value={beGrowthBaselineCm ?? ''}
@@ -395,7 +396,9 @@
           oninput={(e) => {
             const n = Number(e.currentTarget.value)
             onBeGrowthBaselineCmChange(
-              e.currentTarget.value.trim() === '' || !Number.isFinite(n) ? undefined : n,
+              e.currentTarget.value.trim() === '' || !Number.isFinite(n)
+                ? undefined
+                : clampGrowthBaselineCm(n),
             )
           }}
         />
@@ -417,7 +420,7 @@
         />
       </div>
     {/if}
-    {#if beMode && onBeGrowthEligibleKindsChange}
+    {#if beMode && onBeGrowthEligibleKindsChange && !(beGrowthCosmology ?? '').trim()}
       <div class="grid w-full items-center gap-2 pb-2">
         <Label>Growth-Eligible Events</Label>
         <p class="text-muted-foreground text-xs">

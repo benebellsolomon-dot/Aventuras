@@ -256,7 +256,9 @@ export function detectDrift(narrative: string, name: string, state: BodyState): 
   }
 
   // 4. Omission (research/41): a staged growth directive that the prose ignored.
-  if (state.lastGrowth && !GROWTH_LANGUAGE.test(text)) {
+  // Act-driven growth (research/66 §magnitude) was rendered in the act's own
+  // scene; the next scene is NOT obliged to render it again.
+  if (state.lastGrowth && state.lastGrowth.cm === undefined && !GROWTH_LANGUAGE.test(text)) {
     findings.push({
       kind: 'growth_omitted',
       note: `${name}'s recent growth landed but was never rendered — render the visible change now, at her current tracked size`,

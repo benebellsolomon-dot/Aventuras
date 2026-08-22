@@ -4245,6 +4245,7 @@ class StoryStore {
         charBondEvents.length === 0 &&
         charExposureEvents.length === 0 &&
         charSupplyDelta === 0 &&
+        !triggeredCharacterIds.has(character.id) &&
         state.cooldown === 0 &&
         !state.lastGrowth &&
         !state.pendingGrowth &&
@@ -4276,7 +4277,8 @@ class StoryStore {
         // Present-only ruling: off-screen characters keep time but never
         // change size unseen (fill/pressure/pity/pending all held). Events
         // imply presence even when the classifier's scene list misses her.
-        ticksEnabled: isPresent || charEvents.length > 0,
+        // A verified act trigger IS presence: the act happened to her on the page.
+        ticksEnabled: isPresent || charEvents.length > 0 || triggeredCharacterIds.has(character.id),
         ...(charConditions ? { softConditions: charConditions } : {}),
         ...(driftFindings.length > 0 ? { driftFindings } : {}),
         ...(charBondEvents.length > 0 ? { bondEvents: charBondEvents } : {}),

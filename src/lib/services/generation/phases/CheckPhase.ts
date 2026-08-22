@@ -97,7 +97,7 @@ function previewGrowthVerdict(
     critPierce: record.band === 'crit',
     // Absolute growth rule (research/66): with a cosmology set, an earned landing
     // still needs the driving act ON THE PAGE — the preview mirrors the gated
-    // reducer and answers `conditional` instead of promising `lands`.
+    // reducer and answers `banks_for_act` instead of promising `lands`.
     gateRequired: growthGateRequired(context.story.settings),
   })
 }

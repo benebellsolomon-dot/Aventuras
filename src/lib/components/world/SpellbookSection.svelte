@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { growthGateRequired } from '$lib/services/be'
   // RPG Phase 4 spellbook (research/50). Reads story/ui directly like the
   // sibling sheet sections. The engine + persistence are done; this surface
   // lists known spells, researches new ones, and casts them at a target girl.
@@ -28,6 +29,11 @@
 
   const effectSummary = (spell: SpellEntry) => spell.state.effects.map((ef) => ef.kind).join(' · ')
 
+  // Act-driven stories (research/66 §magnitude): a growth spell never grows her
+  // directly — say so on the card; the cast still resolves and banks.
+  const actDriven = $derived(growthGateRequired(story.currentStory?.settings))
+  const growsDirectly = (spell: SpellEntry) =>
+    spell.state.effects.some((ef) => ef.kind === 'growth')
   // Per-spell target selection, keyed by spell id; defaults to the first girl.
   let targets = $state<Record<string, string>>({})
   const targetFor = (spellId: string) => targets[spellId] ?? girls[0]?.name ?? ''
@@ -97,7 +103,11 @@
           <div class="text-muted-foreground text-xs">
             {spell.state.school}
             {#if effectSummary(spell)}
-              <span class="text-muted-foreground/70">· {effectSummary(spell)}</span>
+              <span class="text-muted-foreground/70"
+                >· {effectSummary(spell)}{actDriven && growsDirectly(spell)
+                  ? ' · banks into her next act'
+                  : ''}</span
+              >
             {/if}
           </div>
           <div class="mt-1.5 flex items-center gap-1.5">

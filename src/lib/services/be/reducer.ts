@@ -39,7 +39,15 @@ import {
   GROWTH_BONUS_NOTE,
 } from './constants'
 import { growthBankHeadroom } from './preview'
-import { actGrowthCm, bankBonusCm, bonusCmForIntensity, fmtCm, tiersForCm } from './magnitude'
+import { tiersForCm } from './magnitude'
+import {
+  bankBonusCm,
+  bonusCmForIntensity,
+  fmtCm,
+  previewActGrowth,
+  safeBonusCm,
+  safeCarryCm,
+} from './magnitude'
 import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
 import { capacityMlPerSide, measurements } from './measurements'
 import {
@@ -87,6 +95,11 @@ const GROWTH_KINDS = new Set(['catalyst', 'contact', 'attempt'])
  * `banked` is absent for the mirror reason: an earned bank is growth deferred by
  * one beat, not a dry beat, and must not also buy a pity roll. */
 const DRY_OUTCOMES = new Set<GrowthOutcome>(['fail', 'partial', 'cooldown', 'muzzled'])
+
+/** The carry an act leaves behind, recomputed from the pre-land tier (one derivation with the preview). */
+const tiersForCmAfter = (act: { cm: number }, preLandTier: number): { carryCm: number } => ({
+  carryCm: tiersForCm(preLandTier, act.cm, null).carryCm,
+})
 
 function decayConditions(conditions: ReadonlyArray<BodyCondition>): BodyCondition[] {
   const next: BodyCondition[] = []
@@ -175,8 +188,11 @@ export function reduceCharacterBody(
   // entirely unless a verified trigger names her this turn.
   const gated = extras?.growthGate?.requireTrigger === true
   const triggerBlocked = gated && extras?.growthGate?.triggered !== true
-  let growthBonusCm = Math.max(0, state.growthBonusCm ?? 0)
-  let growthCarryCm = Math.max(0, state.growthCarryCm ?? 0)
+  // The PRE-turn bank is what this turn's act consumes; casts made this turn
+  // bank for the NEXT act (the narrator was told "banks into her next act").
+  const preTurnBankCm = gated ? safeBonusCm(state.growthBonusCm) : 0
+  let growthBonusCm = gated ? preTurnBankCm : 0
+  let growthCarryCm = gated ? safeCarryCm(state.growthCarryCm) : 0
   // Lactation (research/49): the block materializes ONLY on activation — an
   // untouched girl's state must stay key-identical (R1 neutral passthrough).
   let lactation: LactationState | undefined = state.lactation
@@ -601,47 +617,64 @@ export function reduceCharacterBody(
 
   // ---- Step 6b: act growth (research/66 §magnitude) — cosmology stories only ----
   // The verified act grows her by the story's baseline cm + whatever spells /
-  // skills / magic banked since the last act (+ the sub-tier carry). Exactly
-  // that many cm, every act — the narrator was told the same number up front
-  // (ACT GROWTH line), so prose and stats agree by construction. Cooldown does
-  // not apply: acts ARE the pacing. Lock and the size cap still bind.
+  // skills / magic banked BEFORE this turn (+ the sub-tier carry). Exactly the
+  // cm the ACT GROWTH line told the narrator (one shared derivation), so prose
+  // and stats agree by construction. Cooldown does not apply: acts ARE the
+  // pacing. Lock and the size cap still bind; a cast made this turn stays banked.
   if (gated && !triggerBlocked && ticksEnabled) {
-    const bankedCm = growthBonusCm
-    const carriedCm = growthCarryCm
-    const actCm = actGrowthCm(config, { growthBonusCm: bankedCm, growthCarryCm: carriedCm })
-    if (state.locked) {
+    const act = previewActGrowth(config, {
+      tier,
+      locked: state.locked,
+      growthBonusCm: preTurnBankCm,
+      growthCarryCm,
+    })
+    if (act.mode === 'locked') {
       log.push({
         character: characterName,
         kind: 'act',
         outcome: 'muzzled',
         delta: 0,
         tierAfter: tier,
-        note: `act growth ${fmtCm(actCm)} cm blocked (locked) — bank and carry kept`,
+        note: `act growth ${fmtCm(act.cm)} cm blocked (locked) — bank and carry kept`,
       })
-    } else {
-      const { tiers, carryCm } = tiersForCm(tier, actCm, config.sizeCapTier)
-      const landed = tiers > 0 ? landGrowth(tiers) : 0
-      // Cast, not annotated: TS narrows the `let` to its initializer (undefined)
-      // because landGrowth assigns it from inside a closure.
-      const landedGrowth = lastGrowth as BodyState['lastGrowth']
-      if (landed > 0 && landedGrowth) {
-        lastGrowth = { ...landedGrowth, cm: Math.round(actCm * 10) / 10 }
-      }
-      const atCap = config.sizeCapTier !== null && tier >= config.sizeCapTier
-      growthBonusCm = 0
-      growthCarryCm = atCap ? 0 : carryCm
-      const parts = [`baseline ${fmtCm(config.growthBaselineCm)}`]
-      if (bankedCm > 0) parts.push(`banked ${fmtCm(bankedCm)}`)
-      if (carriedCm > 0) parts.push(`carry ${fmtCm(carriedCm)}`)
+    } else if (act.mode === 'at_cap') {
+      // At the ceiling: nothing lands, and the bank is KEPT (paid for), like the lock.
       log.push({
         character: characterName,
         kind: 'act',
-        outcome: landed > 0 ? 'success' : atCap ? 'cooldown' : 'partial',
+        outcome: 'ineligible',
+        delta: 0,
+        tierAfter: tier,
+        note: `act growth ${fmtCm(act.cm)} cm — at the size cap, nothing lands (bank kept)`,
+      })
+    } else {
+      const landedBefore = (lastGrowth as BodyState['lastGrowth'])?.delta ?? 0
+      const landed = act.tiers > 0 ? landGrowth(act.tiers) : 0
+      // Cast, not annotated: TS narrows the `let` to its initializer (undefined)
+      // because landGrowth assigns it from inside a closure.
+      const landedGrowth = lastGrowth as BodyState['lastGrowth']
+      // The cm is the act's own: when something else also landed this turn (a
+      // legacy pending bank), the directive must not claim the act's cm for both.
+      if (landed > 0 && landedGrowth && landedBefore === 0) {
+        lastGrowth = { ...landedGrowth, cm: Math.round(act.cm * 10) / 10 }
+      }
+      const { carryCm } = tiersForCmAfter(act, tier - landed)
+      growthBonusCm -= preTurnBankCm // this turn's casts (if any) stay banked
+      growthCarryCm = carryCm
+      const parts = [`baseline ${fmtCm(config.growthBaselineCm)}`]
+      if (preTurnBankCm > 0) parts.push(`banked ${fmtCm(preTurnBankCm)}`)
+      if (safeCarryCm(state.growthCarryCm) > 0)
+        parts.push(`carry ${fmtCm(safeCarryCm(state.growthCarryCm))}`)
+      log.push({
+        character: characterName,
+        kind: 'act',
+        outcome: landed > 0 ? 'success' : 'none',
         delta: landed,
         tierAfter: tier,
-        note: `act growth ${fmtCm(actCm)} cm (${parts.join(' + ')}) → +${landed} tier${landed === 1 ? '' : 's'}${
-          atCap ? ', at the size cap' : `, carry ${fmtCm(growthCarryCm)} cm`
-        }`,
+        note:
+          landed > 0
+            ? `act growth ${fmtCm(act.cm)} cm (${parts.join(' + ')}) → +${landed} tier${landed === 1 ? '' : 's'}, carry ${fmtCm(growthCarryCm)} cm`
+            : `act growth ${fmtCm(act.cm)} cm (${parts.join(' + ')}) → builds toward her next size (carry ${fmtCm(growthCarryCm)} cm, no visible change)`,
       })
     }
   }
@@ -710,7 +743,11 @@ export function reduceCharacterBody(
       // counter stays BANKED at the threshold (tickChronic pins it) until the
       // roll actually happens. Resetting on a blocked fire permanently starved
       // the axis in stories where every growth arms a fresh cooldown.
-      if (state.locked) {
+      if (gated) {
+        // Act-driven story (research/66): growth comes only from the act's
+        // baseline — the chronic channel never rolls here (beats stay pinned,
+        // silently; no per-turn "blocked (cooldown)" row after each act either).
+      } else if (state.locked) {
         log.push({
           character: characterName,
           kind: 'supply',
@@ -728,9 +765,6 @@ export function reduceCharacterBody(
           tierAfter: tier,
           note: 'chronic supply blocked (cooldown)',
         })
-      } else if (gated) {
-        // Act-driven story: growth comes only from the act's baseline — the
-        // chronic channel never rolls here (beats stay pinned, silently).
       } else {
         const roll = seededRoll(`${seed}:chronic`)
         const outcome = resolveGrowthOutcome(roll, 1)
@@ -977,42 +1011,42 @@ export function reduceCharacterBody(
       ? { note: extras.driftFindings.map((f) => f.note).join('; ') }
       : undefined
 
-  // Drop the cosmology carriers from the spread so a cleared bank cannot survive.
-  const { growthBonusCm: _staleBonus, growthCarryCm: _staleCarry, ...restState } = state
-  void _staleBonus
-  void _staleCarry
+  const nextState: BodyState = {
+    ...state,
+    tier,
+    cooldown,
+    conditions,
+    // fluidType syncs to config (the story settings are authoritative) so the
+    // fill tick and the mass/context derivations always agree on the fluid.
+    fluids: { ...state.fluids, fillPercent, fluidType: config.fluidType },
+    pendingGrowth,
+    lastGrowth,
+    attitude,
+    arousal,
+    // Finite-guard: a NaN here would silently nuke the whole persisted record
+    // on the next readBodyState (all-or-nothing schema parse).
+    growthPressure: Number.isFinite(growthPressure) ? growthPressure : 0,
+    driftNote,
+    // Track fields spread conditionally: an untouched girl's state stays
+    // key-identical (the store's stringify no-op-write skip depends on it).
+    // Legacy `bond` passes through via ...state untouched; `rel` is
+    // authoritative once present (research/60).
+    ...(rel !== undefined ? { rel } : {}),
+    ...(dependence !== undefined ? { dependence } : {}),
+    ...(beatsSinceExposure !== undefined ? { beatsSinceExposure } : {}),
+    // Same conditional-spread contract: the lactation block appears only when
+    // it already existed or was created this turn (research/49 R1).
+    ...(lactation !== undefined ? { lactation } : {}),
+  }
+  // Cosmology carriers: set in place (an existing key keeps its position — the
+  // store's stringify no-op skip depends on key order) or removed when empty;
+  // a legacy girl never gains the keys.
+  if (growthBonusCm > 0) nextState.growthBonusCm = growthBonusCm
+  else delete nextState.growthBonusCm
+  if (growthCarryCm > 0) nextState.growthCarryCm = growthCarryCm
+  else delete nextState.growthCarryCm
   return {
-    state: {
-      ...restState,
-      tier,
-      cooldown,
-      conditions,
-      // fluidType syncs to config (the story settings are authoritative) so the
-      // fill tick and the mass/context derivations always agree on the fluid.
-      fluids: { ...state.fluids, fillPercent, fluidType: config.fluidType },
-      pendingGrowth,
-      lastGrowth,
-      attitude,
-      arousal,
-      // Finite-guard: a NaN here would silently nuke the whole persisted record
-      // on the next readBodyState (all-or-nothing schema parse).
-      growthPressure: Number.isFinite(growthPressure) ? growthPressure : 0,
-      // Cosmology-story carriers: present only when non-zero (key-identical
-      // output for every legacy girl; a cleared bank is dropped from restState).
-      ...(growthBonusCm > 0 ? { growthBonusCm } : {}),
-      ...(growthCarryCm > 0 ? { growthCarryCm } : {}),
-      driftNote,
-      // Track fields spread conditionally: an untouched girl's state stays
-      // key-identical (the store's stringify no-op-write skip depends on it).
-      // Legacy `bond` passes through via ...state untouched; `rel` is
-      // authoritative once present (research/60).
-      ...(rel !== undefined ? { rel } : {}),
-      ...(dependence !== undefined ? { dependence } : {}),
-      ...(beatsSinceExposure !== undefined ? { beatsSinceExposure } : {}),
-      // Same conditional-spread contract: the lactation block appears only when
-      // it already existed or was created this turn (research/49 R1).
-      ...(lactation !== undefined ? { lactation } : {}),
-    },
+    state: nextState,
     log,
     ...(milkYield !== undefined ? { milkYield } : {}),
   }

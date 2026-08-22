@@ -176,7 +176,7 @@
     {/if}
   </div>
 
-  {#if quirks.length > 0 || state.conditions.length > 0 || state.lastGrowth}
+  {#if quirks.length > 0 || state.conditions.length > 0 || state.lastGrowth || (state.growthBonusCm ?? 0) > 0}
     <div class="border-border/70 flex flex-wrap items-center gap-1 border-t px-3 py-2">
       {#each quirks as quirk (quirk.id)}
         <span
@@ -193,6 +193,13 @@
           title={condition.note ?? ''}>{condition.label}</span
         >
       {/each}
+      {#if (state.growthBonusCm ?? 0) > 0}
+        <span
+          class="rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-300"
+          title="Banked by spells/skills — lands on her next growth act"
+          >+{(state.growthBonusCm ?? 0).toFixed(1)} cm banked</span
+        >
+      {/if}
       {#if state.lastGrowth}
         <span class="ml-auto flex items-center gap-1 text-[11px] text-emerald-400">
           <TrendingUp class="h-3 w-3" /> grew this turn

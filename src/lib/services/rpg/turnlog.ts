@@ -30,6 +30,7 @@ const BE_LOG_STYLES: Readonly<Record<string, BeLogStyle>> = {
   induction: { label: 'induction', tint: 'border-l-sky-400/70' },
   supply: { label: 'supply', tint: 'border-l-fuchsia-400/70' },
   yield: { label: 'milk yield', tint: 'border-l-amber-400/80' },
+  act: { label: 'growth act', tint: 'border-l-emerald-400/80' },
 }
 
 /**

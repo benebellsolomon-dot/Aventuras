@@ -48,8 +48,10 @@ export const bodyStateSchema = z
       .object({ delta: z.number(), tierBefore: z.number(), cm: z.number().optional() })
       .passthrough()
       .optional(),
-    growthBonusCm: z.number().nonnegative().optional(),
-    growthCarryCm: z.number().nonnegative().optional(),
+    // Cosmology carriers: a bad value must not nuke the whole body state (the
+    // `rel` lesson) — it falls back to absent and the reducer re-clamps anyway.
+    growthBonusCm: z.number().finite().nonnegative().max(100).optional().catch(undefined),
+    growthCarryCm: z.number().finite().nonnegative().max(100).optional().catch(undefined),
     attitude: z.enum(['craving', 'accepting', 'conflicted', 'fearful', 'resentful']).optional(),
     arousal: z.number().min(0).max(100).optional(),
     growthPressure: z.number().nonnegative().optional(),
