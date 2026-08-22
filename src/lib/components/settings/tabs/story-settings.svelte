@@ -451,6 +451,53 @@
         onCheckedChange={(v) => story.updateStorySettings({ chekhovGun: v ? true : undefined })}
       />
     </div>
+
+    <div class="mt-4 flex items-center justify-between gap-4">
+      <div>
+        <Label for="gm-notebook" class="text-sm font-medium">GM's notebook</Label>
+        <p class="text-muted-foreground mt-1 text-xs">
+          A short, always-visible list of continuity notes the engine keeps for the narrator —
+          who knows what, standing pretenses, open threads. Applies from the next turn.
+        </p>
+      </div>
+      <Switch
+        id="gm-notebook"
+        checked={storySettings.gmNotebook ?? false}
+        onCheckedChange={(v) => story.updateStorySettings({ gmNotebook: v ? true : undefined })}
+      />
+    </div>
+
+    <div class="mt-4 flex items-center justify-between gap-4">
+      <div>
+        <Label for="npc-thoughts" class="text-sm font-medium">NPC inner voices</Label>
+        <p class="text-muted-foreground mt-1 text-xs">
+          The narrator may close a response with up to three characters' private thoughts, shown
+          under the entry instead of inside the prose. Flavor only — never engine state.
+        </p>
+      </div>
+      <Switch
+        id="npc-thoughts"
+        checked={storySettings.npcThoughts ?? false}
+        onCheckedChange={(v) => story.updateStorySettings({ npcThoughts: v ? true : undefined })}
+      />
+    </div>
+
+    {#if storySettings.beMode}
+      <div class="mt-4 flex items-center justify-between gap-4">
+        <div>
+          <Label for="rpg-titles" class="text-sm font-medium">Earned titles</Label>
+          <p class="text-muted-foreground mt-1 text-xs">
+            Clear accomplishments earn titles ("Charmer", "Slayer") on the sheet; each grants +1
+            on the skills it covers. At most one per turn, eight in all.
+          </p>
+        </div>
+        <Switch
+          id="rpg-titles"
+          checked={storySettings.rpgTitles ?? false}
+          onCheckedChange={(v) => story.updateStorySettings({ rpgTitles: v ? true : undefined })}
+        />
+      </div>
+    {/if}
   </div>
 
   <!-- ── RPG Display (Phase 5 W3) ─────────────────────────────────────────── -->

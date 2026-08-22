@@ -168,6 +168,9 @@ export interface StorySettings {
   worldSimFrequency?: 'off' | 'sparse' | 'lively' // E3 seeded background-event roll cadence (unset = off)
   npcAgendas?: boolean // E4 off-screen NPC agendas: classifier-proposed goals, deterministic ticking, [OFF-SCREEN] block (unset = off)
   chekhovGun?: boolean // E2 narrative-debt engine (research/62): classifier-observed setups, seeded firing, [CALLBACK] block (unset = off)
+  gmNotebook?: boolean // E5 GM's Notebook (research/65): classifier-maintained capped continuity notes, [GM NOTES] block (unset = off)
+  npcThoughts?: boolean // E6 NPC inner voices (research/65): narrator may emit <thought who> tags, stripped from prose and shown in a panel (unset = off)
+  rpgTitles?: boolean // E7 earned titles (research/65): classifier-detected accomplishments → sheet titles → +1 domain-locked check modifier (unset = off; needs the RPG sheet)
   // RPG layer display settings (Phase 5 W3) — DISPLAY-only, never injected into
   // the prompt (a prompt change would fragment the cache).
   rpgRollCardVerbosity?: 'compact' | 'full' // Roll-card detail: full math vs band+total (default: full)
