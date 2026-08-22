@@ -551,7 +551,7 @@ export function stripCharacterNames(prompt: string, presentCharacters: Character
 }
 
 /** Appearance reference (for subjects with no locked bank) as "field: value" parts. */
-function appearanceReference(vd: VisualDescriptors | null | undefined): string {
+export function appearanceReference(vd: VisualDescriptors | null | undefined): string {
   if (!vd) return ''
   const parts: string[] = []
   for (const field of APPEARANCE_FIELDS) {
@@ -572,7 +572,7 @@ function appearanceReference(vd: VisualDescriptors | null | undefined): string {
  * booru models know neither, and the dossier is copied nearly verbatim, so any
  * non-tag text here becomes wasted tokens inside CLIP's attention window.
  */
-function bodyStatePhrase(metadata: Character['metadata']): string | null {
+export function bodyStatePhrase(metadata: Character['metadata']): string | null {
   const state = readBodyState(metadata)
   if (!state) return null
   const tier = apparentTier(state)
@@ -590,7 +590,7 @@ function bodyStatePhrase(metadata: Character['metadata']): string | null {
  * the writer can copy it, AND merged deterministically at compose time so the
  * face survives even when the writer ignores it.
  */
-function expressionPhrase(metadata: Character['metadata']): string | null {
+export function expressionPhrase(metadata: Character['metadata']): string | null {
   const state = readBodyState(metadata)
   if (!state) return null
   const tags = engineExpressionTags(state)
@@ -598,7 +598,7 @@ function expressionPhrase(metadata: Character['metadata']): string | null {
 }
 
 /** Resolve the tagged subjects in tag order (skips names with no present match). */
-function resolveSubjects(present: Character[], tagNames: string[]): Character[] {
+export function resolveSubjects(present: Character[], tagNames: string[]): Character[] {
   const byName = new Map(present.map((c) => [c.name.toLowerCase(), c]))
   const out: Character[] = []
   const seen = new Set<string>()
@@ -774,7 +774,7 @@ Attire, props, architecture, and technology in your tags MUST fit this setting a
 }
 
 /** Trim the narrative beat to a bounded tail so it stays a hint, not the bulk. */
-function narrativeContext(narrativeText: string): string {
+export function narrativeContext(narrativeText: string): string {
   const trimmed = (narrativeText ?? '').trim()
   if (trimmed.length <= NARRATIVE_CONTEXT_CHARS) return trimmed || '(none)'
   return `…${trimmed.slice(-NARRATIVE_CONTEXT_CHARS)}`

@@ -333,3 +333,40 @@ export function hasPicTags(content: string): boolean {
 export function stripPicTags(content: string): string {
   return content.replace(/<pic\s+[^>]*?(?:\/>|>\s*<\/pic>)/gi, '')
 }
+
+/**
+ * Does a <pic> prompt read as booru tags rather than prose? A rating tag
+ * opening a comma list, count tags (1girl/1boy/solo/no humans), or a dense
+ * comma list of short fragments. Used to keep only the CURRENT image dialect's
+ * tags in the narrator's history — a story that moved from Illustrious to Krea
+ * still carries a dozen tag-dialect examples the narrator would otherwise copy
+ * over the new instructions (D5 live failure, research/64).
+ */
+export function looksBooruPrompt(prompt: string): boolean {
+  const p = prompt.trim()
+  if (/^(?:general|safe|sensitive|questionable|explicit)\s*,/i.test(p)) return true
+  if (/\b(?:1girl|2girls|3girls|1boy|2boys|no humans|1other|solo|multiple girls)\b/i.test(p))
+    return true
+  const segments = p
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (segments.length >= 8) {
+    const avgWords = segments.reduce((n, s) => n + s.split(/\s+/).length, 0) / segments.length
+    if (avgWords <= 3) return true
+  }
+  return false
+}
+
+/**
+ * Remove <pic> tags whose prompt is written in the OTHER dialect from content
+ * destined for the narrator's history: prose stories drop tag-dialect examples,
+ * booru stories drop prose ones. Same-dialect tags are kept (cadence/continuity).
+ */
+export function stripForeignDialectPicTags(content: string, dialect: 'prose' | 'booru'): string {
+  return content.replace(/<pic\s+([^>]*?)(?:\/>|>\s*<\/pic>)/gi, (match, attributes: string) => {
+    const prompt = matchAttribute(attributes, 'prompt') ?? ''
+    const isBooru = looksBooruPrompt(prompt)
+    return isBooru === (dialect === 'booru') ? match : ''
+  })
+}

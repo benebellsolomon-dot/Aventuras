@@ -25,7 +25,7 @@ import { settings } from '$lib/stores/settings.svelte'
 import { emitImageQueued, emitImageReady } from '$lib/services/events'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { assembleInlineImage } from './inlineAssembly'
-import { resolveBooruScenePrompt } from './booruPromptWriter'
+import { resolveScenePrompt } from './scenePromptWriter'
 import { pickImageSize } from './aspectRatio'
 import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
@@ -163,7 +163,7 @@ export class InlineImageTracker {
     // models the narration model's prose <pic> prompt is rewritten into proper
     // Danbooru tags (copying locked identity banks) by a focused LLM call.
     // Best-effort — returns tag.prompt unchanged when off / non-booru / on failure.
-    const tagPrompt = await resolveBooruScenePrompt({
+    const tagPrompt = await resolveScenePrompt({
       presentCharacters: this.getCharacters(),
       tagCharacterNames: tag.characters,
       scenePrompt: tag.prompt,

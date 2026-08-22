@@ -52,7 +52,9 @@ import type { PresetPack, FullPack } from './types'
 // content discipline (research/64).
 // v13: both scene-analysis templates ask for a per-scene `rating` (general /
 // sensitive / explicit) — drives explicit-beat image routing (research/64 B).
-const SERVICE_TEMPLATE_SYNC_VERSION = 13
+// v14: new `image-prose-scene-prompt` service template — the dedicated prose
+// scene writer for LLM-encoder image models (Krea 2 / Flux), research/64 §3c.
+const SERVICE_TEMPLATE_SYNC_VERSION = 14
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

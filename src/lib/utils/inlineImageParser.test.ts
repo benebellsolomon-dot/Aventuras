@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { extractPicTags } from './inlineImageParser'
+import { extractPicTags, looksBooruPrompt, stripForeignDialectPicTags } from './inlineImageParser'
 
 describe('extractPicTags rating', () => {
   it('reads the rating attribute (tolerant) and leaves it null when absent', () => {
@@ -27,5 +27,27 @@ describe('extractPicTags rating fallback from prompt text', () => {
         '<pic prompt="a quiet kitchen at dawn with bread cooling on the table" characters="" rating="general"></pic>',
     )
     expect(tags.map((t) => t.rating)).toEqual(['explicit', 'explicit', 'general'])
+  })
+})
+
+describe('looksBooruPrompt / stripForeignDialectPicTags', () => {
+  const booruTag =
+    '<pic prompt="sensitive, medium shot, 1girl, solo, long hair, blonde hair, yellow eyes, attic interior" characters="Amelia"></pic>'
+  const proseTag =
+    '<pic prompt="one woman: a young woman with long blonde hair and yellow eyes, clutching a journal in a dusty attic" characters="Amelia" rating="general"></pic>'
+
+  it('classifies tag lists vs prose', () => {
+    expect(looksBooruPrompt('sensitive, 1girl, solo, long hair')).toBe(true)
+    expect(looksBooruPrompt('general, wide shot, no humans, attic interior, dusty')).toBe(true)
+    expect(
+      looksBooruPrompt('one woman: a young woman with long blonde hair, standing in the rain'),
+    ).toBe(false)
+    expect(looksBooruPrompt('a, b, c, d, e, f, g, h, i')).toBe(true)
+  })
+
+  it("keeps only the current dialect's tags in narrator history", () => {
+    const content = `Beat one. ${booruTag} Beat two. ${proseTag}`
+    expect(stripForeignDialectPicTags(content, 'prose')).toBe(`Beat one.  Beat two. ${proseTag}`)
+    expect(stripForeignDialectPicTags(content, 'booru')).toBe(`Beat one. ${booruTag} Beat two. `)
   })
 })

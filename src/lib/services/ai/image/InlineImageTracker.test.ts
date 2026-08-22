@@ -72,6 +72,14 @@ vi.mock('./booruPromptWriter', () => ({
   resolveBooruScenePrompt: mocks.resolveBooruScenePrompt,
 }))
 
+// The tracker now calls the dialect dispatcher (booru writer, then the prose
+// writer); route it straight to the booru mock so the existing assertions on
+// what reached the writer stay meaningful and the prose writer's module graph
+// (context builder, stores) stays out of this unit test.
+vi.mock('./scenePromptWriter', () => ({
+  resolveScenePrompt: (input: { scenePrompt: string }) => mocks.resolveBooruScenePrompt(input),
+}))
+
 import { InlineImageTracker } from './InlineImageTracker'
 import type { Character } from '$lib/types'
 

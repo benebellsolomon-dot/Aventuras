@@ -17,7 +17,7 @@ import { getContentGuidelines } from './contentGuidelines'
 import { StyleReviewerService } from './StyleReviewerService'
 import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
-import { stripPicTags } from '$lib/utils/inlineImageParser'
+import { stripForeignDialectPicTags, stripPicTags } from '$lib/utils/inlineImageParser'
 import { settings } from '$lib/stores/settings.svelte'
 import { detectPromptDialect } from '../image/dialect'
 import {
@@ -66,7 +66,7 @@ You can embed images directly in your narrative using the <pic> tag. Images will
 
 **HOW THE IMAGE MODEL READS YOUR PROMPT (this decides what works):**
 The image model's text encoder is a language model (Krea 2 / Flux class). It reads the prompt as flowing English describing an image — colors, shapes, sizes, textures, quantities, and the spatial relationships of people and objects. So:
-- Write ONE dense paragraph of natural prose. No comma-separated tag lists, no keyword confetti.
+- Write ONE dense paragraph of natural prose. No comma-separated tag lists, no keyword confetti. If earlier <pic> tags in this conversation use a comma-separated tag format ("1girl, solo, …"), that was a different image model — do NOT imitate them; follow these rules.
 - What comes FIRST is what the model treats as the subject. Lead with the people (or the single subject), then what they are doing, then where, then light — style is appended automatically at the end.
 - No quality words ("masterpiece, best quality, 8k, ultra detailed", "highly detailed") — they are ignored at best. No weighting syntax like (word:1.3). No negatives ("no blur", "without X") — say what IS there instead ("sharp focus on her face").
 - Text that should appear in the image goes in double quotes: a sign that says "The Rusty Anchor".
@@ -776,11 +776,24 @@ export class NarrativeService {
     // Use all entries passed - these are already the visible (non-summarized) entries
     // Truncation/context management happens upstream via the memory system
 
+    // In inline mode the history keeps the CURRENT dialect's <pic> tags only:
+    // a story that moved from a booru model to Krea carries a dozen tag-dialect
+    // examples the narrator copies over the new prose instructions (D5 live
+    // failure, research/64). Outside inline mode every tag is stripped.
+    const historyDialect = inlineImageMode
+      ? detectPromptDialect(
+          settings.getImageProfile(settings.systemServicesSettings.imageGeneration.profileId ?? '')
+            ?.model ?? '',
+        )
+      : null
+
     // Format entries based on mode
     const historyParts: string[] = []
     for (const entry of entries) {
       // Strip <pic> tags if not in inline mode to prevent AI from immitating them
-      const content = inlineImageMode ? entry.content : stripPicTags(entry.content)
+      const content = historyDialect
+        ? stripForeignDialectPicTags(entry.content, historyDialect)
+        : stripPicTags(entry.content)
 
       if (entry.type === 'user_action') {
         const prefix = mode === 'creative-writing' ? '[DIRECTION]' : '[ACTION]'

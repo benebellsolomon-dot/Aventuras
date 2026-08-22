@@ -23,7 +23,7 @@ import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser'
 import { resolveRatingRoute } from './ratingRouting'
 import { assembleInlineImage } from './inlineAssembly'
-import { resolveBooruScenePrompt } from './booruPromptWriter'
+import { resolveScenePrompt } from './scenePromptWriter'
 import { pickImageSize } from './aspectRatio'
 import { bridgeIdentityAnchor } from './bridgeSpec'
 import { type ResolvedLora } from './loraBinding'
@@ -180,7 +180,7 @@ export class InlineImageGenerationService {
     // Danbooru tags (copying locked identity banks) by a focused LLM call.
     // Best-effort — returns tag.prompt unchanged when off / non-booru / on failure.
     const activeProviderType = settings.getImageProfile(profileId)?.providerType
-    const tagPrompt = await resolveBooruScenePrompt({
+    const tagPrompt = await resolveScenePrompt({
       presentCharacters: context.presentCharacters,
       tagCharacterNames: tag.characters,
       scenePrompt: tag.prompt,

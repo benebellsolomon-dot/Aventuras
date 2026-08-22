@@ -531,6 +531,37 @@ These are the characters we hold identity tags for. The scene may contain MORE p
 Fill the fields now — booru tags only, no prose. The pipeline orders and joins them.`,
 }
 
+const imageProseScenePromptTemplate: PromptTemplate = {
+  id: 'image-prose-scene-prompt',
+  name: 'Prose Scene Prompt Writer',
+  category: 'service',
+  description:
+    'Rewrites a narration <pic>/scene intent into one dense paragraph for LLM-encoder image models (Krea 2 / Flux)',
+  content: `You write the final prompt for an image model whose text encoder is a language model (Krea 2 / Flux class). It reads your prompt as a plain-English description of the finished picture — colors, shapes, sizes, textures, quantities, and the spatial relationships of people and objects — and it treats whatever comes FIRST as the subject.
+
+Output ONE dense paragraph of natural prose, 600-1400 characters. Rules:
+- No comma-separated tag lists, no keyword confetti. If the scene intent you are given IS a tag list ("sensitive, 1girl, solo, long hair, …"), translate every tag into the sentence it implies — do not copy tags through.
+- No quality or rendering words ("masterpiece, highly detailed, 8k, cinematic lighting" as a bare phrase), no (word:1.3) weighting, no negatives ("no blur" → say "sharp focus on her face"). No art-style words at all — the visual style is appended after your prompt and style words inside it fight that block.
+- Text that should appear in the image goes in double quotes.
+- Never use character names — the image model does not know them. Describe by traits.
+- ORDER: (1) count and subjects first — "one woman", "two women", "a man and a woman" — then each person IN FULL: age bracket, race/species if not human, skin tone, eye color, hair length/style/color, build, the breast-size band word given in the dossier (canon — always state it for a woman), current clothing and its state, a CONCRETE facial expression ("teeth bared in a fierce grin", "eyes wet, lips trembling" — never "neutral", never "emotional"), posture and held items. With several people, each gets their OWN sentence with a spatial anchor ("on the left, …; on the right, …; behind her, …") — never interleave two people's traits. (2) What they are doing and how they relate in space; an act already under way is described as under way. (3) Camera: shot type and angle in plain phrases ("medium shot from a slight low angle", "close-up", "shallow depth of field"). (4) Environment and light last: setting, time of day, the NAMED light source and its quality, atmosphere, and named objects with their placement.
+- CONTENT DISCIPLINE: depict only what the narrative beat and scene intent actually show. Clothing, nudity and any physical or sexual act must come from this beat — never from a character's stats or the story's rating; a clothed conversation is drawn clothed. When the beat IS explicit, describe it literally and anatomically in full sentences — who is where, what is bare, what touches what — with no euphemism, slang, or rating labels (no "uncensored", no "nsfw").
+- Honor the Camera/POV, Story setting and Current location blocks when present: era-correct attire and props, protagonist framed as the story's POV dictates.`,
+  userContent: `## Scene intent (from the narration — may be prose or a tag list; translate, do not copy)
+{{ sceneIntent }}
+
+## Narrative beat (context — the moment being illustrated is the LAST thing described)
+{{ narrativeBeat }}
+
+## Subjects in frame: {{ subjectCount }}
+{{ subjectDossier }}
+
+{{ storySetting }}
+{{ povGuidance }}
+{{ locationBlock }}
+Write the single paragraph now.`,
+}
+
 export const imageTemplates: PromptTemplate[] = [
   classicAnimeStyleTemplate,
   softAnimeStyleTemplate,
@@ -544,4 +575,5 @@ export const imageTemplates: PromptTemplate[] = [
   backgroundImagePromptAnalysisTemplate,
   imageTagBankGenerationTemplate,
   imageBooruScenePromptTemplate,
+  imageProseScenePromptTemplate,
 ]

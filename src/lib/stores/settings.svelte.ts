@@ -576,6 +576,7 @@ export function getDefaultImageGenerationSettings(): ImageGenerationServiceSetti
     reasoningEffort: 'high',
     manualBody: '',
     dedicatedBooruPromptWriter: true, // On by default; booru-gated + best-effort
+    dedicatedProsePromptWriter: true, // On by default; prose-gated + best-effort (research/64)
     backgroundProfileId: null,
     backgroundSize: '1280x720',
     backgroundBlur: 2, // Default blur for atmosphere

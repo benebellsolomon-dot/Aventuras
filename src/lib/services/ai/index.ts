@@ -69,7 +69,7 @@ import type { InlineImageContext, ImageAnalysisContext } from './image'
 import { generateImage as registryGenerateImage } from './image/providers/registry'
 import { effectiveBeatRating, resolveRatingRoute } from './image/ratingRouting'
 import { assembleInlineImage } from './image/inlineAssembly'
-import { resolveBooruScenePrompt } from './image/booruPromptWriter'
+import { resolveScenePrompt } from './image/scenePromptWriter'
 import { type ResolvedLora } from './image/loraBinding'
 import type { StructuredImageSpecInput } from './image/providers/types'
 import { EntryInjector, MemoryService, NarrativeService } from './generation'
@@ -151,6 +151,8 @@ export interface ImageGenerationServiceSettings {
   // rides the 'imageGeneration' service preset. Best-effort — falls back to the
   // original prompt on any failure, so turning it off is never worse than before.
   dedicatedBooruPromptWriter: boolean
+  /** Rewrite <pic>/scene prompts into a dense Krea/LLM-encoder paragraph for prose models (research/64). Default on. */
+  dedicatedProsePromptWriter?: boolean
 
   // Background image settings
   backgroundProfileId: string | null // API profile for background image generation
@@ -1116,7 +1118,7 @@ class AIService {
     // for portrait generation, which has its own full-body/plain-bg format.
     const tagPrompt = scene.generatePortrait
       ? scene.prompt
-      : await resolveBooruScenePrompt({
+      : await resolveScenePrompt({
           presentCharacters,
           tagCharacterNames: scene.characters,
           scenePrompt: scene.prompt,

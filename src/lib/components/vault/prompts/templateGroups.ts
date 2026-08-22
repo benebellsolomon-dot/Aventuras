@@ -56,6 +56,7 @@ const TEMPLATE_GROUP_MAP: Record<string, string> = {
   // Dedicated booru scene-prompt writer — rendered by booruPromptWriter via
   // ContextBuilder; converts a scene into one Danbooru-tag image prompt.
   'image-booru-scene-prompt': 'Image',
+  'image-prose-scene-prompt': 'Image',
 
   // Translation
   'translate-narration': 'Translation',
