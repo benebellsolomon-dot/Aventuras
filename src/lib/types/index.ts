@@ -173,6 +173,7 @@ export interface StorySettings {
   rpgTitles?: boolean // E7 earned titles (research/65): classifier-detected accomplishments → sheet titles → +1 domain-locked check modifier (unset = off; needs the RPG sheet)
   // RPG layer display settings (Phase 5 W3) — DISPLAY-only, never injected into
   // the prompt (a prompt change would fragment the cache).
+  rpgCheckTaggingRate?: 'sparing' | 'frequent' // D5 knob (research/63): how readily action choices get a skill check — sparing = real risk only (default, byte-stable unset), frequent = any action with a conceivable failure mode (DC 8–11), 1–3 per turn
   rpgRollCardVerbosity?: 'compact' | 'full' // Roll-card detail: full math vs band+total (default: full)
   rpgTurnLogLength?: number // Max rows in the Harem-tab turn log (default: 30)
 }

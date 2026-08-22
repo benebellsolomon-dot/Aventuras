@@ -456,7 +456,10 @@ export class ContextBuilder {
           })
         }
         checkTaggingInstruction = [
-          buildCheckTaggingInstruction(sheet),
+          buildCheckTaggingInstruction(
+            sheet,
+            story.settings?.rpgCheckTaggingRate === 'frequent' ? 'frequent' : 'sparing',
+          ),
           buildGatedActionsInstruction(gateInputs),
         ]
           .filter(Boolean)

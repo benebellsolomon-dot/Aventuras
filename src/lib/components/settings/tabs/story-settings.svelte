@@ -499,6 +499,32 @@
           onCheckedChange={(v) => story.updateStorySettings({ rpgTitles: v ? true : undefined })}
         />
       </div>
+
+      <div class="mt-4">
+        <Label class="text-sm font-medium">Skill-check frequency</Label>
+        <p class="text-muted-foreground mt-1 mb-2 text-xs">
+          How readily offered actions carry a dice check (D5 knob). Applies from the next turn.
+        </p>
+        <RadioGroup.Root
+          value={storySettings.rpgCheckTaggingRate ?? 'sparing'}
+          onValueChange={(v) =>
+            story.updateStorySettings({
+              rpgCheckTaggingRate: v === 'frequent' ? 'frequent' : undefined,
+            })}
+          class="grid grid-cols-2 gap-2"
+        >
+          {#each [{ value: 'sparing', label: 'Sparing', desc: 'real risk of failure only' }, { value: 'frequent', label: 'Frequent', desc: '1–3 per turn, any fumblable action (DC 8–11)' }] as opt (opt.value)}
+            <Label
+              for={`rpg-tagging-${opt.value}`}
+              class="border-muted bg-popover hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 flex cursor-pointer flex-col items-start justify-center gap-1 rounded-md border-2 p-3"
+            >
+              <RadioGroup.Item value={opt.value} id={`rpg-tagging-${opt.value}`} class="sr-only" />
+              <span class="font-medium">{opt.label}</span>
+              <span class="text-muted-foreground text-xs font-normal">{opt.desc}</span>
+            </Label>
+          {/each}
+        </RadioGroup.Root>
+      </div>
     {/if}
   </div>
 

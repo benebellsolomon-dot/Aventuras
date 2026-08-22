@@ -156,4 +156,18 @@ describe('summaries and tagging instruction', () => {
     expect(instruction).toContain('DC rubric')
     expect(instruction).toContain('essenceCost')
   })
+
+  it('tagging rate: unset/sparing keeps the original REAL-risk rule; frequent swaps only that line (D5 knob)', () => {
+    const sparing = buildCheckTaggingInstruction(sheet())
+    expect(sparing).toBe(buildCheckTaggingInstruction(sheet(), 'sparing'))
+    expect(sparing).toContain('carries REAL risk of failure')
+    const frequent = buildCheckTaggingInstruction(sheet(), 'frequent')
+    expect(frequent).toContain('Tag 1-3 choices per turn')
+    expect(frequent).not.toContain('carries REAL risk of failure')
+    // Everything else is identical — same line count, same skill list + rubric.
+    const sLines = sparing.split('\n')
+    const fLines = frequent.split('\n')
+    expect(fLines.length).toBe(sLines.length)
+    expect(fLines.filter((l, i) => l !== sLines[i])).toHaveLength(1)
+  })
 })

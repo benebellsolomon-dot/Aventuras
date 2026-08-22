@@ -156,12 +156,26 @@ export function buildCheckResultBlock(record: CheckRecord): string {
  * Choice-generator instruction: how to tag risky choices with skill/dc/cost.
  * Rendered into the action-choices template only for BE-mode stories.
  */
-export function buildCheckTaggingInstruction(sheet: RpgSheet): string {
+/** D5 knob (research/63): how readily the choice generator tags a check. */
+export type CheckTaggingRate = 'sparing' | 'frequent'
+
+/** The per-rate tagging rule — 'sparing' is the original wording (byte-stable for stories with the setting unset). */
+const CHECK_TAGGING_RULE: Readonly<Record<CheckTaggingRate, string>> = {
+  sparing:
+    'For each choice, decide whether it carries REAL risk of failure. If it does, add `skill` and `dc` fields; leave safe choices untagged (no skill, no dc).',
+  frequent:
+    'Tag 1-3 choices per turn: any physical or social action with a conceivable failure mode gets a check (add `skill` and `dc`; most land at DC 8-11). Only pure conversation, observation, or trivially safe choices stay untagged (no skill, no dc).',
+}
+
+export function buildCheckTaggingInstruction(
+  sheet: RpgSheet,
+  rate: CheckTaggingRate = 'sparing',
+): string {
   const skillList = SKILLS.map((s) => `${s.id} (${ATTRIBUTE_LABELS[s.attribute]})`).join(', ')
   return [
     '## Skill Check Tagging',
     `The player has an RPG sheet: ${buildPlayerSheetSummary(sheet)}.`,
-    'For each choice, decide whether it carries REAL risk of failure. If it does, add `skill` and `dc` fields; leave safe choices untagged (no skill, no dc).',
+    CHECK_TAGGING_RULE[rate],
     `Valid skill ids: ${skillList}.`,
     'DC rubric: 8 trivial-but-fumblable · 11 easy · 14 moderate · 17 hard · 20 very hard · 24 near-impossible. Judge from the fiction, not the player convenience.',
     "If a choice channels the player's catalytic power (growth influence, transformation magic), also set `essenceCost` 1-3 by potency. Do not tag more than 3 of the choices.",
