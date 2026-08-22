@@ -33,18 +33,20 @@ export function tiersForCm(
   tier: number,
   cm: number,
   sizeCapTier: number | null,
-): { tiers: number; carryCm: number } {
+): { tiers: number; carryCm: number; clipped: boolean } {
   const start = Number.isFinite(tier) ? Math.max(0, Math.floor(tier)) : 0
   const budget = Number.isFinite(cm) ? Math.max(0, cm) : 0
   let current = start
   let spent = 0
   for (;;) {
     if (sizeCapTier !== null && current >= sizeCapTier) {
-      return { tiers: current - start, carryCm: 0 }
+      return { tiers: current - start, carryCm: 0, clipped: false }
     }
     // Per-act ceiling: the excess is discarded, never carried (a runaway
     // baseline or a corrupt carrier must not loop or dump dozens of tiers).
-    if (current - start >= MAX_TIERS_PER_ACT) return { tiers: current - start, carryCm: 0 }
+    if (current - start >= MAX_TIERS_PER_ACT) {
+      return { tiers: current - start, carryCm: 0, clipped: true }
+    }
     const step = cmPerTierAt(current)
     if (!(step > 0) || spent + step > budget + EPSILON) break
     spent += step
@@ -53,6 +55,7 @@ export function tiersForCm(
   return {
     tiers: current - start,
     carryCm: Math.min(MAX_GROWTH_CARRY_CM, Math.max(0, budget - spent)),
+    clipped: false,
   }
 }
 
@@ -96,12 +99,26 @@ export function previewActGrowth(
   tiers: number
   tierAfter: number
   bankedCm: number
+  /** The carry the act leaves (cap-consistent: computed on the same ladder the act climbs). */
+  carryCm: number
+  /** The per-act tier ceiling clipped this act (excess cm discarded — say so in the log). */
+  clipped: boolean
   mode: 'grows' | 'builds' | 'at_cap' | 'locked'
 } {
   const cm = actGrowthCm(config, state)
   const bankedCm = safeBonusCm(state.growthBonusCm)
-  if (state.locked) return { cm, tiers: 0, tierAfter: state.tier, bankedCm, mode: 'locked' }
-  const { tiers } = tiersForCm(state.tier, cm, config.sizeCapTier)
+  if (state.locked) {
+    return {
+      cm,
+      tiers: 0,
+      tierAfter: state.tier,
+      bankedCm,
+      carryCm: 0,
+      clipped: false,
+      mode: 'locked',
+    }
+  }
+  const { tiers, carryCm, clipped } = tiersForCm(state.tier, cm, config.sizeCapTier)
   const atCap =
     config.sizeCapTier !== null && state.tier + tiers >= config.sizeCapTier && tiers === 0
   return {
@@ -109,6 +126,8 @@ export function previewActGrowth(
     tiers,
     tierAfter: state.tier + tiers,
     bankedCm,
+    carryCm,
+    clipped,
     mode: atCap ? 'at_cap' : tiers === 0 ? 'builds' : 'grows',
   }
 }

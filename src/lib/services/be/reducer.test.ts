@@ -904,4 +904,48 @@ describe('absolute growth rule — act-driven growth (cosmology trigger gate)', 
     const open = reduceCharacterBody(pressured, [], NO_TICK, 'pity')
     expect(open.log.find((e) => e.kind === 'pressure')?.note).toContain('pity roll')
   })
+
+  test('fix-diff F1: a cast on the act turn survives even with a full pre-turn bank; the act consumes only the pre-turn bank', () => {
+    const full: BodyState = { ...base(), growthBonusCm: MAX_GROWTH_BONUS_CM }
+    const r = reduceCharacterBody(
+      full,
+      [growthEvent({ guaranteed: true, intensity: 2 })],
+      NO_TICK,
+      'f1',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    expect(r.state.growthBonusCm).toBeCloseTo(2 * SPELL_GROWTH_CM_PER_INTENSITY)
+    expect(r.state.tier).toBe(
+      base().tier +
+        tiersForCm(base().tier, NO_TICK.growthBaselineCm + MAX_GROWTH_BONUS_CM, null).tiers,
+    )
+    expect(r.log.find((e) => e.kind === 'catalyst')?.note).toContain(
+      `+${(2 * SPELL_GROWTH_CM_PER_INTENSITY).toFixed(1)} cm`,
+    )
+  })
+
+  test('fix-diff F2/F3: a legacy pending that lands with the act still marks the growth as already rendered, and the act lands what the pre-turn preview promised', () => {
+    const pending: BodyState = { ...base(), pendingGrowth: { delta: 1, source: 'catalyst' } }
+    const promised = tiersForCm(base().tier, NO_TICK.growthBaselineCm, null).tiers
+    const r = reduceCharacterBody(pending, [], NO_TICK, 'f2', 'Lucy', undefined, TRIGGERED)
+    expect(r.state.tier).toBe(base().tier + 1 + promised)
+    expect(r.state.lastGrowth?.cm).toBe(NO_TICK.growthBaselineCm)
+  })
+
+  test('fix-diff F4: an act that hits the size cap leaves no phantom carry', () => {
+    const capped: BeStoryConfig = { ...NO_TICK, sizeCapTier: base().tier + 1 }
+    const r = reduceCharacterBody(
+      { ...base(), growthBonusCm: 3 },
+      [],
+      capped,
+      'f4',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    expect(r.state.tier).toBe(base().tier + 1)
+    expect(r.state.growthCarryCm).toBeUndefined()
+  })
 })

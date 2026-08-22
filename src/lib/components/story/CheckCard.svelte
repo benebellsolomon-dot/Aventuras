@@ -68,7 +68,9 @@
         <div class="text-pink-300/80">
           {row.character}: {row.kind} → {row.outcome}{row.delta > 0
             ? ` (+${row.delta} tier → ${row.tierAfter})`
-            : ''}{row.outcome === 'banked' || row.kind === 'act' ? ` · ${row.note ?? ''}` : ''}
+            : ''}{(row.outcome === 'banked' || row.kind === 'act') && row.note
+            ? ` · ${row.note}`
+            : ''}
         </div>
       {/each}
     </div>

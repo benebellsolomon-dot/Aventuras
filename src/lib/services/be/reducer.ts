@@ -37,9 +37,9 @@ import {
   fluidProfile,
   GROWTH_TRIGGER_BLOCK_NOTE,
   GROWTH_BONUS_NOTE,
+  MAX_GROWTH_BONUS_CM,
 } from './constants'
 import { growthBankHeadroom } from './preview'
-import { tiersForCm } from './magnitude'
 import {
   bankBonusCm,
   bonusCmForIntensity,
@@ -95,11 +95,6 @@ const GROWTH_KINDS = new Set(['catalyst', 'contact', 'attempt'])
  * `banked` is absent for the mirror reason: an earned bank is growth deferred by
  * one beat, not a dry beat, and must not also buy a pity roll. */
 const DRY_OUTCOMES = new Set<GrowthOutcome>(['fail', 'partial', 'cooldown', 'muzzled'])
-
-/** The carry an act leaves behind, recomputed from the pre-land tier (one derivation with the preview). */
-const tiersForCmAfter = (act: { cm: number }, preLandTier: number): { carryCm: number } => ({
-  carryCm: tiersForCm(preLandTier, act.cm, null).carryCm,
-})
 
 function decayConditions(conditions: ReadonlyArray<BodyCondition>): BodyCondition[] {
   const next: BodyCondition[] = []
@@ -193,6 +188,9 @@ export function reduceCharacterBody(
   const preTurnBankCm = gated ? safeBonusCm(state.growthBonusCm) : 0
   let growthBonusCm = gated ? preTurnBankCm : 0
   let growthCarryCm = gated ? safeCarryCm(state.growthCarryCm) : 0
+  // cm banked by THIS turn's casts, kept apart so an act consuming the pre-turn
+  // bank cannot also erase a cast made in the same scene (fix-diff F1).
+  let castBankedCm = 0
   // Lactation (research/49): the block materializes ONLY on activation — an
   // untouched girl's state must stay key-identical (R1 neutral passthrough).
   let lactation: LactationState | undefined = state.lactation
@@ -475,15 +473,16 @@ export function reduceCharacterBody(
     // itself lands the baseline (step 6b), on any other turn nothing happens.
     if (gated && GROWTH_KINDS.has(event.kind)) {
       if (event.guaranteed === true) {
-        const before = growthBonusCm
-        growthBonusCm = bankBonusCm(growthBonusCm, bonusCmForIntensity(intensity))
+        const add = bonusCmForIntensity(intensity)
+        castBankedCm = bankBonusCm(castBankedCm, add)
+        growthBonusCm = bankBonusCm(growthBonusCm, add)
         log.push({
           character: event.character,
           kind: event.kind,
           outcome: 'banked',
           delta: 0,
           tierAfter: tier,
-          note: `cast @i${intensity} → +${fmtCm(growthBonusCm - before)} cm ${GROWTH_BONUS_NOTE} (bank ${fmtCm(growthBonusCm)} cm)`,
+          note: `cast @i${intensity} → +${fmtCm(add)} cm ${GROWTH_BONUS_NOTE}`,
         })
         return
       }
@@ -622,8 +621,11 @@ export function reduceCharacterBody(
   // and stats agree by construction. Cooldown does not apply: acts ARE the
   // pacing. Lock and the size cap still bind; a cast made this turn stays banked.
   if (gated && !triggerBlocked && ticksEnabled) {
+    // Previewed from the PRE-turn state — the same inputs the narrator's ACT
+    // GROWTH line was computed from — so the act lands what was promised even
+    // if a legacy pending bank moved the tier in step 3.
     const act = previewActGrowth(config, {
-      tier,
+      tier: Number.isFinite(state.tier) ? Math.max(0, state.tier) : 0,
       locked: state.locked,
       growthBonusCm: preTurnBankCm,
       growthCarryCm,
@@ -648,23 +650,24 @@ export function reduceCharacterBody(
         note: `act growth ${fmtCm(act.cm)} cm — at the size cap, nothing lands (bank kept)`,
       })
     } else {
-      const landedBefore = (lastGrowth as BodyState['lastGrowth'])?.delta ?? 0
       const landed = act.tiers > 0 ? landGrowth(act.tiers) : 0
       // Cast, not annotated: TS narrows the `let` to its initializer (undefined)
       // because landGrowth assigns it from inside a closure.
       const landedGrowth = lastGrowth as BodyState['lastGrowth']
-      // The cm is the act's own: when something else also landed this turn (a
-      // legacy pending bank), the directive must not claim the act's cm for both.
-      if (landed > 0 && landedGrowth && landedBefore === 0) {
+      // `cm` marks act-driven growth that the narrator ALREADY rendered in the
+      // act's scene (the next turn confirms canon instead of asking again) —
+      // set whenever the act landed, even if a legacy pending landed too.
+      if (landed > 0 && landedGrowth) {
         lastGrowth = { ...landedGrowth, cm: Math.round(act.cm * 10) / 10 }
       }
-      const { carryCm } = tiersForCmAfter(act, tier - landed)
-      growthBonusCm -= preTurnBankCm // this turn's casts (if any) stay banked
-      growthCarryCm = carryCm
+      // The act consumed the pre-turn bank; this turn's casts stay banked.
+      growthBonusCm = Math.min(MAX_GROWTH_BONUS_CM, castBankedCm)
+      growthCarryCm = act.carryCm
       const parts = [`baseline ${fmtCm(config.growthBaselineCm)}`]
       if (preTurnBankCm > 0) parts.push(`banked ${fmtCm(preTurnBankCm)}`)
       if (safeCarryCm(state.growthCarryCm) > 0)
         parts.push(`carry ${fmtCm(safeCarryCm(state.growthCarryCm))}`)
+      const clipNote = act.clipped ? `, capped at ${act.tiers} tiers this act` : ''
       log.push({
         character: characterName,
         kind: 'act',
@@ -673,7 +676,7 @@ export function reduceCharacterBody(
         tierAfter: tier,
         note:
           landed > 0
-            ? `act growth ${fmtCm(act.cm)} cm (${parts.join(' + ')}) → +${landed} tier${landed === 1 ? '' : 's'}, carry ${fmtCm(growthCarryCm)} cm`
+            ? `act growth ${fmtCm(act.cm)} cm (${parts.join(' + ')}) → +${landed} tier${landed === 1 ? '' : 's'}${clipNote}, carry ${fmtCm(growthCarryCm)} cm`
             : `act growth ${fmtCm(act.cm)} cm (${parts.join(' + ')}) → builds toward her next size (carry ${fmtCm(growthCarryCm)} cm, no visible change)`,
       })
     }

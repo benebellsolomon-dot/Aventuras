@@ -34,10 +34,10 @@ describe('growth magnitude (research/66 §magnitude)', () => {
     expect(tiers).toBe(2)
     expect(carryCm).toBeGreaterThanOrEqual(0)
     expect(carryCm).toBeLessThan(cmPerTierAt(2))
-    expect(tiersForCm(0, 0.1, null)).toEqual({ tiers: 0, carryCm: 0.1 })
-    expect(tiersForCm(0, -3, null)).toEqual({ tiers: 0, carryCm: 0 })
-    expect(tiersForCm(5, 50, 7)).toEqual({ tiers: 2, carryCm: 0 })
-    expect(tiersForCm(7, 3, 7)).toEqual({ tiers: 0, carryCm: 0 })
+    expect(tiersForCm(0, 0.1, null)).toMatchObject({ tiers: 0, carryCm: 0.1 })
+    expect(tiersForCm(0, -3, null)).toMatchObject({ tiers: 0, carryCm: 0 })
+    expect(tiersForCm(5, 50, 7)).toMatchObject({ tiers: 2, carryCm: 0 })
+    expect(tiersForCm(7, 3, 7)).toMatchObject({ tiers: 0, carryCm: 0 })
   })
 
   it('bonus cm scales with intensity and the bank is capped', () => {
