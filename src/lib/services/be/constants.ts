@@ -126,6 +126,13 @@ export const MAX_BE_CONDITIONS = 6
  * cycle and its exports can be undefined mid-init depending on entry order. */
 export const BE_CONDITION_LABEL_MAX = 200
 export const BE_CONDITION_NOTE_MAX = 200
+/** Cap on a growth-trigger evidence quote (matched against the narration, never persisted or rendered). */
+export const BE_TRIGGER_EVIDENCE_MAX = 240
+/** Player-visible AND dev-log note for every growth channel the absolute growth rule blocks (research/66). */
+export const GROWTH_TRIGGER_BLOCK_NOTE = "the story's growth act did not complete on the page"
+/** Note for earned (cast/check) growth banked on an untriggered turn — lands on the next triggered one. */
+export const GROWTH_TRIGGER_BANK_NOTE =
+  "earned growth banked — lands when the story's growth act completes on the page"
 /** Hard cap on classifier events per turn — bounds reducer work and the persisted
  * cadence log. Lives here (not schema.ts) so module-scope consumers like
  * presence.ts get it cycle-free: schema.ts sits on a be↔worldsim import cycle

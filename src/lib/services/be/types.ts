@@ -245,7 +245,40 @@ export type GrowthOutcome =
  * given body state, computed at check time so narration can be told the truth
  * before it writes. See be/preview.ts.
  */
-export type GrowthVerdict = 'lands' | 'blocked_recovery' | 'at_cap' | 'blocked'
+export type GrowthVerdict =
+  | 'lands'
+  | 'blocked_recovery'
+  | 'at_cap'
+  | 'blocked'
+  /** Absolute growth rule (research/66): the story has a cosmology, so the earned
+   * growth lands ONLY if the narration shows the driving act completing — the
+   * narrator is told growth is conditional on the page, and the classifier's
+   * verified trigger decides after the fact. */
+  | 'conditional'
+
+/**
+ * A classifier-reported completion of the story's growth driver for one
+ * character this turn (research/66). `evidence` is a verbatim quote from the
+ * response; the engine verifies it against the finalized narration and a
+ * trigger whose quote is not on the page is discarded.
+ */
+export interface GrowthTrigger {
+  character: string
+  evidence: string
+}
+
+/**
+ * Per-character growth gate for one reduce (research/66, Ben's ruling): when
+ * `requireTrigger` is set (the story has a cosmology), every growth channel —
+ * classifier events of any kind, cast/check-guaranteed events, the pity fire,
+ * chronic lactation growth — is blocked unless `triggered` (a verified trigger
+ * for HER this turn). Banked growth earned on an earlier triggered turn still
+ * lands. Absent = legacy behavior (kinds gate only).
+ */
+export interface GrowthGate {
+  requireTrigger: boolean
+  triggered: boolean
+}
 
 /**
  * One instrumentation record per handled event (research/34 D11): rides the entry's

@@ -125,6 +125,13 @@ describe('buildCheckResultBlock', () => {
     expect(blocked).toContain('holds her body fixed')
   })
 
+  it('a conditional verdict (absolute growth rule) tells the narrator growth needs the act on the page', () => {
+    const block = buildCheckResultBlock(record({ band: 'success', growthVerdict: 'conditional' }))
+    expect(block).toContain('ABSOLUTE')
+    expect(block).toContain('COMPLETING')
+    expect(block).toContain('does NOT change')
+  })
+
   it('a landing verdict adds nothing — the band directive already licenses it', () => {
     expect(buildCheckResultBlock(record({ growthVerdict: 'lands' }))).toBe(
       buildCheckResultBlock(record()),

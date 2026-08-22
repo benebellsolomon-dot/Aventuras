@@ -21,8 +21,9 @@ import {
   BE_CONDITION_NOTE_MAX,
   MAX_BE_CONDITIONS,
   MAX_BE_EVENTS_PER_TURN,
+  BE_TRIGGER_EVIDENCE_MAX,
 } from './constants'
-import type { BeEvent, BeSoftState, BondEvent, ExposureEvent } from './types'
+import type { BeEvent, BeSoftState, BondEvent, ExposureEvent, GrowthTrigger } from './types'
 
 // Re-export from their constants.ts home for the existing './schema' importers.
 export { BE_CONDITION_LABEL_MAX, BE_CONDITION_NOTE_MAX, MAX_BE_EVENTS_PER_TURN }
@@ -99,13 +100,32 @@ export const exposureEventSchema = z.object({
   intensity: z.number().describe('1=trace dose, 2=a full dose, 3=heavy or prolonged exposure'),
 })
 
+export const growthTriggerSchema = z.object({
+  character: z.string().describe('Exact name of the female character whose growth act completed'),
+  evidence: z
+    .string()
+    .describe(
+      'ONE narration sentence that shows the driving act COMPLETING for her, copy-pasted EXACTLY from this response (same words, same order, same punctuation — do not shorten, fix, or paraphrase; a shorter exact fragment beats a longer approximate one). It must name her or say she/her, and must not be a line of dialogue.',
+    ),
+})
+
+const GROWTH_TRIGGERS_DESCRIPTION = `Completed growth-driver acts this response (see the Growth Cosmology instruction): one entry per character for whom the story's driving act actually COMPLETED in this response — not discussed, remembered, promised, begun, or attempted. \`evidence\` must be a literal quote; the engine rejects anything not found in the text. Empty array on most turns.`
+
 const EXPOSURE_EVENTS_DESCRIPTION = `Catalyst exposure this response: one event per scene in which she took the catalyst into her body (drank, absorbed, was infused), intensity by dose/duration. Distinct from beEvents — this feeds her dependence, not her growth. Empty array when no one was exposed; at most ${MAX_BE_EVENTS_PER_TURN}.`
 
 /**
  * Extend a classification schema (base or runtime-vars-extended — both are object
  * schemas with entryUpdates + scene) with the top-level beEvents array.
  */
-export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.ZodType {
+export interface BeSchemaExtensionOptions {
+  /** Absolute growth rule (research/66): add `growthTriggers` ONLY for stories with a cosmology — the schema is prompt surface, so cosmology-off stories stay byte-identical. */
+  growthTriggers?: boolean
+}
+
+export function extendClassificationSchemaWithBeEvents(
+  schema: z.ZodType,
+  options: BeSchemaExtensionOptions = {},
+): z.ZodType {
   const objectSchema = schema as unknown as z.ZodObject<z.ZodRawShape>
   // Returns the input UNCHANGED when it isn't an extendable object schema —
   // callers detect the no-op by reference identity and should warn (BE
@@ -117,6 +137,14 @@ export function extendClassificationSchemaWithBeEvents(schema: z.ZodType): z.Zod
     beConditions: z.array(beConditionSchema).default([]).describe(BE_CONDITIONS_DESCRIPTION),
     bondEvents: z.array(bondEventSchema).default([]).describe(BOND_EVENTS_DESCRIPTION),
     exposureEvents: z.array(exposureEventSchema).default([]).describe(EXPOSURE_EVENTS_DESCRIPTION),
+    ...(options.growthTriggers === true
+      ? {
+          growthTriggers: z
+            .array(growthTriggerSchema)
+            .default([])
+            .describe(GROWTH_TRIGGERS_DESCRIPTION),
+        }
+      : {}),
   })
 }
 
@@ -168,7 +196,28 @@ Also fill the top-level \`exposureEvents\` array with catalyst exposure:
 
 ## This Story's Growth Cosmology
 ${cosmology}
-When this response contains the driving act described above, classify it as kind 'catalyst' — reserve 'contact' for intimate escalation that is not the driver.`
+When this response contains the driving act described above, classify it as kind 'catalyst' — reserve 'contact' for intimate escalation that is not the driver.
+Growth in this story is ABSOLUTE: her body can grow ONLY on a turn where that driving act actually COMPLETES in this response. Additionally fill the top-level \`growthTriggers\` array: one entry per character for whom the driving act COMPLETED in this response — not discussed, remembered, promised, begun, or merely attempted. \`character\` = her exact name as given. \`evidence\` = ONE narration sentence that shows the act completing, copy-pasted EXACTLY from this response: same words, same order, same punctuation — do not shorten, fix, or paraphrase it; a shorter exact fragment beats a longer approximate one. The sentence must name her or refer to her (she/her), and must be narration, not a line of dialogue (a character saying it happened is not it happening). The engine checks the quote against the text character-for-character and discards anything that is not a literal quote — a paraphrase erases growth the story earned, so copy exactly. If the act clearly completed, you MUST file the entry; if it did not complete, the array is empty (most turns).`
+}
+
+/** Pull validated growth triggers off a classification result (same tolerance rules as the event coercers). */
+export function growthTriggersFromResult(result: Record<string, unknown>): GrowthTrigger[] {
+  const raw = result['growthTriggers']
+  if (!Array.isArray(raw)) return []
+  const triggers: GrowthTrigger[] = []
+  for (const candidate of raw) {
+    if (triggers.length >= MAX_BE_EVENTS_PER_TURN) break
+    const parsed = growthTriggerSchema.safeParse(candidate)
+    if (!parsed.success) continue
+    const character = parsed.data.character.trim()
+    // The quote rides the turn's raw classificationResult into the delta like
+    // every other extension field (bounded by classifier-bounds); it is matched
+    // against the narration, never rendered into a prompt — a length cap is enough.
+    const evidence = parsed.data.evidence.trim().slice(0, BE_TRIGGER_EVIDENCE_MAX)
+    if (character === '' || evidence === '') continue
+    triggers.push({ character, evidence })
+  }
+  return triggers
 }
 
 /**

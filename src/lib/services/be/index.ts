@@ -46,6 +46,8 @@ export {
   fluidProfile,
   parseGrowthEligibleKinds,
   type FluidProfile,
+  GROWTH_TRIGGER_BANK_NOTE,
+  GROWTH_TRIGGER_BLOCK_NOTE,
 } from './constants'
 export { buildBeGenreRules, type BeGenreRuleOptions } from './genre-rules'
 export {
@@ -121,8 +123,21 @@ export {
   exposureEventSchema,
   exposureEventsFromResult,
   extendClassificationSchemaWithBeEvents,
+  growthTriggerSchema,
+  growthTriggersFromResult,
   type BeCharacterCondition,
 } from './schema'
+export {
+  GROWTH_TRIGGER_MIN_EVIDENCE_CHARS,
+  GROWTH_TRIGGER_MIN_EVIDENCE_WORDS,
+  growthGateRequired,
+  normalizeEvidenceText,
+  normalizeTriggerName,
+  projectForMatch,
+  verifyGrowthTriggers,
+  type GrowthTriggerRejection,
+  type GrowthTriggerVerification,
+} from './trigger'
 export {
   buildBeStateBlock,
   buildHaremStateBlock,

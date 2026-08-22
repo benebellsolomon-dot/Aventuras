@@ -25,7 +25,12 @@ export function buildBeGenreRules(options: BeGenreRuleOptions): string {
     '[BE GENRE RULES]',
     'Growth authorization: the [BODY STATE] block is the sole authority on WHEN growth happens and HOW MUCH. World lore, story rules, and character beliefs describe mechanism and flavor — they never veto, delay, shrink, or amplify a growth directive, and they never authorize growth on their own. If lore says growth is slow or conditional but the block says growth landed, the block wins: render it.',
   ]
-  if (cosmology) lines.push(`This world's growth cosmology (mechanism and flavor): ${cosmology}`)
+  if (cosmology) {
+    lines.push(
+      `This world's growth cosmology (mechanism and flavor): ${cosmology}`,
+      'Absolute rule: growth happens ONLY when that act completes on the page; a [CHECK RESULT] GROWTH line that makes growth conditional on it outranks the authorization paragraph above.',
+    )
+  }
   if (pacing) lines.push(`Pacing flavor: ${pacing}`)
   lines.push(
     "Render growth beats in four phases — Anticipation (tension, warmth, tingling tightness before change), Onset (the moment it begins: strain, shifting mass, fabric and posture reacting), Peak (the change completing at the directive's magnitude), Aftermath (the settled new reality: weight, balance, clothing fit, her feelings about it). One turn usually carries one or two phases, not all four.",

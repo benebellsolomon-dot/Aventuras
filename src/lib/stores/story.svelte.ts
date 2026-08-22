@@ -33,6 +33,10 @@ import {
   assignQuirks,
   beConditionsFromResult,
   beEventsFromResult,
+  growthGateRequired,
+  growthTriggersFromResult,
+  normalizeTriggerName,
+  verifyGrowthTriggers,
   beSoftStatesFromResult,
   bondEventsFromResult,
   coerceEffectTags,
@@ -4135,6 +4139,36 @@ class StoryStore {
     // Finalized narrative for output-side drift detection (Spec 1 Task 6).
     const narrativeContent = this.entries.find((e) => e.id === entryId)?.content ?? ''
 
+    // Absolute growth rule (research/66, Ben's ruling): with a cosmology set, NO
+    // growth channel lands unless the classifier reported the driving act
+    // COMPLETING in this response with a quote the engine finds in the text.
+    const gateRequired = growthGateRequired(this.currentStory?.settings)
+    const growthTriggers = gateRequired
+      ? growthTriggersFromResult(result as unknown as Record<string, unknown>)
+      : []
+    const triggerVerification = gateRequired
+      ? verifyGrowthTriggers(growthTriggers, narrativeContent)
+      : null
+    // Resolve verified names to character ids the same way the event loops do
+    // (case-insensitive name match), so the gate and the events agree on who she is.
+    const triggeredCharacterIds = new SvelteSet<string>()
+    for (const name of triggerVerification?.verified ?? []) {
+      const target = this.characters.find((c) => normalizeTriggerName(c.name) === name)
+      if (target) triggeredCharacterIds.add(target.id)
+    }
+    if (gateRequired && (growthTriggers.length > 0 || events.length > 0)) {
+      log('growth triggers', {
+        proposed: growthTriggers.map((t) => ({
+          character: t.character,
+          evidence: t.evidence.slice(0, 120),
+        })),
+        verified: [...(triggerVerification?.verified ?? [])],
+        resolved: [...triggeredCharacterIds],
+        rejected: triggerVerification?.rejected ?? [],
+        ...(narrativeContent === '' ? { warning: 'no narration text to verify against' } : {}),
+      })
+    }
+
     // Config from story settings (research/41 + Spec 1 Task 9): the eligible-kinds
     // gate keeps canon-illegal growth from ever rolling; the story fluid drives
     // the registry tick; unset settings keep the defaults.
@@ -4257,6 +4291,14 @@ class StoryStore {
         ...(charBondEvents.length > 0 ? { bondEvents: charBondEvents } : {}),
         ...(charExposureEvents.length > 0 ? { exposureEvents: charExposureEvents } : {}),
         ...(charSupplyDelta > 0 ? { supplyDelta: charSupplyDelta } : {}),
+        ...(gateRequired
+          ? {
+              growthGate: {
+                requireTrigger: true,
+                triggered: triggeredCharacterIds.has(character.id),
+              },
+            }
+          : {}),
       })
       pendingLog.push(...reducerLog)
 

@@ -11,8 +11,10 @@ import {
   buildBeEventInstructions,
   exposureEventsFromResult,
   extendClassificationSchemaWithBeEvents,
+  growthTriggersFromResult,
   MAX_BE_EVENTS_PER_TURN,
 } from './schema'
+import { BE_TRIGGER_EVIDENCE_MAX } from './constants'
 
 describe('extendClassificationSchemaWithBeEvents (Phase 2 arrays)', () => {
   it('adds bondEvents/exposureEvents beside the Phase-1 arrays', () => {
@@ -198,5 +200,52 @@ describe('instruction copy', () => {
     const withCosmology = buildBeEventInstructions('Ambrosia drives every change here.')
     expect(withCosmology.match(/a failed attempt is NOT an induction/g)?.length).toBe(1)
     expect(withCosmology).toContain('Growth Cosmology')
+  })
+})
+
+describe('growth triggers (research/66 absolute growth rule)', () => {
+  it('the cosmology block teaches growthTriggers; no cosmology = byte-identical legacy instructions', () => {
+    const bare = buildBeEventInstructions()
+    expect(bare).not.toContain('growthTriggers')
+    expect(buildBeEventInstructions('   ')).toBe(bare)
+    const withCosmology = buildBeEventInstructions("Player's semen when ejaculated during sex")
+    expect(withCosmology).toContain('growthTriggers')
+    expect(withCosmology).toContain('copy-pasted EXACTLY')
+    expect(withCosmology).toContain('ABSOLUTE')
+    expect(withCosmology.startsWith(bare)).toBe(true)
+  })
+
+  it('the extended schema accepts growthTriggers and the coercer trims, caps, and drops junk', () => {
+    const base = z.object({ entryUpdates: z.object({}), scene: z.object({}) })
+    // Cosmology-off stories keep the exact legacy key set (the schema is prompt surface).
+    const legacy = extendClassificationSchemaWithBeEvents(
+      base,
+    ) as unknown as z.ZodObject<z.ZodRawShape>
+    expect(Object.keys(legacy.shape)).not.toContain('growthTriggers')
+    const schema = extendClassificationSchemaWithBeEvents(base, { growthTriggers: true })
+    const parsed = schema.safeParse({
+      entryUpdates: {},
+      scene: {},
+      growthTriggers: [{ character: 'Amelia', evidence: 'he spends himself inside her' }],
+    })
+    expect(parsed.success).toBe(true)
+
+    const out = growthTriggersFromResult({
+      growthTriggers: [
+        { character: '  Amelia ', evidence: '  he spends himself inside her  ' },
+        { character: 'Brielle', evidence: 'x'.repeat(BE_TRIGGER_EVIDENCE_MAX + 50) },
+        { character: '', evidence: 'something' },
+        { character: 'Cora' },
+        'junk',
+        ...Array.from({ length: MAX_BE_EVENTS_PER_TURN + 2 }, (_, i) => ({
+          character: `G${i}`,
+          evidence: `quote number ${i}`,
+        })),
+      ],
+    })
+    expect(out[0]).toEqual({ character: 'Amelia', evidence: 'he spends himself inside her' })
+    expect(out[1]!.evidence.length).toBe(BE_TRIGGER_EVIDENCE_MAX)
+    expect(out.length).toBe(MAX_BE_EVENTS_PER_TURN)
+    expect(growthTriggersFromResult({})).toEqual([])
   })
 })

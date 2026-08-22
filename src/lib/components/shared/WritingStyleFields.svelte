@@ -367,8 +367,12 @@
           placeholder="what drives growth in this world (e.g. 'only her partner's climax inside her')"
         />
         <p class="text-muted-foreground text-xs">
-          Teaches the classifier what counts as this story's growth catalyst and gives the narrator
-          the mechanism to flavor growth scenes with.
+          The ABSOLUTE growth rule. When set, her body changes size only on a turn where this act
+          completes in the narration — the classifier must quote that sentence verbatim and the
+          engine verifies the quote. No event, spell, check, pressure, or previously banked growth
+          lands on any other turn (earned growth waits for the next such turn). With a cosmology set
+          the event-kind list below is ignored — the verified act decides. Leave empty for the
+          looser event-kind rule.
         </p>
       </div>
     {/if}

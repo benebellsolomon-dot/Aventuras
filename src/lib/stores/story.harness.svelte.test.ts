@@ -1817,3 +1817,96 @@ describe('store harness — accept-time entity-routing guard (research/63)', () 
     expect(db.methodsCalled()).not.toContain('updateLocation')
   })
 })
+
+/**
+ * Absolute growth rule (research/66, Ben's ruling 2026-08-22): the live failure
+ * was a pure-dialogue turn where the classifier filed talk about "his seed" as
+ * `catalyst i2` and the reducer rolled growth. With a cosmology set, growth now
+ * needs a classifier trigger whose quote the engine finds in the narration.
+ */
+describe('store harness — absolute growth rule (cosmology trigger gate)', () => {
+  // `s1:entry-0:char-amelia:0` rolls 13 — an ambient catalyst at intensity 2 LANDS
+  // without the gate (see the growthIntent suite), so every block below is real.
+  const ENTRY_ID = 'entry-0'
+  const COSMOLOGY = "Player's semen when ejaculated during sex or paizuri"
+  const NARRATION =
+    '<p>"Why have you wanted this?" he asks. She laughs, strips, and <em>talks</em> about his seed for a long while.</p>'
+  const COMPLETED =
+    '<p>He groans and spends himself inside her, every pulse pressed into her body; she cries out as the heat spreads.</p>'
+
+  const tierOf = (name: string): number | undefined =>
+    readBodyState(
+      story.characters.find((c) => c.name === name)?.metadata as Record<string, unknown>,
+    )?.tier
+
+  const catalystRows = (): Array<Record<string, unknown>> => {
+    const call = db.calls.find((c) => c.method === 'updateStoryEntry')
+    const delta = (
+      call?.args[1] as { worldStateDelta?: { beLog?: Array<Record<string, unknown>> } }
+    )?.worldStateDelta
+    return (delta?.beLog ?? []).filter((row) => row.kind === 'catalyst')
+  }
+
+  const setup = (content: string) => {
+    settingsMock.experimentalFeatures.stateTracking = true
+    story.currentStory = makeStory({
+      settings: { beMode: true, beGrowthCosmology: COSMOLOGY },
+    }) as never
+    const girl = makeGirlWithBodyState('Amelia')
+    story.characters = [makeProtagonist('Rowan'), girl] as never
+    story.entries = [{ id: ENTRY_ID, type: 'narration', content }] as never
+    return readBodyState(girl.metadata as Record<string, unknown>)?.tier ?? 0
+  }
+  const scene = (extra: Record<string, unknown> = {}) =>
+    makeClassificationResult({
+      beEvents: [{ character: 'Amelia', kind: 'catalyst', intensity: 2 }],
+      scene: { presentCharacterNames: ['Amelia'] },
+      ...extra,
+    })
+
+  beforeEach(() => reset(db))
+
+  it('the live failure, fixed: a catalyst event on a talk-only turn grows nobody', async () => {
+    const before = setup(NARRATION)
+    await story.applyClassificationResult(scene() as never, ENTRY_ID)
+    expect(tierOf('Amelia')).toBe(before)
+    expect(catalystRows()[0]).toMatchObject({
+      outcome: 'ineligible',
+      note: "the story's growth act did not complete on the page",
+    })
+  })
+
+  it('a trigger whose quote is NOT in the narration is discarded — still no growth', async () => {
+    const before = setup(NARRATION)
+    await story.applyClassificationResult(
+      scene({
+        growthTriggers: [{ character: 'Amelia', evidence: 'he spends himself inside her' }],
+      }) as never,
+      ENTRY_ID,
+    )
+    expect(tierOf('Amelia')).toBe(before)
+  })
+
+  it('a verified trigger (verbatim quote on the page) lets the same event land', async () => {
+    const before = setup(COMPLETED)
+    await story.applyClassificationResult(
+      scene({
+        growthTriggers: [
+          {
+            character: 'amelia',
+            evidence: 'spends himself inside her, every pulse pressed into her body',
+          },
+        ],
+      }) as never,
+      ENTRY_ID,
+    )
+    expect(tierOf('Amelia')).toBe(before + 1)
+  })
+
+  it('no cosmology = legacy behavior: the same talk-only turn still rolls (and lands) growth', async () => {
+    const before = setup(NARRATION)
+    story.currentStory = makeStory({ settings: { beMode: true } }) as never
+    await story.applyClassificationResult(scene() as never, ENTRY_ID)
+    expect(tierOf('Amelia')).toBe(before + 1)
+  })
+})

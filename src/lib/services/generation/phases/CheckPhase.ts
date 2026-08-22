@@ -23,6 +23,7 @@ import {
   type BeStoryConfig,
   type BodyState,
   type GrowthVerdict,
+  growthGateRequired,
 } from '$lib/services/be'
 import {
   buildTargetCheckModifiers,
@@ -101,11 +102,17 @@ function previewGrowthVerdict(
     ? castGrowsTarget(record.spellId, context)
     : record.growthIntent === true
   if (!growsHer) return null
-  return previewGuaranteedGrowth(targetState, beConfigFor(context.story), {
+  const verdict = previewGuaranteedGrowth(targetState, beConfigFor(context.story), {
     // Both guaranteed channels emit `catalyst`; a crit punches through cooldown.
     kind: 'catalyst',
     critPierce: record.band === 'crit',
   })
+  // Absolute growth rule (research/66): with a cosmology set, an earned landing
+  // still needs the driving act ON THE PAGE — tell the narrator the growth is
+  // conditional rather than promising it. blocked_recovery keeps its own
+  // wording (the bank never shows this scene either way); cap/lock stand.
+  if (verdict === 'lands' && growthGateRequired(context.story.settings)) return 'conditional'
+  return verdict
 }
 
 export class CheckPhase {

@@ -32,7 +32,11 @@ import {
   type ClassificationResult,
 } from '../sdk/schemas/classifier'
 import { buildExtendedClassificationSchema } from '../sdk/schemas/runtime-variables'
-import { buildBeEventInstructions, extendClassificationSchemaWithBeEvents } from '$lib/services/be'
+import {
+  buildBeEventInstructions,
+  extendClassificationSchemaWithBeEvents,
+  growthGateRequired,
+} from '$lib/services/be'
 import {
   buildAgendaInstructions,
   buildChekhovInstructions,
@@ -120,7 +124,11 @@ export class ClassifierService extends BaseAIService {
     // ad-hoc fields would be stripped by Zod)
     const beMode = context.story.settings?.beMode === true
     if (beMode) {
-      const extended = extendClassificationSchemaWithBeEvents(schema)
+      const extended = extendClassificationSchemaWithBeEvents(schema, {
+        // Absolute growth rule (research/66): the trigger field exists only for
+        // cosmology stories — cosmology-off prompts stay byte-identical.
+        growthTriggers: growthGateRequired(context.story.settings),
+      })
       if (extended === schema) {
         log('WARNING: beEvents schema extension no-op — BE extraction disabled this turn')
       }

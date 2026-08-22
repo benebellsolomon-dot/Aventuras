@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest'
-import { DEFAULT_BE_STORY_CONFIG } from './constants'
+import {
+  DEFAULT_BE_STORY_CONFIG,
+  GROWTH_TRIGGER_BANK_NOTE,
+  GROWTH_TRIGGER_BLOCK_NOTE,
+  PRESSURE_FIRE,
+} from './constants'
 import { defaultBodyState } from './metadata'
 import { reduceCharacterBody, seededRoll } from './reducer'
 import type { BeEvent, BeLogRecord, BeStoryConfig, BodyState } from './types'
@@ -624,5 +629,147 @@ describe('earned growth banks on cooldown', () => {
     )
     expect(state.pendingGrowth).toBeUndefined()
     expect(log.at(-1)?.outcome).toBe('ineligible')
+  })
+})
+
+/**
+ * Absolute growth rule (research/66, Ben's ruling): with a cosmology set, no
+ * channel lands without a verified trigger for HER this turn.
+ */
+describe('absolute growth rule — cosmology trigger gate', () => {
+  const GATED = { growthGate: { requireTrigger: true, triggered: false } }
+  const TRIGGERED = { growthGate: { requireTrigger: true, triggered: true } }
+  const landingSeed = seedFor((roll) => roll >= 15)
+
+  test('an ambient classifier event that WOULD land is blocked, logged ineligible, and accrues no pressure', () => {
+    const open = reduceCharacterBody(defaultBodyState(), [growthEvent()], NO_TICK, landingSeed)
+    expect(open.state.tier).toBeGreaterThan(defaultBodyState().tier)
+    const gated = reduceCharacterBody(
+      defaultBodyState(),
+      [growthEvent()],
+      NO_TICK,
+      landingSeed,
+      'Lucy',
+      undefined,
+      GATED,
+    )
+    expect(gated.state.tier).toBe(defaultBodyState().tier)
+    expect(gated.log.find((e) => e.kind === 'catalyst')).toMatchObject({
+      outcome: 'ineligible',
+      delta: 0,
+      note: GROWTH_TRIGGER_BLOCK_NOTE,
+    })
+    expect(gated.state.growthPressure).toBe(0)
+  })
+
+  test('earned (guaranteed cast/check) growth BANKS on an untriggered turn and lands on the next triggered one', () => {
+    const gated = reduceCharacterBody(
+      defaultBodyState(),
+      [growthEvent({ guaranteed: true, intensity: 3 })],
+      NO_TICK,
+      'any',
+      'Lucy',
+      undefined,
+      GATED,
+    )
+    expect(gated.state.tier).toBe(defaultBodyState().tier)
+    expect(gated.state.pendingGrowth?.delta).toBeGreaterThan(0)
+    expect(gated.log.at(-1)).toMatchObject({ outcome: 'banked', delta: 0 })
+    expect(gated.log.at(-1)?.note).toContain(GROWTH_TRIGGER_BANK_NOTE)
+    // The bank holds through untriggered turns (step 3 is gated too)…
+    const held = reduceCharacterBody(gated.state, [], NO_TICK, 'hold', 'Lucy', undefined, GATED)
+    expect(held.state.tier).toBe(defaultBodyState().tier)
+    expect(held.state.pendingGrowth).toEqual(gated.state.pendingGrowth)
+    // …and lands (metered) on a triggered turn.
+    const landed = reduceCharacterBody(
+      held.state,
+      [],
+      NO_TICK,
+      'land',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    expect(landed.state.tier).toBeGreaterThan(defaultBodyState().tier)
+  })
+
+  test('a verified trigger restores exactly the ungated behavior', () => {
+    const open = reduceCharacterBody(defaultBodyState(), [growthEvent()], NO_TICK, landingSeed)
+    const triggered = reduceCharacterBody(
+      defaultBodyState(),
+      [growthEvent()],
+      NO_TICK,
+      landingSeed,
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    expect(triggered.state).toEqual(open.state)
+    expect(triggered.log).toEqual(open.log)
+  })
+
+  test('a verified trigger outranks the kinds list: a `contact`-filed act still grows her', () => {
+    const catalystOnly: BeStoryConfig = { ...NO_TICK, growthEligibleKinds: ['catalyst'] }
+    const ungated = reduceCharacterBody(
+      defaultBodyState(),
+      [growthEvent({ kind: 'contact' })],
+      catalystOnly,
+      landingSeed,
+    )
+    expect(ungated.log.at(-1)).toMatchObject({
+      outcome: 'ineligible',
+      note: 'kind not growth-eligible in this story',
+    })
+    const triggered = reduceCharacterBody(
+      defaultBodyState(),
+      [growthEvent({ kind: 'contact' })],
+      catalystOnly,
+      landingSeed,
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    expect(triggered.state.tier).toBeGreaterThan(defaultBodyState().tier)
+  })
+
+  test('no gate object = legacy behavior (stories without a cosmology are untouched)', () => {
+    const open = reduceCharacterBody(defaultBodyState(), [growthEvent()], NO_TICK, landingSeed)
+    const explicitOff = reduceCharacterBody(
+      defaultBodyState(),
+      [growthEvent()],
+      NO_TICK,
+      landingSeed,
+      'Lucy',
+      undefined,
+      {
+        growthGate: { requireTrigger: false, triggered: false },
+      },
+    )
+    expect(explicitOff.state).toEqual(open.state)
+  })
+
+  test('the pity fire holds at the wall, silently, while untriggered', () => {
+    const pressured: BodyState = { ...defaultBodyState(), growthPressure: PRESSURE_FIRE }
+    const gated = reduceCharacterBody(pressured, [], NO_TICK, 'pity', 'Lucy', undefined, GATED)
+    expect(gated.state.tier).toBe(pressured.tier)
+    expect(gated.log.find((e) => e.kind === 'pressure')).toBeUndefined()
+    expect(gated.state.growthPressure).toBeGreaterThanOrEqual(PRESSURE_FIRE)
+    // Ungated, the same state rolls its pity die and resets.
+    const open = reduceCharacterBody(pressured, [], NO_TICK, 'pity')
+    expect(open.log.find((e) => e.kind === 'pressure')?.note).toContain('pity roll')
+    expect(open.state.growthPressure).toBe(0)
+  })
+
+  test('chronic lactation growth is held too, silently (beats stay banked for a triggered turn)', () => {
+    const chronic: BodyState = {
+      ...defaultBodyState(),
+      lactation: { active: true, supplyTier: 3, chronicBeats: 5 },
+    }
+    const gated = reduceCharacterBody(chronic, [], NO_TICK, 'chronic', 'Lucy', undefined, GATED)
+    expect(gated.state.tier).toBe(chronic.tier)
+    expect(gated.log.find((e) => e.kind === 'supply')).toBeUndefined()
+    expect(gated.state.lactation?.chronicBeats).toBeGreaterThanOrEqual(5)
+    const open = reduceCharacterBody(chronic, [], NO_TICK, 'chronic')
+    expect(open.log.find((e) => e.kind === 'supply')?.note).toContain('chronic supply roll')
   })
 })

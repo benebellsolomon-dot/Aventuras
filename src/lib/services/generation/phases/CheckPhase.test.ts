@@ -307,6 +307,32 @@ describe('CheckPhase — pre-flight growth verdict', () => {
     expect(record?.growthVerdict).toBe('lands')
   })
 
+  it('with a cosmology set, a landing verdict becomes conditional; banking/cap/lock keep their own wording', async () => {
+    const cosmology = { beGrowthCosmology: "Player's semen when ejaculated during sex" }
+    const lands = await growthCheck(
+      makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: {}, settings: cosmology }),
+    )
+    expect(lands?.growthVerdict).toBe('conditional')
+    const banks = await growthCheck(
+      makeContext({
+        content: CONTENT,
+        girls: ['Amelia'],
+        bodyState: { cooldown: 2 },
+        settings: cosmology,
+      }),
+    )
+    expect(banks?.growthVerdict).toBe('blocked_recovery')
+    const locked = await growthCheck(
+      makeContext({
+        content: CONTENT,
+        girls: ['Amelia'],
+        bodyState: { locked: true },
+        settings: cosmology,
+      }),
+    )
+    expect(locked?.growthVerdict).toBe('blocked')
+  })
+
   it('the live failure: a girl who grew last turn reads blocked_recovery', async () => {
     const record = await growthCheck(
       makeContext({ content: CONTENT, girls: ['Amelia'], bodyState: { cooldown: 2 } }),

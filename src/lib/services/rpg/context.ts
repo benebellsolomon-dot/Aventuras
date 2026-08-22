@@ -105,6 +105,8 @@ const GROWTH_VERDICT_DIRECTIVES: Readonly<Record<GrowthVerdict, string | null>> 
     'GROWTH: she is at her limit — no further growth is possible. Describe the power finding nowhere to go and the strain of it; her size does NOT change.',
   blocked:
     'GROWTH: something holds her body fixed and nothing takes. Describe the effort and the power refusing to bite; her size does NOT change.',
+  conditional:
+    "GROWTH: this story's growth is ABSOLUTE — her size can change ONLY if your narration shows the story's growth act (the growth cosmology stated in the genre rules) actually COMPLETING for her in this scene, in narration rather than in dialogue. If it completes on the page, the growth lands; if it does not complete, her size does NOT change and you must not describe growth.",
 }
 
 /**

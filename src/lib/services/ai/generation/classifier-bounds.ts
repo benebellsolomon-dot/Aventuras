@@ -26,6 +26,7 @@ const EXTENSION_ARRAY_ENGINE_CAPS: ReadonlyArray<readonly [string, number]> = [
   ['beConditions', MAX_BE_CONDITIONS],
   ['bondEvents', MAX_BE_EVENTS_PER_TURN],
   ['exposureEvents', MAX_BE_EVENTS_PER_TURN],
+  ['growthTriggers', MAX_BE_EVENTS_PER_TURN],
   ['agendaProposals', MAX_AGENDA_PROPOSALS],
   ['narrativeDebt', CHEKHOV_MAX_LOADS_PER_TURN],
   ['resolvedDebts', CHEKHOV_MAX_RESOLVED_PER_TURN],

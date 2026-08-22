@@ -35,6 +35,8 @@ import {
   PRESSURE_RELEASE,
   SUPPLY_TIER_MAX,
   fluidProfile,
+  GROWTH_TRIGGER_BANK_NOTE,
+  GROWTH_TRIGGER_BLOCK_NOTE,
 } from './constants'
 import { growthBankHeadroom } from './preview'
 import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
@@ -74,6 +76,7 @@ import type {
   GrowthOutcome,
   LactationState,
   ReducerResult,
+  GrowthGate,
 } from './types'
 
 const GROWTH_KINDS = new Set(['catalyst', 'contact', 'attempt'])
@@ -128,6 +131,13 @@ export interface ReducerExtras {
    * logged no-op (surge raises existing supply, it does not induce).
    */
   supplyDelta?: number
+  /**
+   * Absolute growth rule (research/66): with a story cosmology set, NO growth
+   * channel lands unless the classifier reported the driving act completing
+   * for her this turn with a quote verified against the narration. Absent =
+   * legacy behavior (the kinds gate alone).
+   */
+  growthGate?: GrowthGate
 }
 
 /**
@@ -159,6 +169,9 @@ export function reduceCharacterBody(
   let grewThisTurn = false
   let dryBeats = 0
   const ticksEnabled = extras?.ticksEnabled !== false
+  // Absolute growth rule (research/66): gate on unless a verified trigger names her.
+  const triggerBlocked =
+    extras?.growthGate?.requireTrigger === true && extras.growthGate.triggered !== true
   // Lactation (research/49): the block materializes ONLY on activation — an
   // untouched girl's state must stay key-identical (R1 neutral passthrough).
   let lactation: LactationState | undefined = state.lactation
@@ -222,7 +235,9 @@ export function reduceCharacterBody(
   if (cooldown > 0) cooldown -= 1
 
   // ---- Step 3: land the anticipation remainder (locked or off-screen holds it staged) ----
-  if (pendingGrowth && !state.locked && ticksEnabled) {
+  // Absolute growth rule (research/66): a bank is growth too — it lands only on a
+  // turn where the story's act completed on the page (held silently otherwise).
+  if (pendingGrowth && !state.locked && ticksEnabled && !triggerBlocked) {
     const tierBeforeLand = tier
     // M-2 (research/54): meter the release. A slow_burn girl can bank a pending
     // delta > 1 across turns; land at most MAX_GROWTH_LAND_PER_TURN this turn and
@@ -399,7 +414,15 @@ export function reduceCharacterBody(
     // set never roll — the story's canon, not the dice, says what drives growth.
     // Deliberately precedes the lock/cooldown gates: "ineligible" is the more
     // precise label when both apply. Ineligible beats do NOT accrue pressure.
-    if (config.growthEligibleKinds && !config.growthEligibleKinds.includes(event.kind)) {
+    // A verified cosmology trigger IS the canon statement that the act drove
+    // growth this turn — it outranks the kinds list (which otherwise stalls a
+    // triggered turn whose act the classifier filed as `contact`, research/66).
+    const triggerVerified = extras?.growthGate?.requireTrigger === true && !triggerBlocked
+    if (
+      !triggerVerified &&
+      config.growthEligibleKinds &&
+      !config.growthEligibleKinds.includes(event.kind)
+    ) {
       log.push({
         character: event.character,
         kind: event.kind,
@@ -407,6 +430,44 @@ export function reduceCharacterBody(
         delta: 0,
         tierAfter: tier,
         note: 'kind not growth-eligible in this story',
+      })
+      return
+    }
+
+    // Absolute growth rule (research/66): no verified cosmology trigger on the
+    // page → nothing lands, earned or ambient, and the beat is not "dry" (the
+    // story's canon denied it, exactly like an ineligible kind — pity-firing
+    // growth the canon forbids is the research/41 bug again). EARNED growth
+    // (cast/check — essence paid, dice rolled) BANKS instead of vanishing and
+    // lands on the next triggered turn; ambient growth simply never happened.
+    if (triggerBlocked && GROWTH_KINDS.has(event.kind)) {
+      if (event.guaranteed === true && !state.locked) {
+        const bankOutcome = resolveGrowthOutcome(GUARANTEED_GROWTH_ROLL, intensity)
+        const bankDelta = GROWTH_DELTA_BY_OUTCOME[bankOutcome] ?? 0
+        const staged = Math.min(
+          bankDelta,
+          growthBankHeadroom(tier, pendingGrowth?.delta ?? 0, config.sizeCapTier),
+        )
+        if (staged > 0) {
+          pendingGrowth = { delta: (pendingGrowth?.delta ?? 0) + staged, source: event.kind }
+          log.push({
+            character: event.character,
+            kind: event.kind,
+            outcome: 'banked',
+            delta: 0,
+            tierAfter: tier,
+            note: `cast @i${intensity} (guaranteed) → ${GROWTH_TRIGGER_BANK_NOTE} (+${staged} staged)`,
+          })
+          return
+        }
+      }
+      log.push({
+        character: event.character,
+        kind: event.kind,
+        outcome: 'ineligible',
+        delta: 0,
+        tierAfter: tier,
+        note: GROWTH_TRIGGER_BLOCK_NOTE,
       })
       return
     }
@@ -621,6 +682,10 @@ export function reduceCharacterBody(
           tierAfter: tier,
           note: 'chronic supply blocked (cooldown)',
         })
+      } else if (triggerBlocked) {
+        // Absolute growth rule: held silently, not reset — the beats stay
+        // banked (tickChronic pins them at the threshold) and roll on the next
+        // triggered turn. No log row: it would repeat every turn (review F8/D4).
       } else {
         const roll = seededRoll(`${seed}:chronic`)
         const outcome = resolveGrowthOutcome(roll, 1)
@@ -782,6 +847,15 @@ export function reduceCharacterBody(
   growthPressure = Math.min(growthPressure, PRESSURE_CAP)
   if (grewThisTurn) {
     growthPressure = Math.max(0, growthPressure - PRESSURE_RELEASE)
+  } else if (
+    ticksEnabled &&
+    growthPressure >= PRESSURE_FIRE &&
+    !state.locked &&
+    cooldown === 0 &&
+    triggerBlocked
+  ) {
+    // Absolute growth rule: pressure holds at the wall (capped) until a
+    // triggered turn — silently, or the row would repeat every turn (review).
   } else if (ticksEnabled && growthPressure >= PRESSURE_FIRE && !state.locked && cooldown === 0) {
     // One non-guaranteed pity roll, then reset regardless (fire-once-then-reset).
     const roll = seededRoll(`${seed}:pressure`)
