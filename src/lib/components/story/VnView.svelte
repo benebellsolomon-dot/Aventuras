@@ -12,6 +12,7 @@
   import { ui } from '$lib/stores/ui.svelte'
   import { settings, STORY_WIDTH_OPTIONS } from '$lib/stores/settings.svelte'
   import { parseMarkdown } from '$lib/utils/markdown'
+  import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
   import { database } from '$lib/services/database'
   import { eventBus, type ImageQueuedEvent, type ImageReadyEvent } from '$lib/services/events'
   import ActionChoices from './ActionChoices.svelte'
@@ -163,11 +164,15 @@
   )
 
   // ---- ADV paragraphs with streaming hold-back (pixelsaga display loop) ----
+  // Also drops <thought> inner voices: the VN reader shows prose only (E6,
+  // research/65) — the panel that renders them lives in StoryEntry.
   const stripPicTags = (html: string): string =>
-    html
-      .replace(/<pic\b[^>]*>([\s\S]*?)<\/pic>/gi, '$1')
-      .replace(/<pic\b[^>]*\/?>/gi, '')
-      .replace(/<pic\b[^>]*$/i, '')
+    stripThoughtTags(
+      html
+        .replace(/<pic\b[^>]*>([\s\S]*?)<\/pic>/gi, '$1')
+        .replace(/<pic\b[^>]*\/?>/gi, '')
+        .replace(/<pic\b[^>]*$/i, ''),
+    )
 
   /**
    * Split rendered HTML into displayable blocks via the DOM (a regex mis-groups

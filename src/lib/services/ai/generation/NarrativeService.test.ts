@@ -193,3 +193,50 @@ describe('buildUserPrompt — turn-directive placement (research/61 + 62)', () =
     expect(tail).toBeGreaterThan(callback)
   })
 })
+
+describe('buildUserPrompt — inner voices never reach the narrator (E6, research/65)', () => {
+  const service = new NarrativeService()
+  const build = (entries: StoryEntry[]): string =>
+    (
+      service as unknown as {
+        buildUserPrompt: (
+          entries: StoryEntry[],
+          mode: 'adventure' | 'creative-writing',
+          inlineImageMode: boolean,
+        ) => string
+      }
+    ).buildUserPrompt(entries, 'adventure', false)
+
+  const entry = (type: StoryEntry['type'], content: string): StoryEntry =>
+    ({ id: `e-${type}`, type, content }) as unknown as StoryEntry
+
+  it('strips inner voices from narration history', () => {
+    const prompt = build([
+      entry(
+        'narration',
+        'She sets the cup down.\n<thought who="Mira">He has no idea I read the letter.</thought>',
+      ),
+      entry('user_action', 'ask her about the letter'),
+    ])
+    expect(prompt).toContain('She sets the cup down.')
+    expect(prompt).not.toContain('<thought')
+    expect(prompt).not.toContain('read the letter')
+  })
+
+  it('strips inner voices from the current action as well', () => {
+    const prompt = build([
+      entry('user_action', 'wait\n<thought who="Mira">Stop stalling.</thought>'),
+    ])
+    expect(prompt).not.toContain('<thought')
+    expect(prompt).not.toContain('Stop stalling')
+  })
+
+  it('leaves thought-free history untouched', () => {
+    const prompt = build([
+      entry('narration', 'She sets the cup down.'),
+      entry('user_action', 'ask her about the letter'),
+    ])
+    expect(prompt).toContain('She sets the cup down.')
+    expect(prompt).toContain('ask her about the letter')
+  })
+})

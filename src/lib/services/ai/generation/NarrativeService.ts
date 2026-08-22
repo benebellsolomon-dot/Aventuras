@@ -18,6 +18,7 @@ import { StyleReviewerService } from './StyleReviewerService'
 import { templateEngine } from '$lib/services/templates/engine'
 import { createLogger } from '$lib/log'
 import { stripForeignDialectPicTags, stripPicTags } from '$lib/utils/inlineImageParser'
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import { settings } from '$lib/stores/settings.svelte'
 import { detectPromptDialect } from '../image/dialect'
 import {
@@ -334,6 +335,37 @@ Example structure:
 
 Create atmospheric layouts, styled dialogue, themed visual elements. Match visual style to genre and mood.
 </VisualProse>`
+
+/**
+ * NPC inner voices (E6, research/65). Appended to the narrative SYSTEM prompt
+ * only when the `npcThoughts` story setting is on — a per-story constant, so
+ * the cached system prefix stays stable for the life of the story and an
+ * unset setting renders a byte-identical prompt.
+ * Templates reference this via {{ npcThoughtInstructions }}.
+ */
+export function buildNpcThoughtInstructions(pov: string, protagonistName: string): string {
+  // In first/second/hybrid POV the protagonist's interiority belongs in the
+  // prose itself, so the tag is NPC-only there; third person has no such
+  // conflict but the feature is still about what the OTHER side is hiding.
+  const protagonistRule =
+    pov === 'third'
+      ? `Never for ${protagonistName} — the protagonist's interiority belongs in the prose.`
+      : `Never for the protagonist (${protagonistName}); this story is narrated from their side, so their interiority belongs in the prose.`
+
+  return `<InnerVoices>
+After your prose — never inside it — you MAY close the response with up to 3 inner-voice tags:
+
+<thought who="Exact Character Name">one to three sentences of raw, unfiltered inner monologue in that character's own voice</thought>
+
+RULES:
+- Only for NAMED characters who are actually present in this scene. ${protagonistRule} Never for a character who is not in the scene.
+- Use the character's exact name as it appears in the story, in the who attribute.
+- Write the thought as the character thinks it: first person, present tense, unfiltered, unpolished. No narrator voice, no quotation marks, no stage directions.
+- A thought reveals what the character is HIDING — the fear, want, calculation, or judgement behind what they said or did. Never restate their dialogue or actions.
+- Zero to three tags per response. Omit them entirely when nobody is hiding anything interesting; they are flavor, not a quota.
+- Nothing may follow the tags. Never place a tag mid-sentence or mid-paragraph.
+</InnerVoices>`
+}
 
 /**
  * World state context for prompt building
@@ -701,6 +733,19 @@ export class NarrativeService {
       ctx.add({ visualProseInstructions: VISUAL_PROSE_INSTRUCTIONS })
     }
 
+    // NPC inner voices (E6, research/65). Always set — empty string when the
+    // setting is unset, so the template's guard renders a byte-identical prompt
+    // for every existing story.
+    ctx.add({
+      npcThoughtInstructions:
+        story?.settings?.npcThoughts === true
+          ? buildNpcThoughtInstructions(
+              (preRenderContext.pov as string) ?? 'second',
+              (preRenderContext.protagonistName as string) ?? 'the protagonist',
+            )
+          : '',
+    })
+
     // Content guidelines based on the story's content rating.
     // Always set (empty string for 'standard') so templates can safely test it.
     ctx.add({
@@ -790,10 +835,14 @@ export class NarrativeService {
     // Format entries based on mode
     const historyParts: string[] = []
     for (const entry of entries) {
-      // Strip <pic> tags if not in inline mode to prevent AI from immitating them
-      const content = historyDialect
-        ? stripForeignDialectPicTags(entry.content, historyDialect)
-        : stripPicTags(entry.content)
+      // Strip <pic> tags if not in inline mode to prevent AI from immitating them.
+      // <thought> tags always go: an inner voice is flavor for the reader, never
+      // history the narrator should treat as established prose (E6, research/65).
+      const content = stripThoughtTags(
+        historyDialect
+          ? stripForeignDialectPicTags(entry.content, historyDialect)
+          : stripPicTags(entry.content),
+      )
 
       if (entry.type === 'user_action') {
         const prefix = mode === 'creative-writing' ? '[DIRECTION]' : '[ACTION]'
@@ -806,9 +855,9 @@ export class NarrativeService {
     // Get the last user action as the current input
     const lastUserAction = [...entries].reverse().find((e) => e.type === 'user_action')
     const currentAction = lastUserAction
-      ? inlineImageMode
-        ? lastUserAction.content
-        : stripPicTags(lastUserAction.content)
+      ? stripThoughtTags(
+          inlineImageMode ? lastUserAction.content : stripPicTags(lastUserAction.content),
+        )
       : ''
 
     // Build final prompt
