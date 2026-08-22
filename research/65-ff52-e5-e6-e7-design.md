@@ -41,5 +41,31 @@ E8 NPC-side dice, E9 debug engine (research/58). NPC↔NPC thoughts persistence.
 ## Settings
 `gmNotebook?: boolean`, `npcThoughts?: boolean`, `rpgTitles?: boolean` on StorySettings; three switches in Story Settings next to the E2–E4 toggles.
 
-## Review outcome
-(filled at the end of the phase)
+## Design amendments made during the build (differences from the plan above)
+- E5 caps: `GM_NOTES_MAX` 16 (was 12), `GM_NOTES_MAX_ADDS_PER_TURN` 2 (was 3); **reminders never expire** (only threads at 40 turns — a fact honored for 40 turns is still a fact); over-cap eviction is oldest THREAD first, then oldest REMINDER, never a same-turn note (not plain FIFO). Notes keep an `age` counter (relative), not the absolute `turn` named above — a non-empty notebook therefore writes every turn (accepted; chekhov has the same shape).
+- E6: protagonist thoughts are forbidden in EVERY POV (the agent judged third-person protagonist interiority belongs in prose too). The panel renders only voices of KNOWN non-protagonist characters (the prompt rule is enforced at render). Thoughts are stripped before translation (panel shows the original-language thought). No VN-view panel yet (VnView strips them) — open item below.
+- E7: `RpgTitle` has no `turn` field (not needed by any consumer). Stacking capped at `RPG_TITLE_MAX_STACK = 2` per skill; a proposal whose skills are ALL already covered is not awarded (same deed under a new name is not a new title). Skill ids accept labels/any case. Titles line + panel + modifier are all gated on `rpgTitles`.
+- Classifier: when more than one engine extension is attached, one lead line tells the classifier the side-arrays are secondary to base extraction.
+
+## File-level changes
+- worldsim: `notebook.ts`, `notebook-schema.ts`, `constants.ts` (GM_* caps), `directives.ts` (`gmNotesBlock`), `index.ts`.
+- rpg: `titles.ts`, `titles-schema.ts`, `types.ts` (`RpgTitle`, `titles?`), `metadata.ts` (tolerant `titles`, JSON-clone writer), `context.ts` (Titles line), `index.ts`.
+- generation: `ClassifierService.ts` (two extensions + lead line), `NarrativeService.ts` (`[GM NOTES]` render, `buildNpcThoughtInstructions`, history strip), `phases/CheckPhase.ts` (title modifiers), `phases/TranslationPhase.ts` (strip), `classifier-bounds.ts`, `sdk/schemas/classifier.ts` (result fields).
+- E6: `utils/thoughtTagParser.ts`, `utils/htmlStreaming.ts`, `templates/narrative.ts`, `templates/variables.ts`, strip points in MemoryService / EntryRetrievalService / TimelineFillService / ActionChoicesService / SuggestionsService / BackgroundImageService; components `StoryEntry.svelte` (panel), `StreamingEntry.svelte`, `VnView.svelte`.
+- store: `applyGmNotebookTurn` + call; `applyRpgTurn(result, …)` step 2b. Settings: `types/index.ts`, `story-settings.svelte`. UI: `SheetPanel.svelte` Titles.
+- No service-template sync bump: the classifier instructions ride `customVariableInstructions` (code), the narrative templates are story-category (hash-refreshed on startup).
+
+## Review outcome (3-lens adversarial pass + fix-diff round, 2026-08-22)
+Three lenses (security/bypass; concurrency/crash-recovery/persistence; edge-case/player-facing behavior) reviewed the merged diff 11128374..18bec9f9. Fixes landed in 65a24a28 and 3f9c56c5.
+
+**CRITICAL (fixed):** `writeRpgSheet` used `structuredClone`; `titles: z.array(z.unknown())` keeps references to the stored objects, which sit on a Svelte `$state` proxy → `DataCloneError` on the FIRST turn after a title was awarded, rolling back every subsequent turn (and breaking point-spend / spell-learn). Verified with a probe by the reviewer; fix = JSON clone (the chekhov/agenda writer rule). Invisible to unit tests (plain objects) — recorded here as the lesson: **any zod `z.unknown()` field in metadata makes the parsed value a proxy reference; every metadata writer must JSON-clone.**
+
+**HIGH (fixed):** title sanitizer was a hand-rolled narrower copy missing the U+E0000 tag block (title names reach the SYSTEM prompt) → delegates to `sanitizeDebtText`. `stripThoughtTags` deleted everything after any unclosed/imperfectly-closed `<thought` (display, narrator history, classifier input, TTS) → now strips only paired tags, a `who=` tag cut off within one monologue of the end, and a trailing partial prefix; tolerant `</thought >`. Notebook churn: 3 adds/turn vs 12 FIFO evicted load-bearing notes in ~4 turns → caps 2/16 + kind-aware eviction; reminders no longer expire (no refresh path existed).
+
+**MEDIUM (fixed):** Titles line/panel advertised +1 with the setting off while CheckPhase did not apply it → gated; uncapped title stacking (+8 on one skill reachable) → stack cap 2 + covered-skills rejection; thoughts leaked into memory summaries, retrieval, timeline fill, action choices, suggestions, background-image analysis, translation → stripped everywhere; skill ids case-sensitive (a label answer voided the award) → label/any-case lookup; VN visual-prose streaming rendered thoughts live → hold-back in VnView and StreamingHtmlRenderer; panel showed thoughts for absent/protagonist `who` → filtered to known non-self cast; unquoted `who` silently dropped the thought → tolerated; one malformed stored note wiped the whole notebook (array-level catch) → element-wise parse; `[GM NOTES]` wording made "Thread" lines read as standing directives and had no precedence vs [CALLBACK] → per-kind wording + "a directive block below wins"; five stacked "Additionally fill…" blocks → lead line.
+
+**LOW (fixed):** nextId ceiling vs id pattern; read trimmed from the wrong end; passthrough junk on notes; drops/turn below the live cap; store title gate without beMode; `titles.test.ts` was binary (raw NUL) → escaped; settings copy promised a UI ("always-visible"); `npcThoughtInstructions` registered as a template variable; readonly typing of the frozen empty notebook.
+
+**Accepted / deferred (not fixed, recorded):** no player-facing notebook view or pin/edit (notes are invisible except through the narrator's behavior) — next UI pass; no VN-view inner-voices panel (VnView strips them; the toggle is pure token cost in VN mode) — next UI pass; title awards surface only on the sheet panel (no toast/turn-log row); a stored title whose skills no longer parse is dropped on the next award (no migration); notes carry relative `age` so a non-empty notebook writes every turn; thoughts are stripped from user-authored text too when a user literally types a paired `<thought who=…>` tag (precedent: `<pic>`); a GM note can duplicate a chekhov bullet (instruction-only guard, harmless).
+
+Suite 1463, check/lint clean.
