@@ -3,6 +3,7 @@ import {
   DEFAULT_BE_STORY_CONFIG,
   GROWTH_TRIGGER_BANK_NOTE,
   GROWTH_TRIGGER_BLOCK_NOTE,
+  MAX_TRIGGER_BANK,
   PRESSURE_FIRE,
 } from './constants'
 import { defaultBodyState } from './metadata'
@@ -771,5 +772,38 @@ describe('absolute growth rule — cosmology trigger gate', () => {
     expect(gated.state.lactation?.chronicBeats).toBeGreaterThanOrEqual(5)
     const open = reduceCharacterBody(chronic, [], NO_TICK, 'chronic')
     expect(open.log.find((e) => e.kind === 'supply')?.note).toContain('chronic supply roll')
+  })
+
+  test('a LOCKED girl on an untriggered turn still reads muzzled (lock outranks the gate, review F12)', () => {
+    const locked: BodyState = { ...defaultBodyState(), locked: true }
+    const gated = reduceCharacterBody(
+      locked,
+      [growthEvent({ guaranteed: true })],
+      NO_TICK,
+      'lock',
+      'Lucy',
+      undefined,
+      GATED,
+    )
+    expect(gated.log.find((e) => e.kind === 'catalyst')).toMatchObject({ outcome: 'muzzled' })
+    expect(gated.state.pendingGrowth).toBeUndefined()
+    expect(gated.state.growthPressure).toBeGreaterThan(0)
+  })
+
+  test('the blocked-earned bank is bounded at MAX_TRIGGER_BANK (review F11) — casts on talk turns cannot farm a debt', () => {
+    let state = defaultBodyState()
+    for (let i = 0; i < 6; i++) {
+      state = reduceCharacterBody(
+        state,
+        [growthEvent({ guaranteed: true, intensity: 3 })],
+        NO_TICK,
+        `farm-${i}`,
+        'Lucy',
+        undefined,
+        GATED,
+      ).state
+    }
+    expect(state.pendingGrowth?.delta).toBe(MAX_TRIGGER_BANK)
+    expect(state.tier).toBe(defaultBodyState().tier)
   })
 })

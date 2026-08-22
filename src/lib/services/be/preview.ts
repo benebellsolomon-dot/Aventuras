@@ -46,6 +46,15 @@ export interface GuaranteedGrowthPreviewInput {
   kind?: BeEventKind
   /** Crit band: the event punches through an armed cooldown (user ruling). */
   critPierce?: boolean
+  /**
+   * Absolute growth rule (research/66): the story has a cosmology, so the
+   * reducer will (a) skip the kinds gate for a verified trigger and (b) hold
+   * the pending bank on an untriggered turn. The preview mirrors both: the
+   * kinds gate never yields `blocked`, a bank makes the turn `conditional`
+   * (it lands only if the act completes), and a cooldown with no bank still
+   * reads `blocked_recovery` (the earned delta banks either way).
+   */
+  gateRequired?: boolean
 }
 
 /**
@@ -71,6 +80,20 @@ export function previewGuaranteedGrowth(
   input: GuaranteedGrowthPreviewInput = {},
 ): GrowthVerdict {
   const kind = input.kind ?? 'catalyst'
+
+  if (input.gateRequired === true) {
+    if (state.locked) return 'blocked'
+    const rawTier = Number.isFinite(state.tier) ? Math.max(0, state.tier) : 0
+    const cap = config.sizeCapTier
+    const hasBank = (state.pendingGrowth?.delta ?? 0) > 0
+    // Untriggered replay: the bank is held, so the cooldown only ticks.
+    const cooldown = Math.max(0, Math.floor(state.cooldown ?? 0) - 1)
+    if (hasBank) return cap !== null && cap - rawTier <= 0 ? 'at_cap' : 'conditional'
+    if (cooldown > 0 && input.critPierce !== true) {
+      return growthBankHeadroom(rawTier, 0, cap) > 0 ? 'blocked_recovery' : 'at_cap'
+    }
+    return cap === null || cap - rawTier > 0 ? 'conditional' : 'at_cap'
+  }
 
   // Reducer step 6, gate 1: story cosmology. Precedes lock/cooldown there too.
   if (config.growthEligibleKinds && !config.growthEligibleKinds.includes(kind)) return 'blocked'

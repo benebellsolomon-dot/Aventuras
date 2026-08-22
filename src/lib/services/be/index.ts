@@ -132,11 +132,13 @@ export {
   GROWTH_TRIGGER_MIN_EVIDENCE_WORDS,
   growthGateRequired,
   normalizeEvidenceText,
+  nameTokensOf,
   normalizeTriggerName,
   projectForMatch,
   verifyGrowthTriggers,
   type GrowthTriggerRejection,
   type GrowthTriggerVerification,
+  type VerifyGrowthTriggersOptions,
 } from './trigger'
 export {
   buildBeStateBlock,

@@ -1903,6 +1903,24 @@ describe('store harness — absolute growth rule (cosmology trigger gate)', () =
     expect(tierOf('Amelia')).toBe(before + 1)
   })
 
+  it('a quote that is only a line of dialogue about the act does not grow her (talk is not the act)', async () => {
+    const before = setup(
+      '<p><span style="color:#e8b64c">"He spends himself inside her, every pulse pressed into her body," she recites from the journal.</span> Nothing happens.</p>',
+    )
+    await story.applyClassificationResult(
+      scene({
+        growthTriggers: [
+          {
+            character: 'Amelia',
+            evidence: 'He spends himself inside her, every pulse pressed into her body',
+          },
+        ],
+      }) as never,
+      ENTRY_ID,
+    )
+    expect(tierOf('Amelia')).toBe(before)
+  })
+
   it('no cosmology = legacy behavior: the same talk-only turn still rolls (and lands) growth', async () => {
     const before = setup(NARRATION)
     story.currentStory = makeStory({ settings: { beMode: true } }) as never

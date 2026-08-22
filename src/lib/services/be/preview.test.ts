@@ -180,3 +180,32 @@ describe('previewGuaranteedGrowth — the verdicts by name', () => {
     expect(state).toEqual(frozen)
   })
 })
+
+describe('absolute growth rule — gated preview (research/66)', () => {
+  const gated = (state: Partial<BodyState>, critPierce = false, config: BeStoryConfig = CONFIG) =>
+    previewGuaranteedGrowth({ ...defaultBodyState(), ...state }, config, {
+      gateRequired: true,
+      critPierce,
+    })
+
+  test('a clean body reads conditional, never lands; the kinds gate is bypassed (the reducer does too)', () => {
+    expect(gated({})).toBe('conditional')
+    expect(gated({}, false, { ...CONFIG, growthEligibleKinds: ['contact'] })).toBe('conditional')
+  })
+
+  test('cooldown with no bank still reads blocked_recovery (the earned delta banks either way); a crit reads conditional', () => {
+    expect(gated({ cooldown: 2 })).toBe('blocked_recovery')
+    expect(gated({ cooldown: 2 }, true)).toBe('conditional')
+  })
+
+  test('a bank makes the turn conditional — the bank lands only if the act completes', () => {
+    expect(gated({ cooldown: 2, pendingGrowth: { delta: 1, source: 'catalyst' } })).toBe(
+      'conditional',
+    )
+  })
+
+  test('lock and cap still win', () => {
+    expect(gated({ locked: true })).toBe('blocked')
+    expect(gated({ tier: 10 }, false, { ...CONFIG, sizeCapTier: 10 })).toBe('at_cap')
+  })
+})

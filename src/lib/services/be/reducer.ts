@@ -37,6 +37,7 @@ import {
   fluidProfile,
   GROWTH_TRIGGER_BANK_NOTE,
   GROWTH_TRIGGER_BLOCK_NOTE,
+  MAX_TRIGGER_BANK,
 } from './constants'
 import { growthBankHeadroom } from './preview'
 import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
@@ -434,6 +435,19 @@ export function reduceCharacterBody(
       return
     }
 
+    // The lock wins over everything, including otherwise-guaranteed triggers (31a §3.6).
+    if (state.locked) {
+      dryBeats += 1
+      log.push({
+        character: event.character,
+        kind: event.kind,
+        outcome: 'muzzled',
+        delta: 0,
+        tierAfter: tier,
+      })
+      return
+    }
+
     // Absolute growth rule (research/66): no verified cosmology trigger on the
     // page → nothing lands, earned or ambient, and the beat is not "dry" (the
     // story's canon denied it, exactly like an ineligible kind — pity-firing
@@ -441,12 +455,17 @@ export function reduceCharacterBody(
     // (cast/check — essence paid, dice rolled) BANKS instead of vanishing and
     // lands on the next triggered turn; ambient growth simply never happened.
     if (triggerBlocked && GROWTH_KINDS.has(event.kind)) {
-      if (event.guaranteed === true && !state.locked) {
+      if (event.guaranteed === true) {
         const bankOutcome = resolveGrowthOutcome(GUARANTEED_GROWTH_ROLL, intensity)
         const bankDelta = GROWTH_DELTA_BY_OUTCOME[bankOutcome] ?? 0
+        const alreadyStaged = pendingGrowth?.delta ?? 0
+        // Bounded: never more than MAX_TRIGGER_BANK tiers in the bank from
+        // blocked earned growth — an unbounded bank is a growth debt that pays
+        // out on every later act turn, the opposite of the rule (review F11).
         const staged = Math.min(
           bankDelta,
-          growthBankHeadroom(tier, pendingGrowth?.delta ?? 0, config.sizeCapTier),
+          growthBankHeadroom(tier, alreadyStaged, config.sizeCapTier),
+          Math.max(0, MAX_TRIGGER_BANK - alreadyStaged),
         )
         if (staged > 0) {
           pendingGrowth = { delta: (pendingGrowth?.delta ?? 0) + staged, source: event.kind }
@@ -468,19 +487,6 @@ export function reduceCharacterBody(
         delta: 0,
         tierAfter: tier,
         note: GROWTH_TRIGGER_BLOCK_NOTE,
-      })
-      return
-    }
-
-    // The lock wins over everything, including otherwise-guaranteed triggers (31a §3.6).
-    if (state.locked) {
-      dryBeats += 1
-      log.push({
-        character: event.character,
-        kind: event.kind,
-        outcome: 'muzzled',
-        delta: 0,
-        tierAfter: tier,
       })
       return
     }

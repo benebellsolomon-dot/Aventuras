@@ -43,38 +43,59 @@ export const normalizeTriggerName = (name: string): string => name.trim().toLowe
 const ATTRS = `(?:"[^"]*"|'[^']*'|[^>"'])*`
 const PIC_TAG = new RegExp(`<pic\\b${ATTRS}/?>|</pic\\s*>`, 'gi')
 const DROPPED_BLOCKS = new RegExp(`<(style|script)\\b${ATTRS}>[\\s\\S]*?</\\1\\s*>`, 'gi')
+/** Block boundaries become a sentinel so a quote can never straddle two paragraphs (review F4). */
+const BLOCK_BREAK = new RegExp(
+  `</(?:p|div|li|h[1-6]|blockquote|tr|td|th)\\s*>|<(?:br|hr)\\b${ATTRS}/?>`,
+  'gi',
+)
 const ANY_TAG = new RegExp(`<${ATTRS}>`, 'g')
-const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g
-const NAMED_ENTITIES: ReadonlyArray<readonly [RegExp, string]> = [
-  [/&nbsp;/gi, ' '],
-  [/&quot;|&ldquo;|&rdquo;/gi, '"'],
-  [/&#39;|&apos;|&lsquo;|&rsquo;/gi, "'"],
-  [/&lt;/gi, '<'],
-  [/&gt;/gi, '>'],
-  [/&hellip;/gi, '...'],
-  [/&mdash;|&ndash;/gi, '-'],
-  // Last, so `&amp;lt;` stays the literal text `&lt;` rather than double-decoding.
-  [/&amp;/gi, '&'],
-]
+const BLOCK_SENTINEL = '␟'
+const ZERO_WIDTH = /[​-‍⁠﻿­]/g
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  nbsp: ' ',
+  amp: '&',
+  quot: '"',
+  apos: "'",
+  lsquo: "'",
+  rsquo: "'",
+  ldquo: '"',
+  rdquo: '"',
+  lt: '<',
+  gt: '>',
+  hellip: '...',
+  mdash: '-',
+  ndash: '-',
+}
 
+/** One pass, one regex — a decoded `&amp;lt;` stays the literal text `&lt;` (no double decoding). */
 function decodeEntities(text: string): string {
-  let out = text
-    .replace(/&#(\d+);/g, (_m, code: string) => String.fromCodePoint(Number(code) || 0xfffd))
-    .replace(/&#x([0-9a-f]+);/gi, (_m, hex: string) =>
-      String.fromCodePoint(Number.parseInt(hex, 16) || 0xfffd),
-    )
-  for (const [pattern, replacement] of NAMED_ENTITIES) out = out.replace(pattern, replacement)
-  return out
+  return text.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (whole, body: string) => {
+    if (body[0] === '#') {
+      const code =
+        body[1]?.toLowerCase() === 'x' ? Number.parseInt(body.slice(2), 16) : Number(body.slice(1))
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : whole
+    }
+    return NAMED_ENTITIES[body.toLowerCase()] ?? whole
+  })
 }
 
 /**
- * Narration and quote are compared in the same normalized space: <pic> tags
- * (the description is not the act), inner voices, style/script blocks removed,
- * HTML stripped, entities decoded, zero-width characters dropped, typographic
- * quotes/dashes/ellipses flattened, whitespace collapsed, lowercased.
+ * Narration and quote are compared in the same normalized space: NFC, <pic>
+ * tags (the description is not the act), inner voices, style/script blocks
+ * removed, block boundaries marked, HTML stripped, entities decoded, zero-width
+ * characters dropped, typographic quotes/dashes/ellipses flattened, whitespace
+ * collapsed, lowercased.
  */
 export function normalizeEvidenceText(text: string): string {
-  const withoutBlocks = stripThoughtTags(text.replace(DROPPED_BLOCKS, ' ').replace(PIC_TAG, ' '))
+  const withoutBlocks = stripThoughtTags(
+    text
+      .normalize('NFC')
+      .replace(DROPPED_BLOCKS, ' ')
+      .replace(PIC_TAG, ' ')
+      .replace(BLOCK_BREAK, ` ${BLOCK_SENTINEL} `),
+  )
   return decodeEntities(withoutBlocks.replace(ANY_TAG, ' '))
     .replace(ZERO_WIDTH, '')
     .replace(/[‘’‚′]/g, "'")
@@ -83,6 +104,7 @@ export function normalizeEvidenceText(text: string): string {
     .replace(/…/g, '...')
     .replace(/\s+/g, ' ')
     .trim()
+    .replace(/^(?:␟ ?)+|(?: ?␟)+$/g, '')
     .toLowerCase()
 }
 
@@ -98,33 +120,81 @@ export function projectForMatch(normalized: string): string {
     .trim()
 }
 
+/** Space-anchored containment: a truncated word at either end is not a quote (review F10). */
+const containsPhrase = (haystack: string, phrase: string): boolean =>
+  ` ${haystack} `.includes(` ${phrase} `)
+
+/** The blocks (paragraphs) of a normalized narration. */
+const blocksOf = (normalized: string): string[] =>
+  normalized
+    .split(BLOCK_SENTINEL)
+    .map((block) => block.trim())
+    .filter((block) => block !== '')
+
 /**
- * The quoted-dialogue spans of a normalized narration, projected — a quote
- * living entirely inside one is talk, not the act. Pairs quotes in document
- * order (odd segments of a split on `"`), so a short utterance cannot make a
- * span bridge into the prose after it.
+ * The dialogue spans of one normalized block, projected: CLOSED double-quote
+ * pairs and word-bounded single-quote pairs only — an unpaired inch mark or a
+ * paragraph-spanning quotation can neither create nor destroy a span (review
+ * F1/F2/F3). A quote living entirely inside one is talk, not the act.
  */
-function dialogueSpans(normalized: string): string[] {
-  return normalized
-    .split('"')
-    .filter((_segment, index) => index % 2 === 1)
-    .map(projectForMatch)
-    .filter((span) => span !== '')
+function dialogueSpans(block: string): string[] {
+  const spans: string[] = []
+  for (const match of block.matchAll(/"([^"]*)"/g)) spans.push(projectForMatch(match[1]))
+  for (const match of block.matchAll(/(?:^|\s)'([^']*)'(?=[\s,.;:!?]|$)/g)) {
+    spans.push(projectForMatch(match[1]))
+  }
+  return spans.filter((span) => span !== '')
 }
 
-/** True when the projected quote names her (a ≥3-char token of her name) or refers to her (she/her). */
-function refersToHer(projectedQuote: string, character: string): boolean {
-  const words = projectedQuote.split(' ')
-  const nameTokens = projectForMatch(normalizeTriggerName(character))
-    .split(' ')
-    .filter((t) => t.length >= NAME_TOKEN_MIN)
-  return words.some((w) => FEMALE_REFERENCE.has(w) || nameTokens.includes(w))
+/** Honorifics/particles that are part of a name but never identify her on their own. */
+const NAME_NOISE = new Set([
+  'lady',
+  'lord',
+  'sir',
+  'miss',
+  'mrs',
+  'mr',
+  'ms',
+  'madame',
+  'madam',
+  'mistress',
+  'master',
+  'queen',
+  'king',
+  'princess',
+  'prince',
+  'sister',
+  'brother',
+  'mother',
+  'father',
+  'aunt',
+  'uncle',
+  'doctor',
+  'dr',
+  'captain',
+  'the',
+  'of',
+  'von',
+  'van',
+  'de',
+  'la',
+  'le',
+  'du',
+  'da',
+])
+
+/** The tokens of a character's name that identify her: a single-token name counts whole (≥2 chars, "Io"); multi-token names drop honorifics/particles and tokens under 3 chars. */
+export function nameTokensOf(character: string): string[] {
+  const tokens = projectForMatch(normalizeTriggerName(character)).split(' ').filter(Boolean)
+  if (tokens.length === 1) return tokens[0].length >= 2 ? tokens : []
+  return tokens.filter((t) => t.length >= NAME_TOKEN_MIN && !NAME_NOISE.has(t))
 }
 
 export type GrowthTriggerRejection =
   | 'empty_name'
   | 'too_short'
   | 'not_about_her'
+  | 'names_another'
   | 'not_on_page'
   | 'dialogue_only'
 
@@ -135,45 +205,70 @@ export interface GrowthTriggerVerification {
   rejected: Array<{ character: string; reason: GrowthTriggerRejection }>
 }
 
+export interface VerifyGrowthTriggersOptions {
+  /** Names of the OTHER tracked characters in the story: a quote that names one of them and not her is rejected (review F5 — a name slip must not grow the wrong girl). */
+  cast?: ReadonlyArray<string>
+}
+
 /**
  * Verify the classifier's triggers against the finalized narration. A trigger
  * is discarded — and with it the growth — when its quote is too short, is not
- * about her, is not a literal (projection-level) substring of the page, or sits
- * entirely inside a line of dialogue.
+ * about her, names another girl instead, is not a literal (projection-level,
+ * word-anchored) substring of ONE block of the page, or sits entirely inside a
+ * line of dialogue.
  */
 export function verifyGrowthTriggers(
   triggers: ReadonlyArray<GrowthTrigger>,
   narrative: string,
+  options: VerifyGrowthTriggersOptions = {},
 ): GrowthTriggerVerification {
   const verified = new Set<string>()
   const rejected: GrowthTriggerVerification['rejected'] = []
   if (triggers.length === 0) return { verified, rejected }
-  const normalizedNarrative = normalizeEvidenceText(narrative)
-  const haystack = projectForMatch(normalizedNarrative)
-  const dialogue = haystack === '' ? [] : dialogueSpans(normalizedNarrative)
+  const blocks = blocksOf(normalizeEvidenceText(narrative)).map((block) => ({
+    projected: projectForMatch(block),
+    dialogue: dialogueSpans(block),
+  }))
   for (const trigger of triggers) {
     const name = normalizeTriggerName(trigger.character)
     if (name === '') {
       rejected.push({ character: trigger.character, reason: 'empty_name' })
       continue
     }
-    const quote = projectForMatch(normalizeEvidenceText(trigger.evidence))
+    const quote = projectForMatch(
+      normalizeEvidenceText(trigger.evidence).replace(BLOCK_SENTINEL, ' '),
+    )
+    const words = quote.split(' ').filter(Boolean)
     if (
       quote.length < GROWTH_TRIGGER_MIN_EVIDENCE_CHARS ||
-      quote.split(' ').length < GROWTH_TRIGGER_MIN_EVIDENCE_WORDS
+      words.length < GROWTH_TRIGGER_MIN_EVIDENCE_WORDS
     ) {
       rejected.push({ character: trigger.character, reason: 'too_short' })
       continue
     }
-    if (!refersToHer(quote, trigger.character)) {
+    const herTokens = nameTokensOf(trigger.character)
+    const namesHer = words.some((w) => herTokens.includes(w))
+    if (!namesHer && !words.some((w) => FEMALE_REFERENCE.has(w))) {
       rejected.push({ character: trigger.character, reason: 'not_about_her' })
       continue
     }
-    if (haystack === '' || !haystack.includes(quote)) {
+    if (
+      !namesHer &&
+      (options.cast ?? []).some(
+        (other) =>
+          normalizeTriggerName(other) !== name &&
+          nameTokensOf(other).some((t) => !herTokens.includes(t) && words.includes(t)),
+      )
+    ) {
+      rejected.push({ character: trigger.character, reason: 'names_another' })
+      continue
+    }
+    const block = blocks.find((b) => containsPhrase(b.projected, quote))
+    if (!block) {
       rejected.push({ character: trigger.character, reason: 'not_on_page' })
       continue
     }
-    if (dialogue.some((span) => span.includes(quote))) {
+    if (block.dialogue.some((span) => containsPhrase(span, quote))) {
       rejected.push({ character: trigger.character, reason: 'dialogue_only' })
       continue
     }

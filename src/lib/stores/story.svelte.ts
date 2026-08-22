@@ -35,7 +35,6 @@ import {
   beEventsFromResult,
   growthGateRequired,
   growthTriggersFromResult,
-  normalizeTriggerName,
   verifyGrowthTriggers,
   beSoftStatesFromResult,
   bondEventsFromResult,
@@ -4147,16 +4146,20 @@ class StoryStore {
       ? growthTriggersFromResult(result as unknown as Record<string, unknown>)
       : []
     const triggerVerification = gateRequired
-      ? verifyGrowthTriggers(growthTriggers, narrativeContent)
+      ? verifyGrowthTriggers(growthTriggers, narrativeContent, {
+          // The other girls' names: a quote that names one of them and not her
+          // must not grow her (a classifier name slip in a harem scene).
+          cast: this.characters.filter((c) => c.relationship !== 'self').map((c) => c.name),
+        })
       : null
     // Resolve verified names to character ids the same way the event loops do
     // (case-insensitive name match), so the gate and the events agree on who she is.
     const triggeredCharacterIds = new SvelteSet<string>()
     for (const name of triggerVerification?.verified ?? []) {
-      const target = this.characters.find((c) => normalizeTriggerName(c.name) === name)
+      const target = this.characters.find((c) => c.name.toLowerCase() === name)
       if (target) triggeredCharacterIds.add(target.id)
     }
-    if (gateRequired && (growthTriggers.length > 0 || events.length > 0)) {
+    if (gateRequired && (growthTriggers.length > 0 || events.length > 0 || spellCast !== null)) {
       log('growth triggers', {
         proposed: growthTriggers.map((t) => ({
           character: t.character,

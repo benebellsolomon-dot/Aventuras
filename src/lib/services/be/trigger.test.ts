@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   GROWTH_TRIGGER_MIN_EVIDENCE_WORDS,
   growthGateRequired,
+  nameTokensOf,
   normalizeEvidenceText,
   normalizeTriggerName,
   projectForMatch,
@@ -137,5 +138,119 @@ describe('verifyGrowthTriggers', () => {
 
   it('normalizeTriggerName matches the apply site (trim + lowercase)', () => {
     expect(normalizeTriggerName('  Amelia Vey ')).toBe('amelia vey')
+  })
+})
+
+describe('verifyGrowthTriggers — fix-diff round (research/66 review)', () => {
+  it('an unpaired inch mark cannot flip dialogue detection (F1): dialogue still rejected, narration still accepted', () => {
+    const page = `<p>He measured 34" of rope and set it down beside her.</p><p>"He poured his seed into her and she swelled," Mira said, laughing.</p><p>Then he poured himself into her for real and she swelled against him.</p>`
+    const v = verifyGrowthTriggers(
+      [
+        { character: 'Mira', evidence: 'He poured his seed into her and she swelled' },
+        {
+          character: 'Mira',
+          evidence: 'he poured himself into her for real and she swelled against him',
+        },
+      ],
+      page,
+    )
+    expect(reasons(v)).toEqual(['dialogue_only'])
+    expect(names(v)).toEqual(['mira'])
+  })
+
+  it('the multi-paragraph dialogue convention (open quote per paragraph) does not swallow a narration paragraph (F2)', () => {
+    const page = `<p>"I have wanted this for so long.</p><p>He spilled himself inside her at last, and she shuddered.</p><p>Tell me you wanted it too."</p>`
+    const v = verifyGrowthTriggers(
+      [
+        {
+          character: 'Amelia',
+          evidence: 'He spilled himself inside her at last, and she shuddered',
+        },
+      ],
+      page,
+    )
+    expect(names(v)).toEqual(['amelia'])
+  })
+
+  it("single-quoted dialogue is dialogue too (F3), and contractions don't count as quotes", () => {
+    const page = `<p>'He poured his seed into her and she swelled,' Mira said. It wasn't true; but later he did pour himself into her and she swelled.</p>`
+    const v = verifyGrowthTriggers(
+      [
+        { character: 'Mira', evidence: 'He poured his seed into her and she swelled' },
+        { character: 'Mira', evidence: 'he did pour himself into her and she swelled' },
+      ],
+      page,
+    )
+    expect(reasons(v)).toEqual(['dialogue_only'])
+    expect(names(v)).toEqual(['mira'])
+  })
+
+  it('a quote assembled across two paragraphs is not on the page (F4), and a word-truncated fragment is not a quote (F10)', () => {
+    const page = `<p>Sara knelt by the fire.</p><p>He finished inside her before dawn broke over the ridge.</p>`
+    const v = verifyGrowthTriggers(
+      [
+        {
+          character: 'Sara',
+          evidence: 'Sara knelt by the fire. He finished inside her before dawn',
+        },
+        { character: 'Sara', evidence: 'e finished inside her before dawn broke over the ridg' },
+        { character: 'Sara', evidence: 'He finished inside her before dawn broke' },
+      ],
+      page,
+    )
+    expect(reasons(v)).toEqual(['not_on_page', 'not_on_page'])
+    expect(names(v)).toEqual(['sara'])
+  })
+
+  it('a quote that names ANOTHER girl and not her is rejected (F5); naming her explicitly wins', () => {
+    const page = '<p>He emptied himself into Sara, and she moaned against him until dawn.</p>'
+    const wrong = verifyGrowthTriggers(
+      [{ character: 'Mira', evidence: 'He emptied himself into Sara, and she moaned against him' }],
+      page,
+      { cast: ['Mira', 'Sara'] },
+    )
+    expect(reasons(wrong)).toEqual(['names_another'])
+    const right = verifyGrowthTriggers(
+      [{ character: 'Sara', evidence: 'He emptied himself into Sara, and she moaned against him' }],
+      page,
+      { cast: ['Mira', 'Sara'] },
+    )
+    expect(names(right)).toEqual(['sara'])
+  })
+
+  it('name tokens: a two-letter single-token name counts (F7); honorifics never identify her (F8)', () => {
+    expect(nameTokensOf('Io')).toEqual(['io'])
+    expect(nameTokensOf('Lady Mira')).toEqual(['mira'])
+    expect(nameTokensOf('Mira de la Vey')).toEqual(['mira', 'vey'])
+    const io = verifyGrowthTriggers(
+      [
+        {
+          character: 'Io',
+          evidence: 'The catalyst took hold in Io and the change began in earnest',
+        },
+      ],
+      '<p>The catalyst took hold in Io and the change began in earnest.</p>',
+    )
+    expect(names(io)).toEqual(['io'])
+    const lady = verifyGrowthTriggers(
+      [
+        {
+          character: 'Lady Mira',
+          evidence: 'The lady of the house poured tea for the guests tonight',
+        },
+      ],
+      '<p>The lady of the house poured tea for the guests tonight.</p>',
+    )
+    expect(reasons(lady)).toEqual(['not_about_her'])
+  })
+
+  it('NFC-normalizes both sides (F6) and decodes entities in one pass (F9)', () => {
+    const decomposed = 'Zoé took him inside her and she swelled with it.'
+    const v = verifyGrowthTriggers(
+      [{ character: 'Zoé', evidence: 'Zoé took him inside her and she swelled with it' }],
+      `<p>${decomposed}</p>`,
+    )
+    expect(names(v)).toEqual(['zoé'])
+    expect(normalizeEvidenceText('a &#38;lt; b')).toBe('a &lt; b')
   })
 })

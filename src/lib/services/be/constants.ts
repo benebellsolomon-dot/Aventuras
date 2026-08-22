@@ -130,6 +130,8 @@ export const BE_CONDITION_NOTE_MAX = 200
 export const BE_TRIGGER_EVIDENCE_MAX = 240
 /** Player-visible AND dev-log note for every growth channel the absolute growth rule blocks (research/66). */
 export const GROWTH_TRIGGER_BLOCK_NOTE = "the story's growth act did not complete on the page"
+/** Most tiers the absolute growth rule will bank from blocked earned growth (review F11: an unbounded bank becomes a debt that pays out on every act turn). */
+export const MAX_TRIGGER_BANK = 2
 /** Note for earned (cast/check) growth banked on an untriggered turn — lands on the next triggered one. */
 export const GROWTH_TRIGGER_BANK_NOTE =
   "earned growth banked — lands when the story's growth act completes on the page"
