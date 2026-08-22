@@ -12,6 +12,7 @@ import { BaseAIService } from '../BaseAIService'
 import { ContextBuilder } from '$lib/services/context'
 import { createLogger } from '$lib/log'
 import { riskAssessResultSchema, type RiskAssessResult } from '../sdk/schemas/riskassess'
+import { withDefaultDc } from '../sdk/schemas/tolerant-fields'
 
 const log = createLogger('RiskAssess')
 
@@ -39,9 +40,12 @@ export class RiskAssessService extends BaseAIService {
         prompt,
         'risk-assess',
       )) as RiskAssessResult
-      // A "risky" verdict without a usable skill/dc cannot resolve — treat as safe.
-      if (!result.risky || !result.skill || !result.dc) return result.risky ? NOT_RISKY : result
-      return result
+      // A skill without a dc is still a check (default-LOW DC); a "risky"
+      // verdict with no usable skill cannot resolve — treat as safe.
+      const verdict = withDefaultDc(result)
+      if (!verdict.risky) return verdict
+      if (!verdict.skill || !verdict.dc) return NOT_RISKY
+      return verdict
     } catch (error) {
       log('risk assess failed — treating action as not risky', { error })
       return NOT_RISKY

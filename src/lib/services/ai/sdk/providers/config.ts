@@ -41,8 +41,10 @@ export interface ProviderCapabilities {
    * enforce the json-schema CONSTRAINTS — enums, integer ranges, required
    * fields (D5 playtest, research/63: minimax answered in markdown, GLM 5.2
    * and DeepSeek V4 wrote "Perception"/"dc": "12" and filled objects by
-   * position). When set, structured calls ALSO render the schema into the
-   * prompt (keeping response_format), so the model sees the type it must match.
+   * position). When set, structured calls default to the prompt-rendered
+   * schema (the path that demonstrably works on these models); an explicit
+   * preset override 'on' sends response_format too, with the schema still in
+   * the prompt so the model sees the type it must match.
    */
   structuredOutputUnenforced?: true
 }

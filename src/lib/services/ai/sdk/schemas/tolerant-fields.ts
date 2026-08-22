@@ -19,7 +19,7 @@
 
 import { z } from 'zod'
 
-import { SKILL_IDS, type SkillId } from '$lib/services/rpg'
+import { DEFAULT_CHECK_DC, SKILL_IDS, type SkillId } from '$lib/services/rpg'
 
 const SKILL_ID_SET: ReadonlySet<string> = new Set(SKILL_IDS)
 
@@ -84,6 +84,14 @@ export const looseBoolean = (value: unknown): unknown => {
 
 const lowercaseTrim = (value: unknown): unknown =>
   typeof value === 'string' ? value.trim().toLowerCase() : value
+
+/**
+ * A tag that names a `skill` but no `dc` is still a check (models do this —
+ * persisted payloads show `{skill: 'investigation'}` bare): assume the rubric's
+ * default-LOW DC rather than silently treating the choice as untagged.
+ */
+export const withDefaultDc = <T extends { skill?: SkillId; dc?: number }>(tag: T): T =>
+  tag.skill !== undefined && tag.dc === undefined ? { ...tag, dc: DEFAULT_CHECK_DC } : tag
 
 /** Optional skill id; decorated/cased forms normalise, anything else drops with a warning. */
 export const skillIdField = (

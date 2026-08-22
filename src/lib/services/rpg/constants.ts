@@ -91,6 +91,8 @@ export const INTIMATE_SKILLS: ReadonlyArray<SkillId> = ['handling', 'milking', '
 // ---- DC bounds for generator-tagged choices ----
 export const DC_MIN = 1
 export const DC_MAX = 40
+/** DC assumed when a model tags a `skill` but omits the `dc` (rubric "11 easy" — the default-LOW end). */
+export const DEFAULT_CHECK_DC = 11
 export const ESSENCE_COST_MAX = 6
 
 // ---- Magic / spells (research/50 Phase 4; D5 reference defaults) ----

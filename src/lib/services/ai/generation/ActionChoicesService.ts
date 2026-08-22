@@ -12,6 +12,7 @@ import { BaseAIService } from '../BaseAIService'
 import { ContextBuilder } from '$lib/services/context'
 import { createLogger } from '$lib/log'
 import { actionChoicesResultSchema, type ActionChoice } from '../sdk/schemas/actionchoices'
+import { withDefaultDc } from '../sdk/schemas/tolerant-fields'
 
 const log = createLogger('ActionChoices')
 
@@ -164,6 +165,6 @@ export class ActionChoicesService extends BaseAIService {
     const result = await this.generate(actionChoicesResultSchema, system, prompt, 'action-choices')
 
     log('Action choices generated:', result.choices.length)
-    return (result.choices as ActionChoice[]).slice(0, 4)
+    return (result.choices as ActionChoice[]).slice(0, 4).map(withDefaultDc)
   }
 }

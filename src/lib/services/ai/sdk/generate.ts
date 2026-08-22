@@ -291,6 +291,14 @@ function resolveConfig(presetId: string, serviceId: string, debugId?: string): R
     }
   }
 
+  // Unenforced aggregators (NanoGPT): the per-model flag only promises JSON
+  // mode, never constraint enforcement, and the prompt-rendered schema is what
+  // demonstrably works on these models (research/63 round 1b). So the DEFAULT is
+  // prompt-only — response_format is sent only on an explicit 'on' override, and
+  // then the schema still rides along in the prompt.
+  if (capabilities?.structuredOutputUnenforced && override !== 'on') {
+    supportsStructuredOutput = false
+  }
   const fetchedModel = settings.getProfileModels(profileId).find((m) => m.id === preset.model)
   const promptSchemaAlongside =
     supportsStructuredOutput && capabilities?.structuredOutputUnenforced === true

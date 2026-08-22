@@ -10,7 +10,7 @@ import { zodSchema } from 'ai'
 import { actionChoiceSchema, actionChoicesResultSchema } from './actionchoices'
 import { riskAssessResultSchema } from './riskassess'
 import { suggestionSchema } from './suggestions'
-import { looseBoolean, looseInt, normalizeSkillInput } from './tolerant-fields'
+import { looseBoolean, looseInt, normalizeSkillInput, withDefaultDc } from './tolerant-fields'
 import { classificationResultSchema, type ClassificationResult } from './classifier'
 import type { RiskAssessResult } from './riskassess'
 import type { z } from 'zod'
@@ -90,6 +90,15 @@ describe('actionChoiceSchema tolerant RPG fields', () => {
     expect(props.growthIntent.type).toBe('boolean')
     expect(props.type.enum).toEqual(['action', 'dialogue', 'examine', 'move'])
     expect(js.properties.choices.items).toMatchObject({ required: ['text'] })
+  })
+})
+
+describe('withDefaultDc', () => {
+  it('fills the default-LOW dc when a skill is tagged without one, and leaves everything else alone', () => {
+    expect(withDefaultDc({ skill: 'investigation' })).toEqual({ skill: 'investigation', dc: 11 })
+    expect(withDefaultDc({ skill: 'stealth', dc: 14 })).toEqual({ skill: 'stealth', dc: 14 })
+    const untagged = { text: 'x' } as { text: string; skill?: never; dc?: number }
+    expect(withDefaultDc(untagged)).toBe(untagged)
   })
 })
 
