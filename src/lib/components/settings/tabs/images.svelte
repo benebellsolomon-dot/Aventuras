@@ -524,7 +524,9 @@
         profileSteps,
         profilePositivePrompt,
         profileNegativePrompt,
-        profileNanoLoras,
+        // Read the NESTED fields, not just the array: typing a LoRA URL or scale
+        // mutates a row in place and must trigger the autosave too.
+        JSON.stringify(profileNanoLoras),
         profileLoraName,
         profileLoraStrengthModel,
         profileLoraStrengthClip,
