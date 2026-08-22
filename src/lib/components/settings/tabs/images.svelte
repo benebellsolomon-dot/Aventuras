@@ -166,6 +166,8 @@
   let profileSteps = $state(6)
   let profilePositivePrompt = $state('')
   let profileNegativePrompt = $state('')
+  /** NanoGPT LoRA adapters for LoRA-capable endpoints (Krea 2 Turbo LoRA): up to 3 {path, scale}. */
+  let profileNanoLoras = $state<{ path: string; scale: number }[]>([])
   let profileSamplers = $state<{ value: string; label: string }[]>([])
   let profileSchedulers = $state<{ value: string; label: string }[]>([])
   let profileLoraName = $state('')
@@ -449,6 +451,10 @@
 
   // Builds the provider-specific options object from current form state
   function buildProviderOptions(): Record<string, any> {
+    if (profileProviderType === 'nanogpt') {
+      const loras = profileNanoLoras.filter((l) => l.path.trim() !== '')
+      return loras.length > 0 ? { loras } : {}
+    }
     if (profileProviderType === 'a1111') {
       return {
         steps: profileSteps,
@@ -517,6 +523,7 @@
         profileSteps,
         profilePositivePrompt,
         profileNegativePrompt,
+        profileNanoLoras,
         profileLoraName,
         profileLoraStrengthModel,
         profileLoraStrengthClip,
@@ -560,6 +567,7 @@
     profileSteps = 20
     profilePositivePrompt = ''
     profileNegativePrompt = ''
+    profileNanoLoras = []
     prevComfyBaseUrl = null
     profileCustomWorkflow = null
     pendingWorkflowData = null
@@ -592,6 +600,17 @@
     profileBaseUrl = profile.baseUrl || ''
     profileModel = profile.model || ''
     profileModels = []
+
+    if (profile.providerType === 'nanogpt') {
+      const raw = (profile.providerOptions || {}).loras
+      profileNanoLoras = Array.isArray(raw)
+        ? raw
+            .filter((l): l is { path: string; scale: number } => !!l && typeof l.path === 'string')
+            .map((l) => ({ path: l.path, scale: Number(l.scale) || 1 }))
+        : []
+    } else {
+      profileNanoLoras = []
+    }
 
     if (profile.providerType === 'a1111') {
       const opts = profile.providerOptions || {}
@@ -1478,6 +1497,50 @@
     {#if profileProviderType !== 'comfyui' && profileProviderType !== 'a1111'}
       <div class="space-y-2">
         {@render modelSelectContent()}
+      </div>
+    {/if}
+    {#if profileProviderType === 'nanogpt'}
+      <div class="space-y-2 pt-2">
+        <div class="flex items-center justify-between">
+          <Label>LoRA adapters</Label>
+          {#if profileNanoLoras.length < 3}
+            <Button
+              variant="outline"
+              size="sm"
+              onclick={() => (profileNanoLoras = [...profileNanoLoras, { path: '', scale: 1 }])}
+            >
+              Add LoRA
+            </Button>
+          {/if}
+        </div>
+        {#each profileNanoLoras as lora, i (i)}
+          <div class="flex items-center gap-2">
+            <Input
+              class="flex-1"
+              bind:value={lora.path}
+              placeholder="https://…/adapter.safetensors (direct URL)"
+            />
+            <Input type="number" class="w-24" bind:value={lora.scale} step="0.1" min="0" max="2" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onclick={() => (profileNanoLoras = profileNanoLoras.filter((_, j) => j !== i))}
+            >
+              Remove
+            </Button>
+          </div>
+        {/each}
+        <p class="text-muted-foreground text-xs">
+          Sent only to LoRA-capable endpoints (e.g. <code>wavespeed-ai/krea-v2/turbo-lora</code>) as
+          <code>loras: [&#123;path, scale&#125;]</code>, max 3. Paths must be direct
+          <code>.safetensors</code> URLs the endpoint can fetch — Civitai links need a stable host
+          or a token. Scale 0.8–1.0 is the usual range; style LoRAs may want a minimal style block.
+          {#if profileModel && !/lora/i.test(profileModel) && profileNanoLoras.length > 0}
+            <span class="text-warning"
+              >The selected model id does not look LoRA-capable — these will be ignored.</span
+            >
+          {/if}
+        </p>
       </div>
     {/if}
     {#if profileProviderType === 'a1111'}

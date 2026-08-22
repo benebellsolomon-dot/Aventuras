@@ -24,6 +24,46 @@ import {
 const DEFAULT_BASE_URL = 'https://nano-gpt.com/api/v1'
 const MODELS_ENDPOINT = 'https://nano-gpt.com/api/models'
 
+/** Krea 2 Turbo LoRA and friends: NanoGPT tags them `lora`; the id carries it too. */
+const LORA_MODEL_PATTERN = /lora/i
+export const NANOGPT_MAX_LORAS = 3
+const LORA_SCALE_MIN = 0
+const LORA_SCALE_MAX = 2
+
+export interface NanoGptLora {
+  /** Direct `.safetensors` URL (wavespeed's `loras[].path`). */
+  path: string
+  scale: number
+}
+
+/**
+ * Normalise a profile's configured LoRA list for the wire: https URLs only,
+ * scale clamped to 0–2 (wavespeed recommends 0.8–1.0; the Krea2 NSFW recipe
+ * runs 1.5), at most NANOGPT_MAX_LORAS. Anything else is dropped.
+ */
+export function sanitizeNanoGptLoras(raw: unknown): NanoGptLora[] {
+  if (!Array.isArray(raw)) return []
+  const out: NanoGptLora[] = []
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const path =
+      typeof (entry as { path?: unknown }).path === 'string'
+        ? (entry as { path: string }).path.trim()
+        : ''
+    if (!/^https:\/\/\S+$/i.test(path)) continue
+    const rawScale = Number((entry as { scale?: unknown }).scale)
+    const scale = Number.isFinite(rawScale)
+      ? Math.min(LORA_SCALE_MAX, Math.max(LORA_SCALE_MIN, rawScale))
+      : 1
+    out.push({ path, scale })
+    if (out.length >= NANOGPT_MAX_LORAS) break
+  }
+  return out
+}
+
+/** Whether a NanoGPT image model id looks like a LoRA-capable endpoint. */
+export const isLoraCapableNanoGptModel = (model: string): boolean => LORA_MODEL_PATTERN.test(model)
+
 // Known img2img capable models/tags
 const IMG2IMG_TAGS = new Set(['image-to-image', 'image-edit'])
 
@@ -43,6 +83,19 @@ export function createNanoGPTProvider(config: ImageProviderConfig): ImageProvide
         prompt,
         width: width || 1024,
         height: height || 1024,
+        // One image per request, always — the pipeline reads data[0] only, and
+        // the Krea endpoints advertise max_images 4 (the default is 1 but a
+        // per-model default must never be able to bill four renders for one).
+        n: 1,
+      }
+
+      // LoRA adapters (wavespeed `loras: [{path, scale}]`) — only on LoRA-capable
+      // endpoints (wavespeed-ai/krea-v2/turbo-lora). NanoGPT's per-model
+      // parameter list does not advertise the field; this is a pass-through
+      // whose effect must be verified live (research/63).
+      const loras = sanitizeNanoGptLoras(config.providerOptions?.loras)
+      if (loras.length > 0 && isLoraCapableNanoGptModel(model)) {
+        body.loras = loras
       }
 
       const isBooru = detectPromptDialect(model) === 'booru'

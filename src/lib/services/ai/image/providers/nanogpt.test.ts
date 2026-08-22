@@ -13,7 +13,7 @@ vi.mock('./fetchAdapter', () => ({
   imageGetFetch: vi.fn(),
 }))
 
-import { createNanoGPTProvider } from './nanogpt'
+import { createNanoGPTProvider, sanitizeNanoGptLoras } from './nanogpt'
 import type { ImageProviderConfig } from './types'
 
 function lastBody(): Record<string, unknown> {
@@ -60,5 +60,38 @@ describe('NanoGPT sampling knobs', () => {
     const body = lastBody()
     expect(typeof body.negative_prompt).toBe('string')
     expect(body.negative_prompt as string).toContain('bad anatomy')
+  })
+})
+
+describe('NanoGPT image count + LoRA pass-through (research/63, Krea 2 Turbo LoRA)', () => {
+  it('always asks for exactly one image', async () => {
+    await gen({}, 'wavespeed-ai/krea-v2/turbo')
+    expect(lastBody().n).toBe(1)
+  })
+
+  it('passes sanitized loras only to LoRA-capable model ids', async () => {
+    const loras = [{ path: 'https://host.example/nikke.safetensors', scale: 0.9 }]
+    await gen({ providerOptions: { loras } }, 'wavespeed-ai/krea-v2/turbo-lora')
+    expect(lastBody().loras).toEqual(loras)
+    await gen({ providerOptions: { loras } }, 'wavespeed-ai/krea-v2/turbo')
+    expect(lastBody().loras).toBeUndefined()
+  })
+
+  it('sanitizeNanoGptLoras: https-only paths, clamped scale, max 3, junk dropped', () => {
+    expect(
+      sanitizeNanoGptLoras([
+        { path: 'https://a/x.safetensors', scale: 2.7 },
+        { path: 'http://insecure/y.safetensors', scale: 1 },
+        { path: 'https://b/y.safetensors', scale: 'abc' },
+        null,
+        { path: 'https://c/z.safetensors', scale: -1 },
+        { path: 'https://d/w.safetensors', scale: 1 },
+      ]),
+    ).toEqual([
+      { path: 'https://a/x.safetensors', scale: 2 },
+      { path: 'https://b/y.safetensors', scale: 1 },
+      { path: 'https://c/z.safetensors', scale: 0 },
+    ])
+    expect(sanitizeNanoGptLoras('nope')).toEqual([])
   })
 })
