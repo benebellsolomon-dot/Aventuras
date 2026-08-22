@@ -105,6 +105,8 @@ Ben moved the NanoGPT image profile to `wavespeed-ai/krea-v2/turbo` (12.9B open-
 
 **To use:** on the NanoGPT profile (now `turbo-lora`) add the three token URLs in the LoRA adapters block (Nikke ~0.9, Sagging ~0.8, NSFW MASTER ~1.0 — scale it up only if explicit prompts still refuse), pick the Nikke style preset, generate. If the first render shows no LoRA effect, NanoGPT is dropping the field — then the route is Ben's SI-bridge/ComfyUI profile (Krea2 workflow + local LoRAs), where the `loras` plumbing already exists in the comfy provider.
 
+**→ Krea 2 prompting research, measurements and the prose-path rewrite are in `research/64-krea2-prompting.md`** (Qwen3-VL-4B encoder reads the prompt as an image description; no token cap — a 1,450-char prompt rendered every late detail; subject-first ordering; no quality words/weights/negatives; rating prefix dropped for prose; density 600–1400; sync v12).
+
 ## D5 knobs still uncalibrated (carry to round 2)
 
 Chekhov cooldown/thresholds, rel pacing (~4× slower by design), world-sim gate frequencies, arousal-suppression threshold 70, single-window budget richness (36/13), narrative model memory quality (short-term-recall complaint from early round — likely provider/context config; engine windowing audited clean: 16k threshold, 10-message buffer).

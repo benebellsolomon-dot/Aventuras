@@ -45,7 +45,12 @@ import type { PresetPack, FullPack } from './types'
 // description; currentLocationName is a place or null) — D5 playtest: a
 // position-filling model routed quests into characters and "minutes" into the
 // current location (research/63).
-const SERVICE_TEMPLATE_SYNC_VERSION = 11
+// v12: image-prompt-analysis rewritten for LLM-encoder image models (Krea 2 /
+// Flux): subject-first ordering, 600-1000 chars (max 1400 — measured: Krea 2
+// Turbo renders every detail of a ~1450-char prompt), no quality words /
+// weights / negatives, quoted in-image text, concrete emotion, beat-scoped
+// content discipline (research/64).
+const SERVICE_TEMPLATE_SYNC_VERSION = 12
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**
