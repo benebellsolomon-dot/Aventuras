@@ -41,6 +41,20 @@ const kreaBridgeStyleTemplate: PromptTemplate = {
   content: `High-quality detailed anime illustration with clean expressive linework, rich colors, refined shading, and cinematic lighting. Crisp focus and polished detail throughout. Every depicted character is a mature adult in their twenties or older.`,
 }
 
+const nikkeKrea2StyleTemplate: PromptTemplate = {
+  id: 'image-style-nikke-krea2',
+  name: 'Nikke style (Krea 2 LoRA)',
+  category: 'image-style',
+  description:
+    'Minimal style block for the Nikke: Goddess of Victory Krea 2 style LoRA — the LoRA carries the look; stylizer words fight it',
+  // The LoRA author's rules: trigger with "Nikke style anime", describe the
+  // nouns (theme / attire / pose / hair / expression / background) and AVOID
+  // stylizers ("masterpiece, highly detailed, 4k, painting, highly realistic").
+  // Keep this block to the trigger + the adult-only line; everything else is
+  // the prose writer's scene description (research/63).
+  content: `Nikke style anime. Describe the scene plainly — no quality or rendering words. Every depicted character is a mature adult in their twenties or older.`,
+}
+
 const imagePromptAnalysisTemplate: PromptTemplate = {
   id: 'image-prompt-analysis',
   name: 'Image Prompt Analysis',
@@ -517,6 +531,7 @@ export const imageTemplates: PromptTemplate[] = [
   semiRealisticAnimeStyleTemplate,
   photorealisticStyleTemplate,
   kreaBridgeStyleTemplate,
+  nikkeKrea2StyleTemplate,
   imagePromptAnalysisTemplate,
   imagePromptAnalysisReferenceTemplate,
   imagePortraitGenerationTemplate,

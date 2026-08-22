@@ -45,6 +45,7 @@ const TEMPLATE_GROUP_MAP: Record<string, string> = {
   'image-style-soft-anime': 'Image',
   'image-style-semi-realistic': 'Image',
   'image-style-photorealistic': 'Image',
+  'image-style-nikke-krea2': 'Image',
   'image-prompt-analysis': 'Image',
   'image-prompt-analysis-reference': 'Image',
   'image-portrait-generation': 'Image',

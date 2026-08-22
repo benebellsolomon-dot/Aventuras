@@ -40,6 +40,7 @@
     { value: 'image-style-semi-realistic', label: 'Semi-realistic Anime' },
     { value: 'image-style-photorealistic', label: 'Photorealistic' },
     { value: 'image-style-krea-bridge', label: 'Krea (SI Bridge)' },
+    { value: 'image-style-nikke-krea2', label: 'Nikke style (Krea 2 LoRA)' },
   ] as const
 
   const imageSizes = [
