@@ -66,9 +66,18 @@
         .filter((c) => c.relationship !== 'self')
         .map((c) => [c.name.trim().toLowerCase(), c.name]),
     )
+    const selfNames = new Set(
+      story.characters
+        .filter((c) => c.relationship === 'self')
+        .map((c) => c.name.trim().toLowerCase()),
+    )
     return extractThoughtTags(entry.content).flatMap((voice) => {
-      const name = cast.get(voice.who.trim().toLowerCase())
-      return name ? [{ ...voice, who: name }] : []
+      const key = voice.who.trim().toLowerCase()
+      // The protagonist never gets a panel voice; anyone else renders — with the
+      // canonical name when known, the raw who otherwise (a missed character
+      // must not make the monologue vanish, fix-diff F11).
+      if (selfNames.has(key)) return []
+      return [{ ...voice, who: cast.get(key) ?? voice.who }]
     })
   })
   let innerVoicesOpen = $state(false)

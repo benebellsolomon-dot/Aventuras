@@ -28,14 +28,26 @@ export interface ParsedThoughtTag {
 }
 
 /** Paired `<thought …>…</thought>`, any case, attributes optional. */
-const THOUGHT_TAG_REGEX = /<thought\b([^>]*)>([\s\S]*?)<\/thought\s*>/gi
+const THOUGHT_TAG_REGEX = /<thought\b([^>]*)>([\s\S]*?)<\/\s*thought\b[^>]*>/gi
+/** Close tag, tolerant of whitespace and stray attributes (`</thought >`, `</thought foo>`). */
+const THOUGHT_CLOSE_REGEX = /<\/\s*thought\b[^>]*>/i
+/** An opening tag that carries a `who=` — the only shape the engine treats as a thought (a literal "<thought for later>" is prose). */
+const THOUGHT_OPEN_WHO_REGEX = /<thought\b[^>]*\bwho\s*=[^>]*>/gi
 /** A half-written opening tag at the very end of a stream. */
 const PARTIAL_THOUGHT_REGEX = /<thought\b[^>]*$/i
-/** A dangling OPEN tag is stripped only when it sits in the tail — within one
- * monologue's length of the end — i.e. a cut-off thought, not prose after it —
- * and only when it carries a `who=` (a literal "<thought for later>" is prose). */
+/** A dangling OPEN tag (with `who=`, no close after it) is stripped only when
+ * it sits in the tail — within one monologue's length of the end — i.e. a
+ * cut-off thought, not prose after it. Measured from the LAST such open. */
 const DANGLING_TAIL_WINDOW = THOUGHT_TEXT_MAX + 80
-const DANGLING_OPEN_REGEX = /<thought\b[^>]*\bwho\s*=[^>]*>(?![\s\S]*<\/thought\s*>)[\s\S]*$/i
+
+/** Index of the last `<thought … who=…>` open with no close after it, or -1. */
+function lastDanglingOpen(content: string): number {
+  let last = -1
+  for (const open of content.matchAll(THOUGHT_OPEN_WHO_REGEX)) {
+    if (!THOUGHT_CLOSE_REGEX.test(content.slice(open.index + open[0].length))) last = open.index
+  }
+  return last
+}
 
 /** `<t`, `<th`, … `<though` at the very end of a chunk (review finding 9). */
 const TRAILING_PREFIX_REGEX = /<(?:t|th|tho|thou|thoug|though)$/i
@@ -91,11 +103,14 @@ export function extractThoughtTags(content: string): ParsedThoughtTag[] {
 export function stripThoughtTags(content: string): string {
   return content
     .replace(new RegExp(THOUGHT_TAG_REGEX.source, 'gi'), '')
-    .replace(DANGLING_OPEN_REGEX, (match, offset: number, whole: string) =>
-      whole.length - offset <= DANGLING_TAIL_WINDOW ? '' : match,
-    )
     .replace(PARTIAL_THOUGHT_REGEX, '')
     .replace(TRAILING_PREFIX_REGEX, '')
+    .replace(/^[\s\S]*$/, (whole) => {
+      const open = lastDanglingOpen(whole)
+      return open !== -1 && whole.length - open <= DANGLING_TAIL_WINDOW
+        ? whole.slice(0, open)
+        : whole
+    })
 }
 
 /**
@@ -120,22 +135,16 @@ export function hasIncompleteThoughtTag(content: string): {
   incomplete: boolean
   safeEnd: number
 } {
-  // Case-insensitive "last index of <thought".
-  const opens = content.matchAll(/<thought\b/gi)
-  let lastOpen = -1
-  for (const open of opens) lastOpen = open.index
-
-  if (lastOpen === -1) {
-    const prefix = TRAILING_PREFIX_REGEX.exec(content)
-    return prefix
-      ? { incomplete: true, safeEnd: prefix.index }
-      : { incomplete: false, safeEnd: content.length }
+  // Only a `who=` open counts (same shape rule as the strip path — a literal
+  // "<thought for later>" in prose must never wedge the stream), and an open
+  // older than one monologue's length is treated as resolved so a malformed
+  // tag can never hold the whole rest of a response back (fix-diff F1).
+  const open = lastDanglingOpen(content)
+  if (open !== -1 && content.length - open <= DANGLING_TAIL_WINDOW) {
+    return { incomplete: true, safeEnd: open }
   }
-
-  const afterOpen = content.slice(lastOpen)
-  if (/<\/thought\s*>/i.test(afterOpen)) {
-    return { incomplete: false, safeEnd: content.length }
-  }
-
-  return { incomplete: true, safeEnd: lastOpen }
+  const prefix = TRAILING_PREFIX_REGEX.exec(content) ?? PARTIAL_THOUGHT_REGEX.exec(content)
+  return prefix
+    ? { incomplete: true, safeEnd: prefix.index }
+    : { incomplete: false, safeEnd: content.length }
 }

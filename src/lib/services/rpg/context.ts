@@ -9,7 +9,7 @@
 
 import { ATTRIBUTE_IDS, ATTRIBUTE_LABELS, SKILL_BY_ID, SKILLS } from './constants'
 import { attributeMod, skillRanks } from './derive'
-import { formatTitles } from './titles'
+import { RPG_TITLE_MAX_STACK, formatTitles } from './titles'
 import type { CheckRecord, GrowthVerdict, RpgSheet } from './types'
 
 export const PLAYER_SHEET_HEADER = '[PLAYER SHEET]'
@@ -60,7 +60,9 @@ export function buildPlayerSheetBlock(
   // E7 titles line renders ONLY when titles exist — same cache guard.
   const titles = titlesEnabled ? formatTitles(sheet) : ''
   if (titles) {
-    lines.push(`Titles: ${titles} — each grants +1 on the skills it covers.`)
+    lines.push(
+      `Titles: ${titles} — +1 on the skills each covers, at most +${RPG_TITLE_MAX_STACK} from titles on any one skill.`,
+    )
   }
   lines.push(
     'These are the ONLY abilities that exist. Do not invent stats, skills, spells, or levels the sheet does not show.',

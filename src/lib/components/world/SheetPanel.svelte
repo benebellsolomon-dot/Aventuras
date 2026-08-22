@@ -174,6 +174,11 @@
               </span>
             </div>
           {/each}
+          {#if titles.length > 1}
+            <div class="text-muted-foreground px-1.5 text-[11px]">
+              At most +2 from titles on any one skill.
+            </div>
+          {/if}
         </div>
       </div>
     {/if}

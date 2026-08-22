@@ -108,7 +108,9 @@ export function readGmNotebook(metadata: Record<string, unknown> | null): GmNote
   if (!parsed.success || parsed.data === undefined) return null
   const notes: GmNote[] = []
   const seen = new Set<string>()
-  for (const rawNote of parsed.data.notes) {
+  // Bounded walk: a hostile/corrupt blob must not cost a full sanitize pass
+  // per read (fix-diff F12) — nothing past the cap's headroom can survive anyway.
+  for (const rawNote of parsed.data.notes.slice(0, GM_NOTES_MAX * 4)) {
     const parsedNote = noteSchema.safeParse(rawNote)
     if (!parsedNote.success) continue
     const note = normalizeNote(parsedNote.data)
@@ -125,7 +127,8 @@ export function readGmNotebook(metadata: Record<string, unknown> | null): GmNote
       : 1
   const stored = rawStored > GM_NOTE_NEXT_ID_MAX ? 1 : rawStored
   const nextId = Math.min(GM_NOTE_NEXT_ID_MAX, Math.max(stored, maxUsed + 1))
-  return { ...(parsed.data as unknown as GmNotebookState), notes, nextId }
+  // Literal: unknown top-level keys must not ride every snapshot forever (fix-diff F5).
+  return { notes, nextId }
 }
 
 /** New metadata object with the notebook written; sibling keys untouched. */
@@ -174,30 +177,26 @@ export function advanceGmNotebook(input: GmNotebookAdvanceInput): GmNotebookStat
     added += 1
   }
   const notes = evictToCap([...aged, ...appended])
-  return { ...input.state, notes, nextId }
+  return { notes, nextId }
 }
 
 /**
- * Over-cap eviction: the oldest THREAD goes first (an open situation ages out
- * of relevance), then the oldest REMINDER — never a note added this turn.
- * Document order is preserved. Pure.
+ * Over-cap eviction: the OLDEST note goes first, a thread before a reminder
+ * of the same age (an open situation ages out of relevance sooner than a
+ * fact), never a note added this turn. Kind is only the tiebreak — a
+ * thread-first rule starved threads to a one-turn life once the list filled
+ * with never-expiring reminders (fix-diff F6). Document order preserved. Pure.
  */
 function evictToCap(notes: ReadonlyArray<GmNote>): GmNote[] {
   const kept = [...notes]
-  const evictOne = (kind: GmNoteKind): boolean => {
+  const rank = (n: GmNote): number => n.age * 2 + (n.kind === 'thread' ? 1 : 0)
+  while (kept.length > GM_NOTES_MAX) {
     let victim = -1
     for (let i = 0; i < kept.length; i++) {
-      const n = kept[i]
-      if (n.kind !== kind || n.age === 0) continue
-      if (victim === -1 || n.age > kept[victim].age) victim = i
+      if (kept[i].age === 0) continue
+      if (victim === -1 || rank(kept[i]) > rank(kept[victim])) victim = i
     }
-    if (victim === -1) return false
-    kept.splice(victim, 1)
-    return true
-  }
-  while (kept.length > GM_NOTES_MAX) {
-    if (evictOne('thread') || evictOne('reminder')) continue
-    kept.shift()
+    kept.splice(victim === -1 ? 0 : victim, 1)
   }
   return kept
 }

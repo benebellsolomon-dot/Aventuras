@@ -115,10 +115,11 @@ export function awardTitles(
     if (!title) continue
     const key = normalizeTitleName(title.name)
     if (seen.has(key)) continue
-    // A title whose every skill is already covered adds nothing but a stack —
-    // refuse it (the same accomplishment under a new name is not a new title).
-    const covered = new Set([...existing, ...awarded].flatMap((t) => t.skills))
-    if (title.skills.every((id) => covered.has(id))) continue
+    // A title whose skill set is a SUBSET of one existing title's is the same
+    // accomplishment under a new name (regenerate loops) — refuse it. A new
+    // combination is a new title (fix-diff F9: a flat union locked titles out).
+    if ([...existing, ...awarded].some((t) => title.skills.every((id) => t.skills.includes(id))))
+      continue
     seen.add(key)
     awarded.push(title)
   }

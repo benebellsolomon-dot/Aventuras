@@ -153,3 +153,31 @@ describe('review follow-ups (research/65)', () => {
     expect(stripThoughtTags('she smiled. <th')).toBe('she smiled. ')
   })
 })
+
+describe('fix-diff follow-ups (research/65)', () => {
+  it('a literal <thought …> without who never wedges the stream', () => {
+    expect(hasIncompleteThoughtTag('He made a <thought for later> note. Done.')).toEqual({
+      incomplete: false,
+      safeEnd: 41,
+    })
+    expect(
+      hasIncompleteThoughtTag('<div><thought-bubble>hi</thought-bubble></div>').incomplete,
+    ).toBe(false)
+  })
+  it('an unclosed who= open older than one monologue is treated as resolved', () => {
+    const text = 'x <thought who="a">' + 'y'.repeat(800)
+    expect(hasIncompleteThoughtTag(text).incomplete).toBe(false)
+    expect(stripThoughtTags(text)).toBe(text)
+  })
+  it('tolerates a close tag with attributes and measures the tail from the last open', () => {
+    expect(stripThoughtTags('A<thought who="M">x</thought foo>B')).toBe('AB')
+    const two = '<thought who="a">' + 'z'.repeat(900) + '<thought who="b">tail'
+    expect(stripThoughtTags(two)).toBe('<thought who="a">' + 'z'.repeat(900))
+  })
+  it('holds back a trailing prefix even after a closed tag', () => {
+    expect(hasIncompleteThoughtTag('<thought who="a">x</thought> prose <t')).toEqual({
+      incomplete: true,
+      safeEnd: 35,
+    })
+  })
+})

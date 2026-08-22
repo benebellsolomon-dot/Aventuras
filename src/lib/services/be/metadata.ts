@@ -163,7 +163,10 @@ export function writeBodyState(
   metadata: Record<string, unknown> | null,
   state: BodyState,
 ): Record<string, unknown> {
-  return { ...(metadata ?? {}), [BODY_STATE_KEY]: structuredClone(state) }
+  // JSON clone, not structuredClone: passthrough keys are copied BY REFERENCE
+  // out of a $state proxy and structuredClone throws DataCloneError on a Proxy
+  // (research/65 persistence review — the writeRpgSheet CRITICAL's sibling).
+  return { ...(metadata ?? {}), [BODY_STATE_KEY]: JSON.parse(JSON.stringify(state)) }
 }
 
 /**
