@@ -10,6 +10,7 @@
  * errors so the pipeline continues even when translation fails.
  */
 
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import type {
   GenerationEvent,
   PhaseStartEvent,
@@ -89,8 +90,10 @@ export class TranslationPhase {
     const targetLanguage = translationSettings.targetLanguage
 
     try {
+      // E6: inner voices are not translated (the panel reads the original); an
+      // unclosed tag rewritten by the translator could otherwise eat the prose.
       const translationResult = await this.deps.translateNarration(
-        narrativeContent,
+        stripThoughtTags(narrativeContent),
         targetLanguage,
         isVisualProse,
       )

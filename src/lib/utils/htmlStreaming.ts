@@ -1,5 +1,6 @@
 import { scopeCssSelectors } from './cssScope'
 import { hasIncompletePicTag } from './inlineImageParser'
+import { hasIncompleteThoughtTag } from './thoughtTagParser'
 
 /**
  * StreamingHtmlRenderer - Handles incremental HTML parsing for Visual Prose Mode.
@@ -64,6 +65,13 @@ export class StreamingHtmlRenderer {
     if (picResult.incomplete) {
       // If we have an incomplete <pic> tag, only render up to that point
       return Math.min(this.findHtmlSafePoint(html), picResult.safeEnd)
+    }
+
+    // Same hold-back for an unclosed <thought> (E6) — visual-prose streams
+    // would otherwise render the hidden monologue live.
+    const thoughtResult = hasIncompleteThoughtTag(html)
+    if (thoughtResult.incomplete) {
+      return Math.min(this.findHtmlSafePoint(html), thoughtResult.safeEnd)
     }
 
     // Check if we're inside an incomplete <style> block

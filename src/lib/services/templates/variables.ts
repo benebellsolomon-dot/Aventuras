@@ -242,6 +242,14 @@ export const RUNTIME_VARIABLES: VariableDefinition[] = [
     required: false,
   },
   {
+    name: 'npcThoughtInstructions',
+    type: 'text',
+    category: 'runtime',
+    description:
+      'NPC inner-voice <thought> tag instructions (E6; empty when the story setting is off)',
+    required: false,
+  },
+  {
     name: 'visualProseInstructions',
     type: 'text',
     category: 'runtime',

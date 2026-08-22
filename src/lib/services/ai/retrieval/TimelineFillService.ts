@@ -5,6 +5,7 @@
  * Uses the Vercel AI SDK for structured output with Zod schema validation.
  */
 
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import type { Chapter, StoryEntry } from '$lib/types'
 import { BaseAIService } from '../BaseAIService'
 import { ContextBuilder } from '$lib/services/context'
@@ -89,7 +90,10 @@ export class TimelineFillService extends BaseAIService {
     // Build chapter history from visible entries
     const chapterHistory = visibleEntries
       .slice(-10)
-      .map((e) => `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${e.content}`)
+      .map(
+        (e) =>
+          `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${stripThoughtTags(e.content)}`,
+      )
       .join('\n\n')
 
     // Build timeline from chapters
@@ -157,7 +161,10 @@ export class TimelineFillService extends BaseAIService {
           const entries = getChapterEntries(c)
           if (entries.length > 0) {
             const entriesText = entries
-              .map((e) => `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${e.content}`)
+              .map(
+                (e) =>
+                  `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${stripThoughtTags(e.content)}`,
+              )
               .join('\n\n')
             return `${header}\n${entriesText}`
           }

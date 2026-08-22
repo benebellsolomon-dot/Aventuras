@@ -28,11 +28,17 @@ export interface ParsedThoughtTag {
 }
 
 /** Paired `<thought …>…</thought>`, any case, attributes optional. */
-const THOUGHT_TAG_REGEX = /<thought\b([^>]*)>([\s\S]*?)<\/thought>/gi
-/** An opening tag left dangling with no close (streaming tail, malformed output). */
-const DANGLING_THOUGHT_REGEX = /<thought\b[^>]*>[\s\S]*$/i
+const THOUGHT_TAG_REGEX = /<thought\b([^>]*)>([\s\S]*?)<\/thought\s*>/gi
 /** A half-written opening tag at the very end of a stream. */
 const PARTIAL_THOUGHT_REGEX = /<thought\b[^>]*$/i
+/** A dangling OPEN tag is stripped only when it sits in the tail — within one
+ * monologue's length of the end — i.e. a cut-off thought, not prose after it —
+ * and only when it carries a `who=` (a literal "<thought for later>" is prose). */
+const DANGLING_TAIL_WINDOW = THOUGHT_TEXT_MAX + 80
+const DANGLING_OPEN_REGEX = /<thought\b[^>]*\bwho\s*=[^>]*>(?![\s\S]*<\/thought\s*>)[\s\S]*$/i
+
+/** `<t`, `<th`, … `<though` at the very end of a chunk (review finding 9). */
+const TRAILING_PREFIX_REGEX = /<(?:t|th|tho|thou|thoug|though)$/i
 
 /**
  * Extract the inner voices from an entry's content.
@@ -52,7 +58,14 @@ export function extractThoughtTags(content: string): ParsedThoughtTag[] {
   while ((match = regex.exec(content)) !== null) {
     if (thoughts.length >= THOUGHT_MAX_PER_TURN) break
 
-    const who = (matchAttribute(match[1] ?? '', 'who') ?? '').trim()
+    const attrs = match[1] ?? ''
+    // Quoted first (the documented form); an unquoted `who=Mira` is tolerated
+    // rather than silently dropping the thought (review finding 13).
+    const who = (
+      matchAttribute(attrs, 'who') ??
+      /\bwho\s*=\s*([^\s>"']+)/i.exec(attrs)?.[1] ??
+      ''
+    ).trim()
     const text = (match[2] ?? '').trim()
     if (!who || !text) continue
 
@@ -66,8 +79,11 @@ export function extractThoughtTags(content: string): ParsedThoughtTag[] {
 }
 
 /**
- * Remove every `<thought>` tag — well-formed, `who`-less, or left dangling by a
- * truncated stream — from content.
+ * Remove every `<thought>` tag — well-formed or `who`-less — plus a half-written
+ * opening tag at the very end of a stream. An UNCLOSED tag mid-content is
+ * deliberately left alone: the first cut swallowed everything after it, which
+ * truncated prose, narrator history and classifier input on one malformed
+ * close tag (review finding 1). Streaming hold-back is `hasIncompleteThoughtTag`'s job.
  *
  * @param content - Narrative content that may carry `<thought>` tags
  * @returns The content with all inner-voice markup removed
@@ -75,8 +91,11 @@ export function extractThoughtTags(content: string): ParsedThoughtTag[] {
 export function stripThoughtTags(content: string): string {
   return content
     .replace(new RegExp(THOUGHT_TAG_REGEX.source, 'gi'), '')
-    .replace(DANGLING_THOUGHT_REGEX, '')
+    .replace(DANGLING_OPEN_REGEX, (match, offset: number, whole: string) =>
+      whole.length - offset <= DANGLING_TAIL_WINDOW ? '' : match,
+    )
     .replace(PARTIAL_THOUGHT_REGEX, '')
+    .replace(TRAILING_PREFIX_REGEX, '')
 }
 
 /**
@@ -107,11 +126,14 @@ export function hasIncompleteThoughtTag(content: string): {
   for (const open of opens) lastOpen = open.index
 
   if (lastOpen === -1) {
-    return { incomplete: false, safeEnd: content.length }
+    const prefix = TRAILING_PREFIX_REGEX.exec(content)
+    return prefix
+      ? { incomplete: true, safeEnd: prefix.index }
+      : { incomplete: false, safeEnd: content.length }
   }
 
   const afterOpen = content.slice(lastOpen)
-  if (/<\/thought>/i.test(afterOpen)) {
+  if (/<\/thought\s*>/i.test(afterOpen)) {
     return { incomplete: false, safeEnd: content.length }
   }
 

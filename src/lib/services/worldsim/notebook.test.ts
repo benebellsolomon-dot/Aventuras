@@ -78,10 +78,10 @@ describe('advanceGmNotebook', () => {
     expect(next.nextId).toBe(4)
   })
 
-  it('expires notes at GM_NOTE_MAX_AGE and skips duplicate text', () => {
+  it('expires THREAD notes at GM_NOTE_MAX_AGE (reminders never) and skips duplicate text', () => {
     const next = advanceGmNotebook({
       state: {
-        notes: [note('n1', 'old', GM_NOTE_MAX_AGE - 1), note('n2', 'Same Text')],
+        notes: [note('n1', 'old', GM_NOTE_MAX_AGE - 1, 'thread'), note('n2', 'Same Text')],
         nextId: 3,
       },
       dropIds: [],
@@ -89,6 +89,12 @@ describe('advanceGmNotebook', () => {
     })
     expect(next.notes.map((n) => n.id)).toEqual(['n2'])
     expect(next.nextId).toBe(3)
+    const reminder = advanceGmNotebook({
+      state: { notes: [note('n1', 'fact', GM_NOTE_MAX_AGE + 5)], nextId: 2 },
+      dropIds: [],
+      loads: [],
+    })
+    expect(reminder.notes.map((n) => n.id)).toEqual(['n1'])
   })
 
   it('caps adds per turn and FIFO-trims to GM_NOTES_MAX', () => {

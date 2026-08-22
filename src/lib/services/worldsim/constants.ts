@@ -271,12 +271,17 @@ export const CHEKHOV_LOCK_MAX = 12
  */
 // ---- E5 GM's Notebook (research/65) ----
 /** Hard cap on live notes — FIFO-oldest drops beyond it. */
-export const GM_NOTES_MAX = 12
-/** A note nobody refreshed or dropped for this many turns expires. */
+export const GM_NOTES_MAX = 16
+/** A THREAD note (an open situation) nobody dropped for this many turns expires.
+ * Reminders (facts) never expire on their own — a fact honored for 40 turns is
+ * still a fact (review finding 3); they leave only by drop or eviction. */
 export const GM_NOTE_MAX_AGE = 40
 export const GM_NOTE_TEXT_MAX = 160
-export const GM_NOTES_MAX_ADDS_PER_TURN = 3
-export const GM_NOTE_NEXT_ID_MAX = 1_000_000
+/** Two, not three: with a 16-note list, three adds a turn evicted load-bearing
+ * notes within a handful of chatty turns (review finding 2). */
+export const GM_NOTES_MAX_ADDS_PER_TURN = 2
+/** Matches GM_NOTE_ID_PATTERN (n + up to 6 digits). */
+export const GM_NOTE_NEXT_ID_MAX = 999_999
 
 export const CALM_PLANT_DIRECTIVE =
   'A quiet beat. Plant one small, concrete environmental detail — an object out of place, a sound at the edge of hearing, a figure at a distance — that could matter later. Do not explain it or call attention to it.'

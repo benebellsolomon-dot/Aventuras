@@ -7,6 +7,7 @@
  * Prompt generation flows through ContextBuilder + Liquid templates.
  */
 
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import type { StoryEntry, Entry, Character, Location, Item, StoryBeat } from '$lib/types'
 import { BaseAIService } from '../BaseAIService'
 import { ContextBuilder } from '$lib/services/context'
@@ -55,7 +56,10 @@ export class ActionChoicesService extends BaseAIService {
     // Format recent context
     const recentContext = context.recentEntries
       .slice(-5)
-      .map((e) => `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${e.content}`)
+      .map(
+        (e) =>
+          `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${stripThoughtTags(e.content)}`,
+      )
       .join('\n\n')
 
     // Format current location

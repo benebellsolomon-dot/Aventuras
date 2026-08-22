@@ -12,7 +12,7 @@
   import { ui } from '$lib/stores/ui.svelte'
   import { settings, STORY_WIDTH_OPTIONS } from '$lib/stores/settings.svelte'
   import { parseMarkdown } from '$lib/utils/markdown'
-  import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
+  import { hasIncompleteThoughtTag, stripThoughtTags } from '$lib/utils/thoughtTagParser'
   import { database } from '$lib/services/database'
   import { eventBus, type ImageQueuedEvent, type ImageReadyEvent } from '$lib/services/events'
   import ActionChoices from './ActionChoices.svelte'
@@ -207,7 +207,10 @@
       // Visual-prose streams arrive as ONE growing repaired-HTML wrapper —
       // render it live instead of holding back.
       if (ui.isVisualProseStreaming()) {
-        const html = ui.streamingContent
+        // Hold back from an unclosed <thought> so a hidden reveal never flashes.
+        const raw = ui.streamingContent
+        const { incomplete, safeEnd } = hasIncompleteThoughtTag(raw)
+        const html = stripThoughtTags(incomplete ? raw.slice(0, safeEnd) : raw)
         return html.trim() ? [html] : []
       }
       const parts = stripPicTags(ui.streamingContent)

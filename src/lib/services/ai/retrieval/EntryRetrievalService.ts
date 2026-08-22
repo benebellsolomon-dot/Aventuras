@@ -1,3 +1,4 @@
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import { generateStructured } from '../sdk/generate'
 import { settings } from '$lib/stores/settings.svelte'
 /**
@@ -192,7 +193,7 @@ export class EntryRetrievalService extends BaseAIService {
     // Build search content from user input and recent story
     const recentContent = recentStoryEntries
       .slice(-this.config.recentEntriesCount)
-      .map((e) => e.content)
+      .map((e) => stripThoughtTags(e.content))
       .join(' ')
     const searchContent = `${userInput} ${recentContent}`.toLowerCase()
 
@@ -600,7 +601,7 @@ export class EntryRetrievalService extends BaseAIService {
     // Build recent content for context
     const recentContent = recentStoryEntries
       .slice(-this.config.recentEntriesCount)
-      .map((e) => e.content)
+      .map((e) => stripThoughtTags(e.content))
       .join('\n\n')
 
     const ctx = new ContextBuilder()

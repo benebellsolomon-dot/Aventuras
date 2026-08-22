@@ -96,5 +96,9 @@ export function writeRpgSheet(
   metadata: Record<string, unknown> | null,
   sheet: RpgSheet,
 ): Record<string, unknown> {
-  return { ...(metadata ?? {}), [RPG_SHEET_KEY]: structuredClone(sheet) }
+  // JSON clone, not structuredClone: `titles` (z.unknown) keeps references to
+  // the stored objects, which sit on a Svelte $state proxy — structuredClone
+  // throws DataCloneError on a Proxy and would roll back every turn (research/65
+  // persistence review, CRITICAL; same rule as writeChekhovState).
+  return { ...(metadata ?? {}), [RPG_SHEET_KEY]: JSON.parse(JSON.stringify(sheet)) }
 }

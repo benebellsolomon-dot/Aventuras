@@ -7,6 +7,7 @@
  * Prompt generation flows through ContextBuilder + Liquid templates.
  */
 
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import type { StoryEntry, StoryBeat, Entry } from '$lib/types'
 import { BaseAIService } from '../BaseAIService'
 import { ContextBuilder } from '$lib/services/context'
@@ -67,7 +68,7 @@ export class SuggestionsService extends BaseAIService {
     let recentContent = lastEntries
       .map((e) => {
         const prefix = e.type === 'user_action' ? '[DIRECTION]' : '[NARRATIVE]'
-        return `${prefix} ${e.content}`
+        return `${prefix} ${stripThoughtTags(e.content)}`
       })
       .join('\n\n')
 

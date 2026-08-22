@@ -212,8 +212,16 @@ export class ClassifierService extends BaseAIService {
 
     // Build custom variable instructions for the prompt. BE event instructions
     // piggyback on the same template slot, so no classifier-template edit is needed.
+    const engineBlocks = [beMode, agendaMode, chekhovMode, notebookMode, titlesMode].filter(
+      Boolean,
+    ).length
     const customVariableInstructions = [
       runtimeVars.length > 0 ? this.buildCustomVarInstructions(runtimeVarsByType) : '',
+      // Several engines may stack side-arrays on one call; say once that the
+      // base extraction stays the priority (review finding 15).
+      engineBlocks > 1
+        ? '## Engine side-arrays\nThe sections below add optional top-level arrays. They are SECONDARY: fill the character/location/item/beat/scene fields above first and completely; leave a side-array empty whenever you are unsure.'
+        : '',
       beMode ? buildBeEventInstructions(context.story.settings?.beGrowthCosmology) : '',
       agendaMode ? buildAgendaInstructions() : '',
       chekhovMode ? buildChekhovInstructions(chekhovBullets?.bullets ?? []) : '',

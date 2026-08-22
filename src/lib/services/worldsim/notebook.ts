@@ -43,12 +43,13 @@ export interface GmNote {
 }
 
 export interface GmNotebookState {
-  notes: GmNote[]
+  notes: ReadonlyArray<GmNote>
   nextId: number
 }
 
+// Deep-frozen AND typed readonly — no caller can be talked into pushing.
 export const EMPTY_GM_NOTEBOOK: GmNotebookState = Object.freeze({
-  notes: Object.freeze([]) as unknown as GmNote[],
+  notes: Object.freeze([]) as ReadonlyArray<GmNote>,
   nextId: 1,
 })
 
@@ -67,9 +68,11 @@ const noteSchema = z
   })
   .passthrough()
 
+// Notes parse ELEMENT-WISE below: one malformed note must not wipe the list
+// (review finding 8 — the array-level catch alone would).
 const notebookSchema = z
   .object({
-    notes: z.array(noteSchema).catch([]),
+    notes: z.array(z.unknown()).catch([]),
     nextId: z.number().catch(0),
   })
   .passthrough()
@@ -106,12 +109,15 @@ export function readGmNotebook(metadata: Record<string, unknown> | null): GmNote
   const notes: GmNote[] = []
   const seen = new Set<string>()
   for (const rawNote of parsed.data.notes) {
-    const note = normalizeNote(rawNote)
+    const parsedNote = noteSchema.safeParse(rawNote)
+    if (!parsedNote.success) continue
+    const note = normalizeNote(parsedNote.data)
     if (!note || seen.has(note.id)) continue
     seen.add(note.id)
     notes.push(note)
-    if (notes.length >= GM_NOTES_MAX) break
   }
+  // Over-long stored lists keep the NEWEST (the end the writer trims from).
+  if (notes.length > GM_NOTES_MAX) notes.splice(0, notes.length - GM_NOTES_MAX)
   const maxUsed = notes.reduce((max, n) => Math.max(max, idSuffix(n.id)), 0)
   const rawStored =
     Number.isFinite(parsed.data.nextId) && parsed.data.nextId > 0
@@ -148,8 +154,9 @@ export function advanceGmNotebook(input: GmNotebookAdvanceInput): GmNotebookStat
   const aged: GmNote[] = []
   for (const note of input.state.notes) {
     if (drop.has(note.id)) continue
-    const age = note.age + 1
-    if (age >= GM_NOTE_MAX_AGE) continue
+    const age = Math.min(GM_NOTE_MAX_AGE, note.age + 1)
+    // Threads expire; reminders are facts and only leave by drop or eviction.
+    if (note.kind === 'thread' && age >= GM_NOTE_MAX_AGE) continue
     aged.push({ ...note, age })
   }
   const existingTexts = new Set(aged.map((n) => n.text.toLowerCase()))
@@ -166,9 +173,33 @@ export function advanceGmNotebook(input: GmNotebookAdvanceInput): GmNotebookStat
     nextId += 1
     added += 1
   }
-  const merged = [...aged, ...appended]
-  const notes = merged.length > GM_NOTES_MAX ? merged.slice(merged.length - GM_NOTES_MAX) : merged
+  const notes = evictToCap([...aged, ...appended])
   return { ...input.state, notes, nextId }
+}
+
+/**
+ * Over-cap eviction: the oldest THREAD goes first (an open situation ages out
+ * of relevance), then the oldest REMINDER — never a note added this turn.
+ * Document order is preserved. Pure.
+ */
+function evictToCap(notes: ReadonlyArray<GmNote>): GmNote[] {
+  const kept = [...notes]
+  const evictOne = (kind: GmNoteKind): boolean => {
+    let victim = -1
+    for (let i = 0; i < kept.length; i++) {
+      const n = kept[i]
+      if (n.kind !== kind || n.age === 0) continue
+      if (victim === -1 || n.age > kept[victim].age) victim = i
+    }
+    if (victim === -1) return false
+    kept.splice(victim, 1)
+    return true
+  }
+  while (kept.length > GM_NOTES_MAX) {
+    if (evictOne('thread') || evictOne('reminder')) continue
+    kept.shift()
+  }
+  return kept
 }
 
 // ---- Rendering ----
@@ -185,6 +216,6 @@ export function buildGmNotesBlock(notes: ReadonlyArray<GmNote>): string {
   return [
     GM_NOTES_HEADER,
     ...lines,
-    'Honor these silently — they are facts the story has established, not prompts to mention them.',
+    '"Remember" lines are established facts: honor them silently, never announce them. "Thread" lines are situations still in motion: let them move only when the scene reaches them. A directive block below that contradicts a note wins for this turn.',
   ].join('\n')
 }

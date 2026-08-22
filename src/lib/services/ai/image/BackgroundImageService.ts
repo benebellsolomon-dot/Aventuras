@@ -1,3 +1,4 @@
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import { emitBackgroundImageAnalysisFailed } from '$lib/services/events'
 import { ContextBuilder } from '$lib/services/context'
 import { database } from '$lib/services/database'
@@ -10,6 +11,9 @@ import { buildStorySettingBlock } from './booruPromptWriter'
 import { generateImage } from './providers/registry'
 
 const log = createLogger('BackgroundImageService')
+
+const stripThoughts = (content: string | undefined): string | undefined =>
+  content === undefined ? undefined : stripThoughtTags(content)
 
 export class BackgroundImageService extends BaseAIService {
   private imageSettings: typeof settings.systemServicesSettings.imageGeneration
@@ -40,8 +44,9 @@ export class BackgroundImageService extends BaseAIService {
       }
     }
 
-    const previousResponse = narrationEntries[narrationEntries.length - 2]?.content
-    const currentResponse = narrationEntries[narrationEntries.length - 1]?.content
+    // E6: inner voices never steer an image prompt (research/65).
+    const previousResponse = stripThoughts(narrationEntries[narrationEntries.length - 2]?.content)
+    const currentResponse = stripThoughts(narrationEntries[narrationEntries.length - 1]?.content)
 
     // Story setting anchors the backdrop's era/atmosphere (D5 playtest
     // finding: without it, generated scenery drifts modern). Best-effort —

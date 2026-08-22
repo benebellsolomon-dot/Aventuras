@@ -57,7 +57,20 @@
 
   // NPC inner voices (E6, research/65): parsed straight off the stored content,
   // exactly like <pic> tags — nothing about them is persisted separately.
-  const innerVoices = $derived(entry.type === 'narration' ? extractThoughtTags(entry.content) : [])
+  // Only voices of known non-protagonist characters render (review finding 12):
+  // the prompt forbids protagonist/absent-character thoughts, the filter enforces it.
+  const innerVoices = $derived.by(() => {
+    if (entry.type !== 'narration') return []
+    const cast = new Map(
+      story.characters
+        .filter((c) => c.relationship !== 'self')
+        .map((c) => [c.name.trim().toLowerCase(), c.name]),
+    )
+    return extractThoughtTags(entry.content).flatMap((voice) => {
+      const name = cast.get(voice.who.trim().toLowerCase())
+      return name ? [{ ...voice, who: name }] : []
+    })
+  })
   let innerVoicesOpen = $state(false)
 
   // Separate token counts for content and reasoning

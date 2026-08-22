@@ -456,7 +456,7 @@
       <div>
         <Label for="gm-notebook" class="text-sm font-medium">GM's notebook</Label>
         <p class="text-muted-foreground mt-1 text-xs">
-          A short, always-visible list of continuity notes the engine keeps for the narrator — who
+          A short list of continuity notes the engine keeps and shows the narrator every turn — who
           knows what, standing pretenses, open threads. Applies from the next turn.
         </p>
       </div>

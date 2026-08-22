@@ -12,7 +12,7 @@
  */
 
 import { sanitizeDebtText } from '$lib/services/worldsim'
-import { SKILL_BY_ID, SKILL_IDS } from './constants'
+import { SKILL_BY_ID, SKILLS } from './constants'
 import type { CheckModifier, RpgSheet, RpgTitle, SkillId } from './types'
 
 export const RPG_TITLES_MAX = 8
@@ -52,8 +52,13 @@ export const normalizeTitleName = (name: string): string =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
 
-const isSkillId = (value: unknown): value is SkillId =>
-  typeof value === 'string' && (SKILL_IDS as ReadonlyArray<string>).includes(value)
+/** Skill id or label, any case, → id (a model answering "Persuasion" must not void the award — review finding 8). */
+const toSkillId = (value: unknown): SkillId | null => {
+  if (typeof value !== 'string') return null
+  const key = value.trim().toLowerCase()
+  const hit = SKILLS.find((s) => s.id === key || s.label.toLowerCase() === key)
+  return hit ? hit.id : null
+}
 
 /** Normalize one stored/proposed title; null when unusable. */
 export function normalizeTitle(raw: unknown): RpgTitle | null {
@@ -62,10 +67,9 @@ export function normalizeTitle(raw: unknown): RpgTitle | null {
   const name = sanitizeTitleText(record.name, RPG_TITLE_NAME_MAX)
   if (name === '') return null
   const skills = Array.isArray(record.skills)
-    ? (Array.from(new Set(record.skills.filter(isSkillId))) as SkillId[]).slice(
-        0,
-        RPG_TITLE_MAX_SKILLS,
-      )
+    ? Array.from(
+        new Set(record.skills.map(toSkillId).filter((id): id is SkillId => id !== null)),
+      ).slice(0, RPG_TITLE_MAX_SKILLS)
     : []
   if (skills.length === 0) return null
   return { name, skills, reason: sanitizeTitleText(record.reason, RPG_TITLE_REASON_MAX) }

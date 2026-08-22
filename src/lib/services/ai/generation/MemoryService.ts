@@ -4,6 +4,7 @@
  * Handles chapter summarization and memory retrieval for long-form narratives.
  */
 
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import type { Chapter, StoryEntry } from '$lib/types'
 import { BaseAIService } from '../BaseAIService'
 import { ContextBuilder } from '$lib/services/context'
@@ -59,7 +60,9 @@ export class MemoryService extends BaseAIService {
       previousChaptersCount: previousChapters?.length ?? 0,
     })
 
-    const entriesText = entries.map((e) => `[${e.type}]: ${e.content}`).join('\n\n')
+    const entriesText = entries
+      .map((e) => `[${e.type}]: ${stripThoughtTags(e.content)}`)
+      .join('\n\n')
 
     const previousChaptersContext =
       previousChapters && previousChapters.length > 0
@@ -108,7 +111,10 @@ export class MemoryService extends BaseAIService {
     const firstValidMessageId = lastChapterEndIndex + 1
     const lastValidMessageId = firstValidMessageId + entries.length - 1
     const entriesText = entries
-      .map((e, index) => `[Message ${firstValidMessageId + index}] [${e.type}]: ${e.content}`)
+      .map(
+        (e, index) =>
+          `[Message ${firstValidMessageId + index}] [${e.type}]: ${stripThoughtTags(e.content)}`,
+      )
       .join('\n\n')
 
     const ctx = new ContextBuilder()
@@ -208,7 +214,10 @@ export class MemoryService extends BaseAIService {
         const entries = getChapterEntries(chapter)
         if (entries.length > 0) {
           block += entries
-            .map((e) => `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${e.content}`)
+            .map(
+              (e) =>
+                `[${e.type === 'user_action' ? 'ACTION' : 'NARRATIVE'}]: ${stripThoughtTags(e.content)}`,
+            )
             .join('\n\n')
         } else {
           block += chapter.summary

@@ -130,3 +130,26 @@ describe('hasIncompleteThoughtTag', () => {
     expect(content.slice(0, result.safeEnd)).toBe('<thought who="A">one</thought>\n')
   })
 })
+
+describe('review follow-ups (research/65)', () => {
+  it('leaves an unclosed tag mid-content alone instead of eating the prose after it', () => {
+    const text = 'Prose one. <thought who="X">oops unclosed. ' + 'Prose two continues. '.repeat(60)
+    expect(stripThoughtTags(text)).toBe(text)
+    expect(stripThoughtTags('The sign read: <thought for later> and more')).toBe(
+      'The sign read: <thought for later> and more',
+    )
+  })
+  it('tolerates a spaced close tag and an unquoted who', () => {
+    expect(stripThoughtTags('A <thought who="X">hm</Thought > B')).toBe('A  B')
+    expect(extractThoughtTags('<thought who=Mira>quiet</thought>')).toEqual([
+      { who: 'Mira', text: 'quiet' },
+    ])
+  })
+  it('holds back a trailing partial prefix during streaming', () => {
+    expect(hasIncompleteThoughtTag('she smiled.\n\n<thoug')).toEqual({
+      incomplete: true,
+      safeEnd: 13,
+    })
+    expect(stripThoughtTags('she smiled. <th')).toBe('she smiled. ')
+  })
+})
