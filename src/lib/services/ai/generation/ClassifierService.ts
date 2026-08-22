@@ -35,12 +35,21 @@ import { buildBeEventInstructions, extendClassificationSchemaWithBeEvents } from
 import {
   buildAgendaInstructions,
   buildChekhovInstructions,
+  buildGmNotesInstructions,
   extendClassificationSchemaWithAgendas,
   extendClassificationSchemaWithChekhov,
+  extendClassificationSchemaWithGmNotes,
   findSelfCharacter,
   readChekhovState,
+  readGmNotebook,
 } from '$lib/services/worldsim'
 import type { RuntimeVariable, RuntimeEntityType } from '$lib/services/packs/types'
+import {
+  buildTitlesInstructions,
+  extendClassificationSchemaWithTitles,
+  sheetOrDefault,
+  sheetTitles,
+} from '$lib/services/rpg'
 import { boundClassifierExtensionArrays } from './classifier-bounds'
 import { guardClassifierEntities, knownEntityNames } from './classifier-entity-guards'
 
@@ -152,6 +161,38 @@ export class ClassifierService extends BaseAIService {
       schema = extended
     }
 
+    // E5 GM's Notebook (research/65): same host rule and extension contract
+    // as chekhov — the active notes render so drops can name real ids.
+    const notebookSelf =
+      context.story.settings?.gmNotebook === true
+        ? findSelfCharacter(context.existingCharacters)
+        : null
+    const notebookMode = notebookSelf !== null
+    let notebookNotes: ReturnType<typeof readGmNotebook> = null
+    if (notebookMode) {
+      notebookNotes = readGmNotebook(notebookSelf.metadata)
+      const extended = extendClassificationSchemaWithGmNotes(schema)
+      if (extended === schema) {
+        log('WARNING: gmNotes schema extension no-op — notebook extraction disabled this turn')
+      }
+      schema = extended
+    }
+
+    // E7 earned titles (research/65): needs the RPG sheet, which only the BE
+    // story turn writes — so the extension is gated on beMode too.
+    const titlesSelf =
+      context.story.settings?.rpgTitles === true && context.story.settings?.beMode === true
+        ? findSelfCharacter(context.existingCharacters)
+        : null
+    const titlesMode = titlesSelf !== null
+    if (titlesMode) {
+      const extended = extendClassificationSchemaWithTitles(schema)
+      if (extended === schema) {
+        log('WARNING: titlesEarned schema extension no-op — title extraction disabled this turn')
+      }
+      schema = extended
+    }
+
     // Format existing entities for the prompt
     const existingCharacters = this.formatExistingCharacters(context.existingCharacters)
     const existingLocations = context.existingLocations.map((l) => l.name).join(', ') || '(none)'
@@ -175,6 +216,8 @@ export class ClassifierService extends BaseAIService {
       beMode ? buildBeEventInstructions(context.story.settings?.beGrowthCosmology) : '',
       agendaMode ? buildAgendaInstructions() : '',
       chekhovMode ? buildChekhovInstructions(chekhovBullets?.bullets ?? []) : '',
+      notebookMode ? buildGmNotesInstructions(notebookNotes?.notes ?? []) : '',
+      titlesMode ? buildTitlesInstructions(sheetTitles(sheetOrDefault(titlesSelf.metadata))) : '',
     ]
       .filter(Boolean)
       .join('\n\n')

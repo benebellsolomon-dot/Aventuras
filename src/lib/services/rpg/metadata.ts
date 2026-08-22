@@ -38,6 +38,8 @@ export const rpgSheetSchema = z
     awardedMilestones: z.array(z.string()).default([]),
     driftNote: z.object({ note: z.string() }).passthrough().optional(),
     startingGrant: z.boolean().optional(),
+    // E7: tolerant — a malformed titles blob degrades to none, never invalidates the sheet.
+    titles: z.array(z.unknown()).optional().catch(undefined),
   })
   .passthrough()
 

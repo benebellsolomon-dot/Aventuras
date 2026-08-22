@@ -87,6 +87,34 @@ export {
 export type { NarrativeDebtProposal } from './chekhov-schema'
 
 export {
+  EMPTY_GM_NOTEBOOK,
+  GM_NOTEBOOK_KEY,
+  GM_NOTE_ID_PATTERN,
+  GM_NOTE_KINDS,
+  GM_NOTES_HEADER,
+  advanceGmNotebook,
+  buildGmNotesBlock,
+  coerceNoteKind,
+  readGmNotebook,
+  writeGmNotebook,
+} from './notebook'
+export type {
+  GmNote,
+  GmNoteKind,
+  GmNoteLoad,
+  GmNotebookAdvanceInput,
+  GmNotebookState,
+} from './notebook'
+export {
+  GM_NOTES_MAX_DROPS_PER_TURN,
+  buildGmNotesInstructions,
+  extendClassificationSchemaWithGmNotes,
+  gmNotesAddFromResult,
+  gmNotesDropFromResult,
+} from './notebook-schema'
+export type { GmNoteProposal } from './notebook-schema'
+
+export {
   AGENDA_MAX_STEPS,
   CALM_PLANT_DIRECTIVE,
   CHEKHOV_FIRE_COOLDOWN,
@@ -98,6 +126,10 @@ export {
   CHEKHOV_OLD_AGE,
   CHEKHOV_REFRACTORY,
   DUO_TABLE,
+  GM_NOTES_MAX,
+  GM_NOTES_MAX_ADDS_PER_TURN,
+  GM_NOTE_MAX_AGE,
+  GM_NOTE_TEXT_MAX,
   MAX_AGENDA_PROPOSALS,
   MAX_OFFSCREEN_LINES,
   MUNDANE_GOALS,

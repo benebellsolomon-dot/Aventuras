@@ -277,4 +277,10 @@ export type ClassificationResult = z.infer<typeof classificationResultSchema> & 
   narrativeDebt?: unknown[]
   /** Ids of active setups this response paid off (chekhovGun schema extension). */
   resolvedDebts?: unknown[]
+  /** New GM's Notebook notes (present only when the gmNotebook schema extension is active). */
+  gmNotesAdd?: unknown[]
+  /** Ids of active notes this response made stale (gmNotebook schema extension). */
+  gmNotesDrop?: unknown[]
+  /** Titles earned this response (present only when the rpgTitles schema extension is active). */
+  titlesEarned?: unknown[]
 }

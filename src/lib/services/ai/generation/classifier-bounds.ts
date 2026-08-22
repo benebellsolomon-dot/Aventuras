@@ -14,8 +14,11 @@ import { MAX_BE_CONDITIONS, MAX_BE_EVENTS_PER_TURN } from '$lib/services/be'
 import {
   CHEKHOV_MAX_LOADS_PER_TURN,
   CHEKHOV_MAX_RESOLVED_PER_TURN,
+  GM_NOTES_MAX_ADDS_PER_TURN,
+  GM_NOTES_MAX_DROPS_PER_TURN,
   MAX_AGENDA_PROPOSALS,
 } from '$lib/services/worldsim'
+import { RPG_TITLES_MAX_PER_TURN } from '$lib/services/rpg'
 
 const EXTENSION_ARRAY_ENGINE_CAPS: ReadonlyArray<readonly [string, number]> = [
   ['beEvents', MAX_BE_EVENTS_PER_TURN],
@@ -26,6 +29,9 @@ const EXTENSION_ARRAY_ENGINE_CAPS: ReadonlyArray<readonly [string, number]> = [
   ['agendaProposals', MAX_AGENDA_PROPOSALS],
   ['narrativeDebt', CHEKHOV_MAX_LOADS_PER_TURN],
   ['resolvedDebts', CHEKHOV_MAX_RESOLVED_PER_TURN],
+  ['gmNotesAdd', GM_NOTES_MAX_ADDS_PER_TURN],
+  ['gmNotesDrop', GM_NOTES_MAX_DROPS_PER_TURN],
+  ['titlesEarned', RPG_TITLES_MAX_PER_TURN],
 ]
 const EXTENSION_FLOW_HEADROOM = 4
 const EXTENSION_STRING_MAX = 256

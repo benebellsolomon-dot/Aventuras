@@ -9,6 +9,7 @@
 
 import { ATTRIBUTE_IDS, ATTRIBUTE_LABELS, SKILL_BY_ID, SKILLS } from './constants'
 import { attributeMod, skillRanks } from './derive'
+import { formatTitles } from './titles'
 import type { CheckRecord, GrowthVerdict, RpgSheet } from './types'
 
 export const PLAYER_SHEET_HEADER = '[PLAYER SHEET]'
@@ -53,6 +54,11 @@ export function buildPlayerSheetBlock(
   // block is byte-identical to Phase 1-3 (prompt-cache guard, research/50 R8).
   if (knownSpells.length > 0) {
     lines.push(`Known spells: ${knownSpells.join('; ')}.`)
+  }
+  // E7 titles line renders ONLY when titles exist — same cache guard.
+  const titles = formatTitles(sheet)
+  if (titles) {
+    lines.push(`Titles: ${titles} — each grants +1 on the skills it covers.`)
   }
   lines.push(
     'These are the ONLY abilities that exist. Do not invent stats, skills, spells, or levels the sheet does not show.',

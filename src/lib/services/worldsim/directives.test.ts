@@ -350,3 +350,26 @@ describe('computeTurnDirectives — chekhov [CALLBACK]', () => {
     expect(second).toEqual(first)
   })
 })
+
+describe('E5 gmNotesBlock (research/65)', () => {
+  it('renders the notebook block only with the setting on and a self host, byte-stable otherwise', async () => {
+    const { writeGmNotebook } = await import('./notebook')
+    const self = {
+      id: 'p',
+      name: 'Ben',
+      relationship: 'self',
+      metadata: writeGmNotebook(null, {
+        notes: [{ id: 'n1', kind: 'reminder', text: 'Stacy does not know', age: 0 }],
+        nextId: 2,
+      }),
+    }
+    const base = { storyId: 's', entryId: 'e', characters: [self], entries: [] }
+    expect(computeTurnDirectives({ ...base, settings: {} })).toEqual(EMPTY_TURN_DIRECTIVES)
+    const on = computeTurnDirectives({ ...base, settings: { gmNotebook: true } })
+    expect(on.gmNotesBlock).toContain('- Remember: Stacy does not know')
+    expect(on.offScreenBlock).toBe('')
+    expect(
+      computeTurnDirectives({ ...base, settings: { gmNotebook: true }, characters: [] }),
+    ).toEqual(EMPTY_TURN_DIRECTIVES)
+  })
+})

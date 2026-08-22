@@ -33,17 +33,21 @@ import {
 } from './chekhov'
 import { CALM_PLANT_DIRECTIVE, WORLDSIM_SUPPRESS_AROUSAL } from './constants'
 import { buildWorldEventBlock, rollWorldEvent, type OffScreenNpc } from './events'
+import { buildGmNotesBlock, readGmNotebook } from './notebook'
 
 export interface TurnDirectives {
   offScreenBlock: string
   worldEventBlock: string
   callbackBlock: string
+  /** E5 (research/65): the GM's Notebook continuity block — renders FIRST in the tail. */
+  gmNotesBlock: string
 }
 
 export const EMPTY_TURN_DIRECTIVES: TurnDirectives = {
   offScreenBlock: '',
   worldEventBlock: '',
   callbackBlock: '',
+  gmNotesBlock: '',
 }
 
 /** FF's own share-gate ("wants to share if BOND ≥ +3") — same scale post-research/60. */
@@ -148,6 +152,7 @@ export interface TurnDirectiveInput {
         worldSimFrequency?: 'off' | 'sparse' | 'lively'
         npcAgendas?: boolean
         chekhovGun?: boolean
+        gmNotebook?: boolean
       }
     | null
     | undefined
@@ -165,7 +170,15 @@ export function computeTurnDirectives(input: TurnDirectiveInput): TurnDirectives
   // (fix-diff round — the classifier extension is gated the same way).
   const chekhovOn =
     input.settings?.chekhovGun === true && findSelfCharacter(input.characters) !== null
-  if (!worldSimOn && !agendasOn && !chekhovOn) return EMPTY_TURN_DIRECTIVES
+  // E5: same host rule — the notebook lives on the self character.
+  const notebookSelf =
+    input.settings?.gmNotebook === true ? findSelfCharacter(input.characters) : null
+  if (!worldSimOn && !agendasOn && !chekhovOn && notebookSelf === null) return EMPTY_TURN_DIRECTIVES
+
+  const gmNotesBlock = notebookSelf
+    ? buildGmNotesBlock(readGmNotebook(notebookSelf.metadata)?.notes ?? [])
+    : ''
+  if (!worldSimOn && !agendasOn && !chekhovOn) return { ...EMPTY_TURN_DIRECTIVES, gmNotesBlock }
 
   const nonSelf = livingNonSelf(input.characters)
   // Presence unknown (turn 1, classifier gap) → nobody is provably off-screen
@@ -264,5 +277,5 @@ export function computeTurnDirectives(input: TurnDirectiveInput): TurnDirectives
     offScreenBlock = buildOffScreenBlock(entries)
   }
 
-  return { offScreenBlock, worldEventBlock, callbackBlock }
+  return { offScreenBlock, worldEventBlock, callbackBlock, gmNotesBlock }
 }

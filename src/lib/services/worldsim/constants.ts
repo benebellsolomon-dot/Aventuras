@@ -269,5 +269,14 @@ export const CHEKHOV_LOCK_MAX = 12
  * narrator plants the detail and the classifier's debt scan observes it — the
  * seed enters through the normal loading channel, never as LLM-authored state.
  */
+// ---- E5 GM's Notebook (research/65) ----
+/** Hard cap on live notes — FIFO-oldest drops beyond it. */
+export const GM_NOTES_MAX = 12
+/** A note nobody refreshed or dropped for this many turns expires. */
+export const GM_NOTE_MAX_AGE = 40
+export const GM_NOTE_TEXT_MAX = 160
+export const GM_NOTES_MAX_ADDS_PER_TURN = 3
+export const GM_NOTE_NEXT_ID_MAX = 1_000_000
+
 export const CALM_PLANT_DIRECTIVE =
   'A quiet beat. Plant one small, concrete environmental detail — an object out of place, a sound at the edge of hearing, a figure at a distance — that could matter later. Do not explain it or call attention to it.'

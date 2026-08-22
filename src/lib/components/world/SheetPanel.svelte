@@ -13,6 +13,8 @@
     essenceMax,
     isStoredRpgSheetInvalid,
     sheetOrDefault,
+    sheetTitles,
+    SKILL_BY_ID,
     SKILLS,
     skillRanks,
     spendPoint,
@@ -28,6 +30,7 @@
     if (!protagonist) return null
     return sheetOrDefault(protagonist.metadata)
   })
+  const titles = $derived(sheet ? sheetTitles(sheet) : [])
 
   let showAllSkills = $state(false)
 
@@ -155,6 +158,23 @@
         {/if}
       </div>
     </div>
+
+    <!-- Titles (E7, research/65) -->
+    {#if titles.length > 0}
+      <div>
+        <div class="text-muted-foreground mb-1 text-xs uppercase">Titles</div>
+        <div class="space-y-0.5">
+          {#each titles as title (title.name)}
+            <div class="px-1.5 py-1 text-xs" title={title.reason}>
+              <span class="text-foreground">{title.name}</span>
+              <span class="text-muted-foreground">
+                — +1 {title.skills.map((id) => SKILL_BY_ID.get(id)?.label ?? id).join(', ')}
+              </span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Spellbook (Phase 4) -->
     <SpellbookSection />

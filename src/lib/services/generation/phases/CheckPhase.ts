@@ -26,6 +26,7 @@ import {
 } from '$lib/services/be'
 import {
   buildTargetCheckModifiers,
+  buildTitleCheckModifiers,
   resolveCheck,
   sheetOrDefault,
   type CheckRecord,
@@ -184,7 +185,14 @@ export class CheckPhase {
         )
       : undefined
     const targetState = target ? readBodyState(target.metadata) : null
-    const modifiers = buildTargetCheckModifiers(targetState, skill as SkillId)
+    // E7 (research/65): earned titles add +1 on the skills they cover — only
+    // when the story opted in (a sheet can carry titles from a toggle-on era).
+    const modifiers = [
+      ...buildTargetCheckModifiers(targetState, skill as SkillId),
+      ...(story.settings?.rpgTitles === true
+        ? buildTitleCheckModifiers(sheet, skill as SkillId)
+        : []),
+    ]
 
     const resolved: CheckRecord = {
       ...resolveCheck({

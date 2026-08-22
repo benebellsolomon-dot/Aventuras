@@ -8,6 +8,7 @@ export type {
   RpgDriftFinding,
   RpgDriftKind,
   RpgSheet,
+  RpgTitle,
   SkillId,
 } from './types'
 export {
@@ -65,6 +66,29 @@ export {
 } from './leveling'
 export { detectRpgDrift } from './drift'
 export { buildTargetCheckModifiers } from './modifiers'
+export {
+  RPG_TITLE_BONUS,
+  RPG_TITLE_MAX_SKILLS,
+  RPG_TITLE_NAME_MAX,
+  RPG_TITLE_REASON_MAX,
+  RPG_TITLES_MAX,
+  RPG_TITLES_MAX_PER_TURN,
+  awardTitles,
+  buildTitleCheckModifiers,
+  formatTitles,
+  normalizeTitle,
+  normalizeTitleName,
+  sanitizeTitleText,
+  sheetTitles,
+  type AwardTitlesResult,
+  type RpgTitleLoad,
+} from './titles'
+export {
+  buildTitlesInstructions,
+  extendClassificationSchemaWithTitles,
+  titlesEarnedFromResult,
+  type TitleProposal,
+} from './titles-schema'
 export { beLogStyle, buildTurnLog, type BeLogStyle, type TurnLogRow } from './turnlog'
 export {
   availableInteractions,

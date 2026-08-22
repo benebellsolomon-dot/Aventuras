@@ -465,8 +465,8 @@ export interface NarrativeOptions {
   /** Resolved RPG check for this turn — rendered as the immutable [CHECK
    * RESULT] block dead last in the user prompt (research/47 Step 6). */
   pendingCheck?: CheckRecord | null
-  /** Pre-generation world-liveliness blocks (research/61): [OFF-SCREEN] +
-   * [WORLD EVENT], rendered in the user prompt tail BEFORE [CHECK RESULT]
+  /** Pre-generation world-liveliness blocks (research/61): [GM NOTES] (E5) +
+   * [OFF-SCREEN] + [WORLD EVENT], rendered in the user prompt tail BEFORE [CHECK RESULT]
    * (which keeps the closest-to-generation slot). Empty strings render nothing. */
   turnDirectives?: TurnDirectives | null
 }
@@ -829,6 +829,11 @@ export class NarrativeService {
       prompt += `[Narrative Directives]\n${postHistoryBlock}\n\n`
     }
 
+    // E5 GM's Notebook (research/65): continuity facts frame everything else
+    // in the tail, so they render FIRST — per-turn volatile like the rest.
+    if (turnDirectives?.gmNotesBlock) {
+      prompt += `${turnDirectives.gmNotesBlock}\n\n`
+    }
     // World-liveliness blocks (research/61): per-turn volatile, so they live
     // here in the user prompt tail — never the system prompt (cache rule) —
     // and BEFORE the check block, which keeps the authority slot.

@@ -56,6 +56,17 @@ export interface RpgSheet {
    * exactly once and sets this, so the grant never double-applies.
    */
   startingGrant?: boolean
+  /** E7 earned titles (research/65): +1 on the skills each covers. Absent on sheets that predate titles. */
+  titles?: RpgTitle[]
+}
+
+export interface RpgTitle {
+  /** Display name, e.g. "Charmer". */
+  name: string
+  /** Skills the +1 applies to (1–3, validated ids). */
+  skills: SkillId[]
+  /** One-line why, for the sheet panel. */
+  reason: string
 }
 
 export interface CheckModifier {

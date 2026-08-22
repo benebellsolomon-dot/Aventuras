@@ -70,6 +70,8 @@ import {
   ALCHEMY_MILK_BONUS_INTENSITY,
   ESSENCE_REGEN_PER_PERIOD,
   applyLevelGrants,
+  awardTitles,
+  titlesEarnedFromResult,
   checkRecordTargets,
   crossingKey,
   defaultRpgSheet,
@@ -86,7 +88,9 @@ import {
 } from '$lib/services/rpg'
 import {
   EMPTY_CHEKHOV_STATE,
+  EMPTY_GM_NOTEBOOK,
   advanceChekhovState,
+  advanceGmNotebook,
   agendaCompletionBondEvent,
   agendaCompletionLocation,
   agendaFromProposal,
@@ -94,13 +98,17 @@ import {
   clearNpcAgenda,
   computeChekhovFire,
   findSelfCharacter,
+  gmNotesAddFromResult,
+  gmNotesDropFromResult,
   mundaneAgenda,
   narrativeDebtFromResult,
+  readGmNotebook,
   readNpcAgenda,
   researchSeed,
   resolvedDebtsFromResult,
   tickAgenda,
   writeChekhovState,
+  writeGmNotebook,
   writeNpcAgenda,
   type ChekhovLoad,
   type NpcAgenda,
@@ -3088,6 +3096,18 @@ class StoryStore {
         )
       }
 
+      // E5 GM's Notebook (research/65): drop → age/expire → append → cap, one
+      // write on the self character. Independent of the other passes.
+      if (this.currentStory.settings?.gmNotebook === true) {
+        await this.applyGmNotebookTurn(
+          result,
+          entryId,
+          trackingEnabled,
+          charactersBefore,
+          createdCharacterIds,
+        )
+      }
+
       // BE engine (Phase A): deterministic body-state reduction. Runs after every
       // entity loop and BEFORE the delta is built/saved so its writes are
       // rollback-visible (research/31 §2.2). beLog/checkLog are declared in the
@@ -3110,6 +3130,7 @@ class StoryStore {
         // RPG layer: protagonist sheet apply (essence/regen/leveling/drift) —
         // after the girls' reducer, before the delta, same rollback contract.
         checkLog = await this.applyRpgTurn(
+          result,
           resolvedCheck,
           entryId,
           trackingEnabled,
@@ -3841,6 +3862,69 @@ class StoryStore {
     })
   }
 
+  /**
+   * E5 GM's Notebook turn pass (research/65): the single writer of
+   * `metadata.gmNotebook` on the SELF character. Same skip/pause contract as
+   * the chekhov pass: no entry id → skip; signal-less classify → pause (no
+   * aging, no drops); value-identity skip so an empty notebook never
+   * materializes and an unchanged one writes nothing.
+   */
+  private async applyGmNotebookTurn(
+    result: ClassificationResult,
+    entryId: string | undefined,
+    trackingEnabled: boolean,
+    charactersBefore: CharacterBeforeState[],
+    createdCharacterIds: string[],
+  ): Promise<void> {
+    if (!this.currentStory?.id) return
+    if (!entryId) {
+      log('applyGmNotebookTurn: no entryId, skipping notebook turn this apply')
+      return
+    }
+    const selfNow = findSelfCharacter(this.characters)
+    if (!selfNow) return
+
+    const resultRecord = result as unknown as Record<string, unknown>
+    const loads = gmNotesAddFromResult(resultRecord)
+    if (
+      loads.length === 0 &&
+      !Array.isArray(resultRecord['gmNotesDrop']) &&
+      (result.scene?.presentCharacterNames?.length ?? 0) === 0 &&
+      !this.hasBaseClassifySignal(result)
+    ) {
+      log('applyGmNotebookTurn: signal-less classify — notebook pauses this turn')
+      return
+    }
+
+    const stored = readGmNotebook(selfNow.metadata)
+    const state = stored ?? EMPTY_GM_NOTEBOOK
+    const next = advanceGmNotebook({
+      state,
+      dropIds: gmNotesDropFromResult(resultRecord, state.notes),
+      loads,
+    })
+    if (stored === null && next.notes.length === 0) return
+    if (stored !== null && JSON.stringify(state) === JSON.stringify(next)) return
+
+    this.captureCharacterBeforeState(
+      selfNow,
+      trackingEnabled,
+      charactersBefore,
+      createdCharacterIds,
+    )
+    await this.wrapUpdate("GM's notebook", selfNow.name, async () => {
+      const { entity: ownedChar, wasCowed } = await this.cowCharacter(selfNow)
+      const metadata = writeGmNotebook(ownedChar.metadata, next)
+      await database.updateCharacter(ownedChar.id, { metadata })
+      this.characters = this.characters.map((c) => (c.id === ownedChar.id ? { ...c, metadata } : c))
+      if (wasCowed && trackingEnabled) {
+        createdCharacterIds.push(ownedChar.id)
+        const idx = charactersBefore.findIndex((cb) => cb.id === selfNow.id)
+        if (idx !== -1) charactersBefore.splice(idx, 1)
+      }
+    })
+  }
+
   private async applyBeEvents(
     result: ClassificationResult,
     entryId: string | undefined,
@@ -4452,6 +4536,7 @@ class StoryStore {
   }
 
   private async applyRpgTurn(
+    result: ClassificationResult,
     checkRecord: CheckRecord | null,
     entryId: string | undefined,
     trackingEnabled: boolean,
@@ -4500,6 +4585,20 @@ class StoryStore {
     //    BEFORE regen so a same-turn level-up raises the max the regen clamps
     //    against — otherwise the player is shorted the difference.
     sheet = applyLevelGrants(sheet, crossings).sheet
+
+    // 2b. E7 earned titles (research/65): classifier-proposed, engine-decided —
+    //     idempotent on name, one per turn, eight in all. Setting-gated so a
+    //     toggle-off story never grows titles.
+    if (this.currentStory.settings?.rpgTitles === true) {
+      const titleLoads = titlesEarnedFromResult(result as unknown as Record<string, unknown>)
+      if (titleLoads.length > 0) {
+        const awarded = awardTitles(sheet, titleLoads)
+        if (awarded.awarded.length > 0) {
+          log('titles awarded', { titles: awarded.awarded.map((t) => t.name) })
+        }
+        sheet = awarded.sheet
+      }
+    }
 
     // 3. Time-period regen: +2 per 6h period crossed this turn, clamped to max.
     if (timeTrackerBefore && this.currentStory.timeTracker) {
