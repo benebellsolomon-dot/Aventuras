@@ -44,7 +44,24 @@
 
 The converter ran (booru writer ON) and produced: `…explicit, uncensored, detailed anatomy, medium shot, pov, 1boy, 1girl, hetero, vaginal, standing sex, standing, pressed together, arms around neck, vaginal from behind, impaled, medium breasts, male pov, faceless male, muscular, partially dressed, long hair, … topless, blush, attic, dusty, wooden beams, heavy breathing` (~45 tags, many multi-word). Two defects: (1) **mixed arrangements** — face-to-face (`pressed together, arms around neck`) AND from-behind (`vaginal from behind`) in one action block → two poses at once → tangled anatomy; (2) **over the 77-token window** — the single-window budget counted TAGS (36), but multi-word tags cost 3–4 tokens each, so the tail (environment, possibly part of the identity run) was truncated on NanoGPT. Fixes in `booruPromptWriter.ts`: a third mechanical defect `conflictingArrangement` (FACING vs BEHIND tag sets) joins the act check → same single corrective retry, then `resolveArrangementConflict` drops the minority family deterministically (keeps the writer's lead); and a **token-estimated post-pass** for single-window endpoints (`BOORU_SINGLE_WINDOW_TOKEN_BUDGET` 66 ≈ 77 − quality prefix − EOS; `estimateTagTokens` = words (+1 for long words) + comma) trimming scene tail → expressions → action → run tails (identity core ≥ 6 kept). Tests +4 (suite 1394). Note: the image-prompt preset is now `deepseek-v4-pro`; the booru writer was calibrated on kimi-k3 in round 1 and deepseek produced the mixed arrangement — if contradictions keep appearing in the dev log (`act-reliability validation failed … conflictingArrangement`), move the image-prompt preset back to kimi-k3.
 
-## 4. Open (round 2, in priority order)
+**Live (Ben, 2026-08-22):** image-prompt preset switched back to `moonshotai/kimi-k3` → noticeably better booru-writer adherence on the routed explicit beats. Session closed here; state below is the handoff.
+
+## Live configuration at session close (2026-08-22)
+
+- Branch `claude/opus-agents-orchestration-82d727` @ this doc's commit, pushed. Suite 1394, check/lint clean.
+- Presets: classification `kimi-k3` (NanoGPT), suggestions/action-choices `deepseek-v4-pro`, image-prompt (booru + prose writers, scene analysis) `kimi-k3`, narrative Kimi K3. NanoGPT is prompt-schema-only for structured output (`structuredOutputUnenforced`).
+- Images: primary profile NanoGPT `wavespeed-ai/krea-v2/turbo-lora` + LoRAs (Nikke style / Sagging / NSFW MASTER via Civitai token URLs), style `image-style-nikke-krea2`, size 1536x1536; **Explicit-Beat Profile** "NanoNSFW" = NanoGPT `wai-illustrious-sdxl` (1024x1024, booru aspect picker overrides); booru writer ON, prose writer ON; template sync v14.
+- Routing: `<pic rating>` attribute + text-inferred upgrade → explicit beats to WAI through the booru writer (act check + arrangement check + token budget); everything else Krea through the prose writer.
+
+## 4. Open (round 2 — next session starts here, in priority order)
+
+1. **NSFW quality on WAI (routed beats):** iterate on live prompts — watch `act-reliability validation failed` / `conflictingArrangement` in the dev log; tune FACING/BEHIND sets and the token budget (66) against real renders; consider `explicitSize` 832x1216.
+2. **Krea prose path polish:** identity consistency across beats (descriptor checklist in the prose writer's dossier — hair length/style/eye/skin always stated), expression damping (state emotion twice if grins keep softening), `aspect_ratio`/`resolution` for wavespeed instead of width/height if VN framing matters, portrait (`image-portrait-generation`) and background templates to the same density/ordering rules.
+3. **D5 knobs (research/63):** chekhov cooldown/thresholds, rel pacing, world-sim gate frequencies, DC-chip tagging rate (prompt nudge drafted in research/63), arousal-suppression threshold, narrative short-term-memory vs provider config; re-verify classifier routing on kimi via `_guardRejects`.
+4. **Deferred FF5.2:** E5 notebook / E6 NPC thoughts / E7 titles (research/58).
+
+
+## 5. Archive — the NSFW-on-NanoGPT-Krea investigation log (resolved by §3b routing; kept for the evidence)
 
 1. **NSFW on the stock encoder** — Ben testing. **Round-2 result so far: NSFW MASTER alone at 1.0 / 1.5 / 2.0 FAILS** (scale on a content LoRA does not beat the layer-9/10 filter). Next rungs, from the MyAIForce six-method comparison + Civitai metadata:
    - **Bypass LoRAs (plain files, usable via `loras`):** `Krea2FilterBypass` by S1LV3RC01N (model 2728234) — 2-vector version **3066812** (layers 9–10, "moderate improvement, stable") and 3-vector **3067151** (9–11, stronger but unstable: missing characters / clothing artifacts); author: strength "1.0 all the way up to 40000 — almost impossible to overdo" (black images only on badly quantized models). `Krea2 Filter Bypass [Fedor]` (model 2746817, version **3089754**, ~1 MB, layers 9–10 only) — "strongest overall performer, improved realism, struggles more with explicit content". `skc3vo` (all 12 layers @ ~0.01) — plastic skin, not recommended.
