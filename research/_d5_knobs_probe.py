@@ -34,6 +34,19 @@ def main():
         report_story(db, sid)
     shutil.rmtree(tmp, ignore_errors=True)
 
+EXPLICIT_WORDS = re.compile(r'\b(?:nude|naked|topless|bottomless|nipples?|areolae?|genitals?|pussy|vagina|cock|penis|erection|cum|semen|sex|penetrat\w*|thrust\w*|orgasm\w*|blowjob|fellatio|paizuri|titfuck|handjob|fuck\w*|masturbat\w*|fingering|lactat\w*|breast milk|creampie|explicit|uncensored|nsfw)\b', re.I)
+
+def routing_audit(db, sid):
+    """Renders that look mis-routed: Krea rows whose prompt reads explicit (doll risk),
+    WAI rows whose prompt reads general (needless NSFW model). Heuristic — read the rows."""
+    rows = db.execute('select id, model, prompt, status, datetime(created_at/1000, "unixepoch") from embedded_images '
+                      'where story_id=? order by created_at', (sid,)).fetchall()
+    krea_explicit = [(ts, m, p[:90]) for (_i, m, p, st, ts) in rows if 'krea' in (m or '') and EXPLICIT_WORDS.search(p or '')]
+    wai_general = [(ts, m, p[:90]) for (_i, m, p, st, ts) in rows if 'krea' not in (m or '') and re.match(r'\s*(general|safe)\b', p or '', re.I)]
+    print(f'routing audit: {len(rows)} renders; Krea-with-explicit-text {len(krea_explicit)}; WAI-with-general-prefix {len(wai_general)}')
+    for ts, m, p in krea_explicit[-5:]: print(f'  MISS? {ts} {m}: {p}')
+    for ts, m, p in wai_general[-3:]: print(f'  over? {ts} {m}: {p}')
+
 def report_story(db, sid):
     rows = db.execute(
         'select position, type, world_state_delta, suggested_actions from story_entries '
@@ -85,6 +98,7 @@ def report_story(db, sid):
               + '; '.join(f"{b['id']} w{b.get('weight')} age{b.get('age')} fires{b.get('fires', 0)}{' LOCKED' if b.get('lock') else ''}" for b in ck.get('bullets', [])))
         nb = m.get('gmNotebook') or {}
         print(f'notebook: {len(nb.get("notes", []))} notes; titles: {[t.get("name") for t in (m.get("rpgSheet") or {}).get("titles", [])]}')
+    routing_audit(db, sid)
 
 if __name__ == '__main__':
     main()

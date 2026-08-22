@@ -94,6 +94,93 @@ describe('retryImageGeneration', () => {
     mocks.generateImage.mockResolvedValue({ base64: 'AAAA' })
   })
 
+  // Rating routing on retry (research/64 option B; D5 live: a regenerated explicit
+  // image fell back to the primary Krea profile, which renders explicit beats as a doll).
+  describe('rating routing', () => {
+    const EXPLICIT_SETTINGS = {
+      profileId: 'profile-1',
+      size: '1024x1024',
+      styleId: 'style-1',
+      referenceProfileId: 'ref-profile',
+      referenceSize: '512x768',
+      explicitProfileId: 'explicit-profile',
+      explicitSize: '832x1216',
+    }
+    const profileOf = (id: string) =>
+      id === 'explicit-profile'
+        ? { providerType: 'nanogpt', model: 'wai-illustrious-sdxl', apiKey: 'k' }
+        : { providerType: 'nanogpt', model: 'wavespeed-ai/krea-v2/turbo', apiKey: 'k' }
+
+    it('re-routes a stored explicit booru prompt to the explicit profile, skipping the reference swap', async () => {
+      mocks.imageGeneration = EXPLICIT_SETTINGS
+      mocks.getImageProfile.mockImplementation(profileOf)
+      mocks.getEmbeddedImage.mockResolvedValue({
+        ...INLINE_IMAGE,
+        sourceText: '<pic prompt="Lucy bare on the crate" characters="Lucy"></pic>',
+        prompt: 'explicit, uncensored, 1girl, completely nude, sitting, spread legs. OLD STYLE',
+      })
+      const lucy = {
+        ...beCharacter('Lucy', 24),
+        portrait: 'data:image/png;base64,QUJD',
+      } as Character
+      await retryImageGeneration('img-1', 'ignored', {
+        presentCharacters: [lucy],
+        beMode: true,
+        narrativeText: '',
+        referenceMode: true,
+      })
+      const call = lastGenerateCall() as unknown as {
+        profileId: string
+        size: string
+        referenceImages?: string[]
+      }
+      expect(call.profileId).toBe('explicit-profile')
+      expect(call.size).toBe('832x1216')
+      expect(call.referenceImages).toBeUndefined()
+    })
+
+    it('honors the <pic rating="explicit"> attribute even when the prose prompt has no explicit words', async () => {
+      mocks.imageGeneration = EXPLICIT_SETTINGS
+      mocks.getImageProfile.mockImplementation(profileOf)
+      mocks.getEmbeddedImage.mockResolvedValue({
+        ...INLINE_IMAGE,
+        sourceText: '<pic prompt="Lucy on the crate" characters="Lucy" rating="explicit"></pic>',
+        prompt: 'Lucy on the crate, dusty attic. OLD STYLE',
+      })
+      await retryImageGeneration('img-1', 'ignored', {
+        presentCharacters: [beCharacter('Lucy', 24)],
+        beMode: true,
+        narrativeText: '',
+      })
+      expect((lastGenerateCall() as unknown as { profileId: string }).profileId).toBe(
+        'explicit-profile',
+      )
+    })
+
+    it('keeps the primary profile for a general beat, and when no explicit profile is configured', async () => {
+      mocks.imageGeneration = EXPLICIT_SETTINGS
+      mocks.getImageProfile.mockImplementation(profileOf)
+      await retryImageGeneration('img-1', INLINE_IMAGE.prompt, {
+        presentCharacters: [beCharacter('Lucy', 24)],
+        beMode: true,
+        narrativeText: '',
+      })
+      expect((lastGenerateCall() as unknown as { profileId: string }).profileId).toBe('profile-1')
+
+      mocks.imageGeneration = { ...EXPLICIT_SETTINGS, explicitProfileId: null }
+      mocks.getEmbeddedImage.mockResolvedValue({
+        ...INLINE_IMAGE,
+        prompt: 'explicit, uncensored, 1girl, completely nude. OLD STYLE',
+      })
+      await retryImageGeneration('img-1', 'ignored', {
+        presentCharacters: [beCharacter('Lucy', 24)],
+        beMode: true,
+        narrativeText: '',
+      })
+      expect((lastGenerateCall() as unknown as { profileId: string }).profileId).toBe('profile-1')
+    })
+  })
+
   it('rebuilds an inline prompt through the shared assembly (trigger words, tier marker, current style)', async () => {
     await retryImageGeneration('img-1', INLINE_IMAGE.prompt, {
       presentCharacters: [beCharacter('Lucy', 24, 'glowmilk')],

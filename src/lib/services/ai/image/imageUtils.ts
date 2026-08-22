@@ -18,6 +18,7 @@ import type { Character, ImageProviderType, StorySettings } from '$lib/types'
 import type { StructuredImageSpecInput } from './providers/types'
 import { emitImageReady, emitImageAnalysisFailed } from '$lib/services/events'
 import { matchAttribute } from '$lib/utils/inlineImageParser'
+import { effectiveBeatRating, parseBeatRating, resolveRatingRoute } from './ratingRouting'
 import { createLogger } from '$lib/log'
 import { normalizeImageDataUrl, parseImageSize } from '$lib/utils/image'
 
@@ -236,23 +237,32 @@ export async function retryImageGeneration(
   }
 
   const imageSettings = settings.systemServicesSettings.imageGeneration
-  let profileId = imageSettings.profileId
-
-  if (!profileId) {
+  if (!imageSettings.profileId) {
     log('Cannot retry - no profile configured')
     return
   }
 
-  let size = imageSettings.size
+  // Rating routing (research/64 option B) must survive a regenerate: the beat's
+  // rating is the higher of the <pic rating> attribute and what the stored /
+  // edited prompt text implies (a booru prompt opens with its rating tag). A
+  // retry that ignored this sent explicit beats back to the primary profile.
+  const declaredRating = parseBeatRating(matchAttribute(image.sourceText ?? '', 'rating'))
+  const ratingText = [image.prompt, prompt, inlineContext?.promptOverride]
+    .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+    .join('\n')
+  const route = resolveRatingRoute(effectiveBeatRating(declaredRating, ratingText), imageSettings)
+  let profileId = route.profileId ?? imageSettings.profileId
+  let size = route.size
 
   // Portrait references (Spec 4 B1): first-time generation swaps to the
   // reference profile/size when the tagged characters have portraits, and
   // routes si-bridge identity through the FaceID anchor. A retry that skipped
-  // this re-rendered the image with no identity anchor at all.
+  // this re-rendered the image with no identity anchor at all. Routed explicit
+  // beats skip references entirely, as first-time generation does.
   const isInlineRecord =
     image.generationMode === 'inline' && (image.sourceText ?? '').startsWith('<pic')
   const referenceImageUrls =
-    inlineContext && isInlineRecord
+    inlineContext && isInlineRecord && !route.routed
       ? collectReferenceImages(image.sourceText ?? '', inlineContext)
       : undefined
   if (referenceImageUrls && imageSettings.referenceProfileId) {
@@ -306,6 +316,7 @@ export async function retryImageGeneration(
     profileId,
     model,
     size,
+    routedExplicit: route.routed,
     reassembled: !!assembled,
     references: referenceImageUrls?.length ?? 0,
     anchored: !!poseFaceAnchor,
