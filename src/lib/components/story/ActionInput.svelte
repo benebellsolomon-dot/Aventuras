@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { stripMarkdownFence } from '$lib/utils/narrativeCleanup'
   import { tick } from 'svelte'
   import { ui } from '$lib/stores/ui.svelte'
   import { story, type ClassificationApplyOutcome } from '$lib/stores/story.svelte'
@@ -668,6 +669,8 @@
         }
 
         if (event.type === 'phase_complete' && event.phase === 'narrative' && fullResponse.trim()) {
+          // Store what the narrator MEANT: a whole-response ```html fence is noise.
+          fullResponse = stripMarkdownFence(fullResponse)
           narrationEntry = await story.addEntry(
             'narration',
             fullResponse,

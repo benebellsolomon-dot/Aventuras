@@ -40,6 +40,7 @@
   import { inlineImageService, retryImageGeneration } from '$lib/services/ai/image'
   import { matchAttribute } from '$lib/utils/inlineImageParser'
   import { resolveInnerVoices, stripThoughtTags } from '$lib/utils/thoughtTagParser'
+  import { stripMarkdownFence } from '$lib/utils/narrativeCleanup'
   import InnerVoicesList from './InnerVoicesList.svelte'
   import { database } from '$lib/services/database'
   import { onMount } from 'svelte'
@@ -1343,7 +1344,9 @@
         {/if}
 
         {#if entry.type === 'narration'}
-          {@const displayContent = stripThoughtTags(entry.translatedContent ?? entry.content)}
+          {@const displayContent = stripThoughtTags(
+            stripMarkdownFence(entry.translatedContent ?? entry.content),
+          )}
           {#if entry.worldStateDelta?.checkLog?.length}
             {#each entry.worldStateDelta.checkLog as checkRecord, i (i)}
               <CheckCard record={checkRecord} beLog={entry.worldStateDelta?.beLog ?? []} />

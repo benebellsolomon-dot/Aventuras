@@ -14,6 +14,9 @@ import { ContextBuilder } from '$lib/services/context'
 import { createLogger } from '$lib/log'
 import { actionChoicesResultSchema, type ActionChoice } from '../sdk/schemas/actionchoices'
 import { withDefaultDc } from '../sdk/schemas/tolerant-fields'
+import { sanitizeActionChoices, stripGrowthIntent } from './action-choice-hygiene'
+import { database } from '$lib/services/database'
+import { growthGateRequired } from '$lib/services/be'
 
 const log = createLogger('ActionChoices')
 
@@ -169,6 +172,22 @@ export class ActionChoicesService extends BaseAIService {
     const result = await this.generate(actionChoicesResultSchema, system, prompt, 'action-choices')
 
     log('Action choices generated:', result.choices.length)
-    return (result.choices as ActionChoice[]).slice(0, 4).map(withDefaultDc)
+    const raw = result.choices as ActionChoice[]
+    const kept = sanitizeActionChoices(raw)
+    if (kept.length < raw.length) {
+      log('Dropped degenerate action choices', {
+        dropped: raw.filter((c) => !kept.includes(c)).map((c) => c.text),
+      })
+    }
+    // Absolute growth rule (research/66): in a cosmology story growth is never an
+    // action — a growthIntent the model set anyway is stripped deterministically
+    // (the check still resolves as an ordinary check; casts still bank).
+    const gateRequired = context.storyId
+      ? growthGateRequired((await database.getStory(context.storyId))?.settings)
+      : false
+    return kept
+      .slice(0, 4)
+      .map((choice) => (gateRequired && choice.growthIntent ? stripGrowthIntent(choice) : choice))
+      .map(withDefaultDc)
   }
 }

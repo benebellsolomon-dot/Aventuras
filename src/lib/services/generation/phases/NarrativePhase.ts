@@ -22,6 +22,7 @@ import type { Story, StoryEntry } from '$lib/types'
 import type { StyleReviewResult } from '$lib/services/ai/generation/StyleReviewerService'
 import type { StreamChunk } from '$lib/services/ai/core/types'
 import type { CheckRecord } from '$lib/services/rpg'
+import { stripMarkdownFence } from '$lib/utils/narrativeCleanup'
 import type { TurnDirectives } from '$lib/services/worldsim'
 
 const MAX_EMPTY_RESPONSE_RETRIES = 3
@@ -170,7 +171,8 @@ export class NarrativePhase {
     }
 
     const result: NarrativeResult = {
-      content: fullResponse,
+      // A whole-response markdown fence (```html … ```) is model noise, not prose.
+      content: stripMarkdownFence(fullResponse),
       reasoning: fullReasoning,
       chunkCount,
     }

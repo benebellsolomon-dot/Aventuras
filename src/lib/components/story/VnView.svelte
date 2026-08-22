@@ -12,6 +12,7 @@
   import { ui } from '$lib/stores/ui.svelte'
   import { settings, STORY_WIDTH_OPTIONS } from '$lib/stores/settings.svelte'
   import { parseMarkdown } from '$lib/utils/markdown'
+  import { stripMarkdownFence } from '$lib/utils/narrativeCleanup'
   import {
     hasIncompleteThoughtTag,
     resolveInnerVoices,
@@ -227,7 +228,7 @@
       return parts.slice(0, Math.max(0, parts.length - 1))
     }
     const entry = latestNarration
-    const content = entry?.translatedContent ?? entry?.content ?? ''
+    const content = stripMarkdownFence(entry?.translatedContent ?? entry?.content ?? '')
     const cleaned = stripPicTags(content)
     if (!cleaned.trim()) return []
     const html = isHtmlContent(cleaned) ? cleaned : parseMarkdown(cleaned)

@@ -1,4 +1,5 @@
 import { scopeCssSelectors } from './cssScope'
+import { stripLeadingFenceIfComplete } from './narrativeCleanup'
 import { hasIncompletePicTag } from './inlineImageParser'
 import { hasIncompleteThoughtTag } from './thoughtTagParser'
 
@@ -17,6 +18,8 @@ export class StreamingHtmlRenderer {
   private buffer = ''
   private safeHtml = ''
   private scopeClass: string
+  /** The opening ```lang fence (if any) has been judged — strip once, never again. */
+  private fenceSettled = false
 
   constructor(entryId: string) {
     this.scopeClass = `vp-${entryId.slice(0, 8)}`
@@ -27,6 +30,12 @@ export class StreamingHtmlRenderer {
    */
   append(chunk: string): string {
     this.buffer += chunk
+    if (!this.fenceSettled && this.safeHtml === '') {
+      const judged = stripLeadingFenceIfComplete(this.buffer)
+      if (!judged.settled) return this.getWrappedOutput() // hold: could still be a fence line
+      this.buffer = judged.content
+      this.fenceSettled = true
+    }
     this.processBuffer()
     return this.getWrappedOutput()
   }
@@ -35,7 +44,8 @@ export class StreamingHtmlRenderer {
    * Finalize - flush remaining buffer.
    */
   flush(): string {
-    const remaining = this.scopeCss(this.buffer)
+    // A trailing fence closer is noise too (the stored entry is stripped separately).
+    const remaining = this.scopeCss(this.buffer.replace(/\r?\n[ \t]*```[ \t]*\s*$/, ''))
     this.safeHtml += remaining
     this.buffer = ''
     return this.getWrappedOutput()
