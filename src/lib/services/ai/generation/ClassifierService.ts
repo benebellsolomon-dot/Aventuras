@@ -25,6 +25,7 @@ import { ContextBuilder } from '$lib/services/context'
 import { database } from '$lib/services/database'
 import { createLogger } from '$lib/log'
 import { stripPicTags } from '$lib/utils/inlineImageParser'
+import { stripThoughtTags } from '$lib/utils/thoughtTagParser'
 import {
   classificationResultSchema,
   clampNumber,
@@ -190,8 +191,8 @@ export class ClassifierService extends BaseAIService {
       currentTimeInfo,
       chatHistoryBlock,
       inputLabel: mode === 'creative-writing' ? 'Author Direction' : 'Player Action',
-      userAction: stripPicTags(context.userAction),
-      narrativeResponse: stripPicTags(context.narrativeResponse),
+      userAction: stripThoughtTags(stripPicTags(context.userAction)),
+      narrativeResponse: stripThoughtTags(stripPicTags(context.narrativeResponse)),
       existingCharacters,
       existingLocations,
       existingItems,
@@ -495,8 +496,8 @@ export class ClassifierService extends BaseAIService {
           const t = e.metadata.timeStart
           timeInfo = ` (at Y${t.years}D${t.days} ${String(t.hours).padStart(2, '0')}:${String(t.minutes).padStart(2, '0')})`
         }
-        // Always strip pic tags for classification to avoid confusion
-        const cleanContent = stripPicTags(e.content)
+        // Always strip pic and thought tags for classification to avoid confusion
+        const cleanContent = stripThoughtTags(stripPicTags(e.content))
         return `${prefix}${timeInfo} ${cleanContent.slice(0, 500)}${cleanContent.length > 500 ? '...' : ''}`
       })
       .join('\n\n')

@@ -130,3 +130,36 @@ describe('creative-writing template', () => {
     expect(out).toContain('Use THIRD PERSON for all characters')
   })
 })
+
+// ---- E6 NPC inner voices (research/65) ----
+// The block is gated on a precomputed guidance string that NarrativeService sets
+// to '' unless the story's npcThoughts setting is on. The cache guard below pins
+// that OFF renders byte-for-byte what the template rendered before the block
+// existed: the same template with the added Liquid segment textually removed.
+
+const NPC_THOUGHT_SEGMENT =
+  "{% if npcThoughtInstructions and npcThoughtInstructions != '' %}\n{{ npcThoughtInstructions }}{% endif %}"
+
+describe('story templates — npcThoughts gating (E6, research/65)', () => {
+  for (const template of [adventure, creativeWriting]) {
+    it(`${template.id}: carries the inner-voice segment exactly once`, () => {
+      expect(template.content.split(NPC_THOUGHT_SEGMENT)).toHaveLength(2)
+    })
+
+    it(`${template.id}: unset npcThoughtInstructions renders byte-identically to the pre-E6 template`, () => {
+      const preE6 = template.content.replace(NPC_THOUGHT_SEGMENT, '')
+      // Both the empty-string case and the legacy case where the variable was
+      // never added to the context at all.
+      expect(render(template.content, { npcThoughtInstructions: '' })).toBe(render(preE6))
+      expect(render(template.content)).toBe(render(preE6))
+    })
+
+    it(`${template.id}: renders the instructions when the setting is on`, () => {
+      const out = render(template.content, {
+        npcThoughtInstructions: '<InnerVoices>\nup to 3 tags\n</InnerVoices>',
+      })
+      expect(out).toContain('<InnerVoices>')
+      expect(out).toContain('up to 3 tags')
+    })
+  }
+})

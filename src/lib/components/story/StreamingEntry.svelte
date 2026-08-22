@@ -7,6 +7,7 @@
   import ReasoningBlock from './ReasoningBlock.svelte'
   import { settings } from '$lib/stores/settings.svelte'
   import { replacePicTagsWithPlaceholders } from '$lib/utils/inlineImageParser'
+  import { hasIncompleteThoughtTag, stripThoughtTags } from '$lib/utils/thoughtTagParser'
 
   // Reactive binding to streaming content
   let content = $derived(ui.streamingContent)
@@ -17,12 +18,20 @@
   // Check if inline image mode is enabled
   let inlineImageMode = $derived(story.currentStory?.settings?.imageGenerationMode === 'inline')
 
+  // Inner voices (E6, research/65) never stream into the prose: a half-written
+  // <thought ...> is held back at its opening tag so no partial tag flashes, and
+  // the finished tags are stripped — StoryEntry renders them once the entry lands.
+  let proseContent = $derived.by(() => {
+    const probe = hasIncompleteThoughtTag(content)
+    return stripThoughtTags(probe.incomplete ? content.slice(0, probe.safeEnd) : content)
+  })
+
   // For Visual Prose, content is already wrapped HTML; for regular, parse as markdown
   // Also process <pic> tags to show generating placeholders when inline mode is enabled
   let renderedContent = $derived.by(() => {
-    let processed = isVisualProse ? content : parseMarkdown(content)
+    let processed = isVisualProse ? proseContent : parseMarkdown(proseContent)
     // Replace <pic> tags with generating placeholders during streaming
-    if (inlineImageMode && content.includes('<pic')) {
+    if (inlineImageMode && proseContent.includes('<pic')) {
       processed = replacePicTagsWithPlaceholders(processed)
     }
     return processed

@@ -18,6 +18,8 @@
     Bookmark,
     Volume2,
     Image as ImageIcon,
+    ChevronDown,
+    MessageCircle,
   } from 'lucide-svelte'
   import { aiService } from '$lib/services/ai'
   import { aiTTSService } from '$lib/services/ai/utils/TTSService'
@@ -37,6 +39,7 @@
   } from '$lib/services/events'
   import { inlineImageService, retryImageGeneration } from '$lib/services/ai/image'
   import { matchAttribute } from '$lib/utils/inlineImageParser'
+  import { extractThoughtTags, stripThoughtTags } from '$lib/utils/thoughtTagParser'
   import { database } from '$lib/services/database'
   import { onMount } from 'svelte'
   import ReasoningBlock from './ReasoningBlock.svelte'
@@ -51,6 +54,11 @@
   import { escapeRegex, extractSentenceAt, expandRangeBidirectional } from '$lib/utils/text'
 
   let { entry }: { entry: StoryEntry } = $props()
+
+  // NPC inner voices (E6, research/65): parsed straight off the stored content,
+  // exactly like <pic> tags — nothing about them is persisted separately.
+  const innerVoices = $derived(entry.type === 'narration' ? extractThoughtTags(entry.content) : [])
+  let innerVoicesOpen = $state(false)
 
   // Separate token counts for content and reasoning
   const contentTokens = $derived(entry.metadata?.tokenCount ?? 0)
@@ -950,7 +958,7 @@
       await aiTTSService.initialize(ttsSettings)
 
       // Use translated content if available, otherwise use original content
-      const ttsContent = entry.translatedContent ?? entry.content
+      const ttsContent = stripThoughtTags(entry.translatedContent ?? entry.content)
       const textToNarrate = sanitizeTextForTTS(ttsContent, {
         removeTags: ttsSettings.removeHtmlTags,
         removeAllTagContent: ttsSettings.removeAllHtmlContent,
@@ -1332,7 +1340,7 @@
         {/if}
 
         {#if entry.type === 'narration'}
-          {@const displayContent = entry.translatedContent ?? entry.content}
+          {@const displayContent = stripThoughtTags(entry.translatedContent ?? entry.content)}
           {#if entry.worldStateDelta?.checkLog?.length}
             {#each entry.worldStateDelta.checkLog as checkRecord, i (i)}
               <CheckCard record={checkRecord} beLog={entry.worldStateDelta?.beLog ?? []} />
@@ -1369,6 +1377,37 @@
           </div>
         {/if}
       </div>
+
+      <!-- Inner voices (E6): collapsed by default, the prose above stays untouched -->
+      {#if innerVoices.length > 0}
+        <div class="border-border/50 mt-3 border-t pt-2">
+          <button
+            type="button"
+            class="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase transition-colors"
+            aria-expanded={innerVoicesOpen}
+            onclick={() => (innerVoicesOpen = !innerVoicesOpen)}
+          >
+            <MessageCircle class="h-3.5 w-3.5" />
+            <span>Inner voices</span>
+            <span class="text-muted-foreground/60 font-normal normal-case"
+              >({innerVoices.length})</span
+            >
+            <ChevronDown
+              class="h-3.5 w-3.5 transition-transform {innerVoicesOpen ? 'rotate-180' : ''}"
+            />
+          </button>
+          {#if innerVoicesOpen}
+            <ul class="mt-2 space-y-1.5">
+              {#each innerVoices as voice, i (i)}
+                <li class="text-muted-foreground text-xs italic">
+                  <span class="text-foreground/80 font-medium not-italic">{voice.who}</span>
+                  <span class="text-muted-foreground/60"> — </span>{voice.text}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Orphaned Images Gallery (Unplaced Illustrations) -->
       {#if orphanedImages.length > 0}

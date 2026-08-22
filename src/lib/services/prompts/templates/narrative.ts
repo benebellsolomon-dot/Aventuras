@@ -203,7 +203,8 @@ End with a natural opening for action, not a direct question.{% endif %}
 </response_instruction>
 
 {% if visualProseMode %}{{ visualProseInstructions }}{% endif %}
-{% if inlineImageMode %}{{ inlineImageInstructions }}{% endif %}
+{% if inlineImageMode %}{{ inlineImageInstructions }}{% endif %}{% if npcThoughtInstructions and npcThoughtInstructions != '' %}
+{{ npcThoughtInstructions }}{% endif %}
 {% if beStateBlock != '' %}
 {{ beStateBlock }}
 {% endif %}
@@ -398,7 +399,8 @@ End at a natural narrative beat.{% endif %}
 </response_instruction>
 
 {% if visualProseMode %}{{ visualProseInstructions }}{% endif %}
-{% if inlineImageMode %}{{ inlineImageInstructions }}{% endif %}
+{% if inlineImageMode %}{{ inlineImageInstructions }}{% endif %}{% if npcThoughtInstructions and npcThoughtInstructions != '' %}
+{{ npcThoughtInstructions }}{% endif %}
 {% if beStateBlock != '' %}
 {{ beStateBlock }}
 {% endif %}
