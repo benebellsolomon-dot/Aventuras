@@ -253,6 +253,11 @@
     settings.saveSystemServicesSettings()
   }
 
+  function handleProsePromptWriterToggle(checked: boolean) {
+    settings.systemServicesSettings.imageGeneration.dedicatedProsePromptWriter = checked
+    settings.saveSystemServicesSettings()
+  }
+
   async function handleResetAll() {
     await settings.resetExperimentalFeatures()
     stateTrackingChecked = settings.experimentalFeatures.stateTracking
@@ -359,6 +364,29 @@
       <Switch
         checked={settings.systemServicesSettings.imageGeneration.dedicatedBooruPromptWriter}
         onCheckedChange={handleBooruPromptWriterToggle}
+      />
+    </div>
+    {#if !settings.systemServicesSettings.imageGeneration.dedicatedBooruPromptWriter && settings.systemServicesSettings.imageGeneration.explicitProfileId}
+      <p class="text-warning text-xs">
+        An Explicit-Beat Profile is configured: with this writer OFF, beats routed to a booru model
+        are sent the story's prose prompt as-is, which booru models render poorly. Turn it on.
+      </p>
+    {/if}
+
+    <div class="flex flex-row items-center justify-between pt-1">
+      <div class="space-y-0.5 pr-4">
+        <Label>Dedicated prose prompt writer</Label>
+        <p class="text-muted-foreground text-xs">
+          For LLM-encoder image models (Krea 2, Flux, …), a focused AI call rewrites each scene into
+          one dense subject-first paragraph — from the characters' descriptors, current clothing and
+          body state — instead of sending the story model's prompt as-is. Uses the Image Gen agent
+          profile; falls back to the story-written prompt if it fails.
+        </p>
+      </div>
+      <Switch
+        checked={settings.systemServicesSettings.imageGeneration.dedicatedProsePromptWriter !==
+          false}
+        onCheckedChange={handleProsePromptWriterToggle}
       />
     </div>
   </div>
