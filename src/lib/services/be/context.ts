@@ -14,6 +14,7 @@
 
 import { GRUDGE_STALL_THRESHOLD, SUPPORT_HANG_GATE } from './constants'
 import { bandWord, comparative, cupLetter } from './ladder'
+import { fmtCm } from './magnitude'
 import {
   bodyRow,
   bwhCmString,
@@ -30,6 +31,12 @@ import type { BodyState } from './types'
 export interface BeStateEntry {
   name: string
   state: BodyState
+  /**
+   * Cosmology stories (research/66 §magnitude): what the story's growth act
+   * would do to her THIS scene — stated up front so the narrator renders
+   * exactly the cm the engine will apply if the act completes.
+   */
+  actGrowth?: { cm: number; tierAfter: number; bankedCm: number }
 }
 
 const HIGH_REGISTER_BANDS = new Set(['gigantic breasts', 'hyper breasts'])
@@ -54,17 +61,29 @@ function growthDirective(name: string, state: BodyState): string {
   const highRegister = HIGH_REGISTER_BANDS.has(bandWord(state.tier))
   // Combined multi-increment land in one turn (pending remainder + event, or
   // multi-event with no cooldown) — the dramatic register is earned.
+  const cmNote = growth.cm !== undefined ? ` — exactly ${fmtCm(growth.cm)} cm of bust` : ''
   if (growth.delta >= 2) {
     const register = highRegister
       ? 'Dramatic register is earned: render the surge with full weight and spatial consequence.'
       : 'Render it as a clear, startling change — but keep comparisons within one band of her actual new size; no room-scale imagery.'
-    return `GROWTH JUST LANDED: ${name} grew significantly this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). ${register}`
+    return `GROWTH JUST LANDED: ${name} grew significantly this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}${cmNote}). ${register}`
   }
-  return `GROWTH JUST LANDED: ${name} grew one increment this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}). Narrate it as subtle and incremental — noticeable strain and warmth, NOT a dramatic transformation. Exactly this much and no further this beat.`
+  return `GROWTH JUST LANDED: ${name} grew one increment this scene (${cupLetter(growth.tierBefore)} → ${cupLetter(state.tier)}${cmNote}). Narrate it as subtle and incremental — noticeable strain and warmth, NOT a dramatic transformation. Exactly this much and no further this beat.`
+}
+
+/** Cosmology stories: the act's exact cm, told BEFORE the narrator writes (research/66 §magnitude). */
+function actGrowthLine(
+  name: string,
+  state: BodyState,
+  act: NonNullable<BeStateEntry['actGrowth']>,
+): string {
+  const bank =
+    act.bankedCm > 0 ? ` (includes ${fmtCm(act.bankedCm)} cm banked from spells/skills)` : ''
+  return `ACT GROWTH: if the story's growth act completes for ${name} in THIS scene, she grows exactly ${fmtCm(act.cm)} cm of bust (${cupLetter(state.tier)} → ${cupLetter(act.tierAfter)})${bank} — render that much and no more; if the act does not complete, her size does NOT change.`
 }
 
 function characterLines(entry: BeStateEntry): string {
-  const { name, state } = entry
+  const { name, state, actGrowth } = entry
   const row = bodyRow(state.tier, state.shape)
   const m = measurements(state)
 
@@ -159,6 +178,7 @@ function characterLines(entry: BeStateEntry): string {
 
   const directive = growthDirective(name, state)
   if (directive) lines.push(directive)
+  if (actGrowth) lines.push(actGrowthLine(name, state, actGrowth))
 
   // The note carries its own imperative (silently-correct vs render-now differ
   // per drift kind) — the wrapper adds no tail that could contradict it.

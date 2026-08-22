@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_BE_STORY_CONFIG,
-  GROWTH_TRIGGER_BANK_NOTE,
+  GROWTH_BONUS_NOTE,
   GROWTH_TRIGGER_BLOCK_NOTE,
-  MAX_TRIGGER_BANK,
+  MAX_GROWTH_BONUS_CM,
   PRESSURE_FIRE,
+  SPELL_GROWTH_CM_PER_INTENSITY,
 } from './constants'
+import { tiersForCm } from './magnitude'
 import { defaultBodyState } from './metadata'
 import { reduceCharacterBody, seededRoll } from './reducer'
 import type { BeEvent, BeLogRecord, BeStoryConfig, BodyState } from './types'
@@ -634,19 +636,22 @@ describe('earned growth banks on cooldown', () => {
 })
 
 /**
- * Absolute growth rule (research/66, Ben's ruling): with a cosmology set, no
- * channel lands without a verified trigger for HER this turn.
+ * Absolute growth rule + magnitude model (research/66, Ben's rulings): with a
+ * cosmology set the story is ACT-DRIVEN — a verified act grows her by the
+ * baseline cm (+ banked modifiers); nothing else grows her.
  */
-describe('absolute growth rule — cosmology trigger gate', () => {
+describe('absolute growth rule — act-driven growth (cosmology trigger gate)', () => {
   const GATED = { growthGate: { requireTrigger: true, triggered: false } }
   const TRIGGERED = { growthGate: { requireTrigger: true, triggered: true } }
   const landingSeed = seedFor((roll) => roll >= 15)
+  const base = () => defaultBodyState()
+  const expectedTiers = (cm: number, tier = base().tier) => tiersForCm(tier, cm, null).tiers
 
-  test('an ambient classifier event that WOULD land is blocked, logged ineligible, and accrues no pressure', () => {
-    const open = reduceCharacterBody(defaultBodyState(), [growthEvent()], NO_TICK, landingSeed)
-    expect(open.state.tier).toBeGreaterThan(defaultBodyState().tier)
+  test('an ambient classifier event that WOULD land ungated is blocked on an untriggered turn (ineligible, no pressure)', () => {
+    const open = reduceCharacterBody(base(), [growthEvent()], NO_TICK, landingSeed)
+    expect(open.state.tier).toBeGreaterThan(base().tier)
     const gated = reduceCharacterBody(
-      defaultBodyState(),
+      base(),
       [growthEvent()],
       NO_TICK,
       landingSeed,
@@ -654,89 +659,138 @@ describe('absolute growth rule — cosmology trigger gate', () => {
       undefined,
       GATED,
     )
-    expect(gated.state.tier).toBe(defaultBodyState().tier)
+    expect(gated.state.tier).toBe(base().tier)
     expect(gated.log.find((e) => e.kind === 'catalyst')).toMatchObject({
       outcome: 'ineligible',
-      delta: 0,
       note: GROWTH_TRIGGER_BLOCK_NOTE,
     })
     expect(gated.state.growthPressure).toBe(0)
+    expect(gated.log.find((e) => e.kind === 'act')).toBeUndefined()
   })
 
-  test('earned (guaranteed cast/check) growth BANKS on an untriggered turn and lands on the next triggered one', () => {
-    const gated = reduceCharacterBody(
-      defaultBodyState(),
-      [growthEvent({ guaranteed: true, intensity: 3 })],
+  test('a verified act grows her by the BASELINE cm — no roll, event count irrelevant, carry kept', () => {
+    const cm = NO_TICK.growthBaselineCm
+    const want = tiersForCm(base().tier, cm, null)
+    expect(want.tiers).toBeGreaterThan(0)
+    const one = reduceCharacterBody(
+      base(),
+      [growthEvent()],
       NO_TICK,
       'any',
       'Lucy',
       undefined,
+      TRIGGERED,
+    )
+    const none = reduceCharacterBody(base(), [], NO_TICK, 'other', 'Lucy', undefined, TRIGGERED)
+    const three = reduceCharacterBody(
+      base(),
+      [
+        growthEvent(),
+        growthEvent({ kind: 'contact' }),
+        growthEvent({ kind: 'attempt', intensity: 3 }),
+      ],
+      NO_TICK,
+      'third',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    for (const r of [one, none, three]) {
+      expect(r.state.tier).toBe(base().tier + want.tiers)
+      expect(r.state.lastGrowth).toEqual({ delta: want.tiers, tierBefore: base().tier, cm })
+      expect(r.log.find((e) => e.kind === 'act')).toMatchObject({
+        outcome: 'success',
+        delta: want.tiers,
+      })
+      expect(r.state.growthCarryCm ?? 0).toBeCloseTo(want.carryCm, 6)
+    }
+    expect(one.log.find((e) => e.kind === 'catalyst')).toMatchObject({ outcome: 'none' })
+  })
+
+  test('the kinds list is irrelevant in an act-driven story: a contact-only classifier read still grows her by the baseline', () => {
+    const catalystOnly: BeStoryConfig = { ...NO_TICK, growthEligibleKinds: ['catalyst'] }
+    const r = reduceCharacterBody(
+      base(),
+      [growthEvent({ kind: 'contact' })],
+      catalystOnly,
+      'c',
+      'Lucy',
+      undefined,
+      TRIGGERED,
+    )
+    expect(r.state.tier).toBe(base().tier + expectedTiers(catalystOnly.growthBaselineCm))
+  })
+
+  test('a cast (guaranteed event) never grows her: it BANKS cm into the next act, capped; the act then grows by baseline + bank', () => {
+    const cast = reduceCharacterBody(
+      base(),
+      [growthEvent({ guaranteed: true, intensity: 2 })],
+      NO_TICK,
+      'cast',
+      'Lucy',
+      undefined,
       GATED,
     )
-    expect(gated.state.tier).toBe(defaultBodyState().tier)
-    expect(gated.state.pendingGrowth?.delta).toBeGreaterThan(0)
-    expect(gated.log.at(-1)).toMatchObject({ outcome: 'banked', delta: 0 })
-    expect(gated.log.at(-1)?.note).toContain(GROWTH_TRIGGER_BANK_NOTE)
-    // The bank holds through untriggered turns (step 3 is gated too)…
-    const held = reduceCharacterBody(gated.state, [], NO_TICK, 'hold', 'Lucy', undefined, GATED)
-    expect(held.state.tier).toBe(defaultBodyState().tier)
-    expect(held.state.pendingGrowth).toEqual(gated.state.pendingGrowth)
-    // …and lands (metered) on a triggered turn.
-    const landed = reduceCharacterBody(
-      held.state,
-      [],
+    expect(cast.state.tier).toBe(base().tier)
+    expect(cast.state.growthBonusCm).toBeCloseTo(2 * SPELL_GROWTH_CM_PER_INTENSITY)
+    expect(cast.log.at(-1)).toMatchObject({ outcome: 'banked', delta: 0 })
+    expect(cast.log.at(-1)?.note).toContain(GROWTH_BONUS_NOTE)
+    // Same on a triggered turn: the cast banks, the act consumes the bank.
+    const castAndAct = reduceCharacterBody(
+      base(),
+      [growthEvent({ guaranteed: true, intensity: 2 })],
       NO_TICK,
-      'land',
+      'both',
       'Lucy',
       undefined,
       TRIGGERED,
     )
-    expect(landed.state.tier).toBeGreaterThan(defaultBodyState().tier)
+    const cm = NO_TICK.growthBaselineCm + 2 * SPELL_GROWTH_CM_PER_INTENSITY
+    expect(castAndAct.state.tier).toBe(base().tier + expectedTiers(cm))
+    expect(castAndAct.state.growthBonusCm).toBeUndefined()
+    // Farming: many casts cap at MAX_GROWTH_BONUS_CM.
+    let farmed = base()
+    for (let i = 0; i < 12; i++) {
+      farmed = reduceCharacterBody(
+        farmed,
+        [growthEvent({ guaranteed: true, intensity: 3 })],
+        NO_TICK,
+        `farm-${i}`,
+        'Lucy',
+        undefined,
+        GATED,
+      ).state
+    }
+    expect(farmed.growthBonusCm).toBe(MAX_GROWTH_BONUS_CM)
+    expect(farmed.tier).toBe(base().tier)
   })
 
-  test('a verified trigger restores exactly the ungated behavior', () => {
-    const open = reduceCharacterBody(defaultBodyState(), [growthEvent()], NO_TICK, landingSeed)
-    const triggered = reduceCharacterBody(
-      defaultBodyState(),
-      [growthEvent()],
+  test('the size cap and the lock still bind an act; a locked act keeps bank and carry', () => {
+    const capped: BeStoryConfig = { ...NO_TICK, sizeCapTier: base().tier + 1 }
+    const r = reduceCharacterBody(base(), [], capped, 'cap', 'Lucy', undefined, TRIGGERED)
+    expect(r.state.tier).toBe(base().tier + 1)
+    expect(r.log.find((e) => e.kind === 'act')?.note).toContain('at the size cap')
+    const locked: BodyState = { ...base(), locked: true, growthBonusCm: 3 }
+    const l = reduceCharacterBody(
+      locked,
+      [growthEvent({ guaranteed: true })],
       NO_TICK,
-      landingSeed,
+      'lock',
       'Lucy',
       undefined,
       TRIGGERED,
     )
-    expect(triggered.state).toEqual(open.state)
-    expect(triggered.log).toEqual(open.log)
+    expect(l.state.tier).toBe(base().tier)
+    expect(l.log.find((e) => e.kind === 'act')).toMatchObject({ outcome: 'muzzled' })
+    // The lock outranks the gate: a cast on a locked girl is muzzled, not banked; her bank is kept.
+    expect(l.log.find((e) => e.kind === 'catalyst')).toMatchObject({ outcome: 'muzzled' })
+    expect(l.state.growthBonusCm).toBe(3)
   })
 
-  test('a verified trigger outranks the kinds list: a `contact`-filed act still grows her', () => {
-    const catalystOnly: BeStoryConfig = { ...NO_TICK, growthEligibleKinds: ['catalyst'] }
-    const ungated = reduceCharacterBody(
-      defaultBodyState(),
-      [growthEvent({ kind: 'contact' })],
-      catalystOnly,
-      landingSeed,
-    )
-    expect(ungated.log.at(-1)).toMatchObject({
-      outcome: 'ineligible',
-      note: 'kind not growth-eligible in this story',
-    })
-    const triggered = reduceCharacterBody(
-      defaultBodyState(),
-      [growthEvent({ kind: 'contact' })],
-      catalystOnly,
-      landingSeed,
-      'Lucy',
-      undefined,
-      TRIGGERED,
-    )
-    expect(triggered.state.tier).toBeGreaterThan(defaultBodyState().tier)
-  })
-
-  test('no gate object = legacy behavior (stories without a cosmology are untouched)', () => {
-    const open = reduceCharacterBody(defaultBodyState(), [growthEvent()], NO_TICK, landingSeed)
+  test('no gate object = legacy behavior (stories without a cosmology roll as before)', () => {
+    const open = reduceCharacterBody(base(), [growthEvent()], NO_TICK, landingSeed)
     const explicitOff = reduceCharacterBody(
-      defaultBodyState(),
+      base(),
       [growthEvent()],
       NO_TICK,
       landingSeed,
@@ -747,63 +801,26 @@ describe('absolute growth rule — cosmology trigger gate', () => {
       },
     )
     expect(explicitOff.state).toEqual(open.state)
+    expect(open.state.growthBonusCm).toBeUndefined()
   })
 
-  test('the pity fire holds at the wall, silently, while untriggered', () => {
-    const pressured: BodyState = { ...defaultBodyState(), growthPressure: PRESSURE_FIRE }
-    const gated = reduceCharacterBody(pressured, [], NO_TICK, 'pity', 'Lucy', undefined, GATED)
-    expect(gated.state.tier).toBe(pressured.tier)
-    expect(gated.log.find((e) => e.kind === 'pressure')).toBeUndefined()
-    expect(gated.state.growthPressure).toBeGreaterThanOrEqual(PRESSURE_FIRE)
-    // Ungated, the same state rolls its pity die and resets.
-    const open = reduceCharacterBody(pressured, [], NO_TICK, 'pity')
-    expect(open.log.find((e) => e.kind === 'pressure')?.note).toContain('pity roll')
-    expect(open.state.growthPressure).toBe(0)
-  })
-
-  test('chronic lactation growth is held too, silently (beats stay banked for a triggered turn)', () => {
+  test('pity and chronic channels never roll in an act-driven story, on any turn', () => {
+    const pressured: BodyState = { ...base(), growthPressure: PRESSURE_FIRE }
+    for (const extras of [GATED, TRIGGERED]) {
+      const r = reduceCharacterBody(pressured, [], NO_TICK, 'pity', 'Lucy', undefined, extras)
+      expect(r.log.find((e) => e.kind === 'pressure')).toBeUndefined()
+    }
     const chronic: BodyState = {
-      ...defaultBodyState(),
+      ...base(),
       lactation: { active: true, supplyTier: 3, chronicBeats: 5 },
     }
-    const gated = reduceCharacterBody(chronic, [], NO_TICK, 'chronic', 'Lucy', undefined, GATED)
-    expect(gated.state.tier).toBe(chronic.tier)
-    expect(gated.log.find((e) => e.kind === 'supply')).toBeUndefined()
-    expect(gated.state.lactation?.chronicBeats).toBeGreaterThanOrEqual(5)
-    const open = reduceCharacterBody(chronic, [], NO_TICK, 'chronic')
-    expect(open.log.find((e) => e.kind === 'supply')?.note).toContain('chronic supply roll')
-  })
-
-  test('a LOCKED girl on an untriggered turn still reads muzzled (lock outranks the gate, review F12)', () => {
-    const locked: BodyState = { ...defaultBodyState(), locked: true }
-    const gated = reduceCharacterBody(
-      locked,
-      [growthEvent({ guaranteed: true })],
-      NO_TICK,
-      'lock',
-      'Lucy',
-      undefined,
-      GATED,
-    )
-    expect(gated.log.find((e) => e.kind === 'catalyst')).toMatchObject({ outcome: 'muzzled' })
-    expect(gated.state.pendingGrowth).toBeUndefined()
-    expect(gated.state.growthPressure).toBeGreaterThan(0)
-  })
-
-  test('the blocked-earned bank is bounded at MAX_TRIGGER_BANK (review F11) — casts on talk turns cannot farm a debt', () => {
-    let state = defaultBodyState()
-    for (let i = 0; i < 6; i++) {
-      state = reduceCharacterBody(
-        state,
-        [growthEvent({ guaranteed: true, intensity: 3 })],
-        NO_TICK,
-        `farm-${i}`,
-        'Lucy',
-        undefined,
-        GATED,
-      ).state
+    for (const extras of [GATED, TRIGGERED]) {
+      const r = reduceCharacterBody(chronic, [], NO_TICK, 'chronic', 'Lucy', undefined, extras)
+      expect(
+        r.log.find((e) => e.kind === 'supply' && e.note?.includes('chronic supply roll')),
+      ).toBeUndefined()
     }
-    expect(state.pendingGrowth?.delta).toBe(MAX_TRIGGER_BANK)
-    expect(state.tier).toBe(defaultBodyState().tier)
+    const open = reduceCharacterBody(pressured, [], NO_TICK, 'pity')
+    expect(open.log.find((e) => e.kind === 'pressure')?.note).toContain('pity roll')
   })
 })

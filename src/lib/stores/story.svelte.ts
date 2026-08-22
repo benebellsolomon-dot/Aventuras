@@ -28,7 +28,6 @@ import { rollbackService } from '$lib/services/rollbackService'
 import { ui } from './ui.svelte'
 import { settings } from './settings.svelte'
 import {
-  DEFAULT_BE_STORY_CONFIG,
   INTERACTION_MILESTONES,
   assignQuirks,
   beConditionsFromResult,
@@ -51,7 +50,6 @@ import {
   milkItemName,
   normalizePresenceName,
   qualityFromBand,
-  parseGrowthEligibleKinds,
   promoteGrowthIntent,
   readBodyState,
   recentPresenceUnion,
@@ -68,6 +66,7 @@ import {
   type BondEvent,
   type ExposureEvent,
   type MilkQuality,
+  beStoryConfigFromSettings,
 } from '$lib/services/be'
 import {
   ALCHEMY_MILK_BONUS_INTENSITY,
@@ -4175,18 +4174,7 @@ class StoryStore {
     // Config from story settings (research/41 + Spec 1 Task 9): the eligible-kinds
     // gate keeps canon-illegal growth from ever rolling; the story fluid drives
     // the registry tick; unset settings keep the defaults.
-    const eligibleKinds = parseGrowthEligibleKinds(
-      this.currentStory?.settings?.beGrowthEligibleKinds,
-    )
-    const settingsFluid = this.currentStory?.settings?.beFluidType
-    const config = {
-      ...DEFAULT_BE_STORY_CONFIG,
-      enabled: true,
-      ...(typeof settingsFluid === 'string' && settingsFluid.trim()
-        ? { fluidType: settingsFluid.trim() }
-        : {}),
-      ...(eligibleKinds ? { growthEligibleKinds: eligibleKinds } : {}),
-    }
+    const config = beStoryConfigFromSettings(this.currentStory?.settings)
 
     for (const character of this.characters) {
       if (character.relationship === 'self') continue

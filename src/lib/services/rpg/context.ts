@@ -105,8 +105,8 @@ const GROWTH_VERDICT_DIRECTIVES: Readonly<Record<GrowthVerdict, string | null>> 
     'GROWTH: she is at her limit — no further growth is possible. Describe the power finding nowhere to go and the strain of it; her size does NOT change.',
   blocked:
     'GROWTH: something holds her body fixed and nothing takes. Describe the effort and the power refusing to bite; her size does NOT change.',
-  conditional:
-    "GROWTH: this story's growth is ABSOLUTE — her size can change ONLY if your narration shows the story's growth act (the growth cosmology stated in the genre rules) actually COMPLETING for her in this scene, in narration rather than in dialogue. If it completes on the page, the growth lands; if it does not complete, her size does NOT change and you must not describe growth.",
+  banks_for_act:
+    'GROWTH: in this story growth comes ONLY from its growth act (the cosmology in the genre rules) — this power does not grow her now. It BANKS into her next act, which will grow her by that much more. Describe the power sinking in, being stored, tension building; her size does NOT change this scene.',
 }
 
 /**
@@ -169,11 +169,22 @@ const CHECK_TAGGING_RULE: Readonly<Record<CheckTaggingRate, string>> = {
     'Tag 1-3 choices per turn: any physical or social action with a conceivable failure mode gets a check (add `skill` and `dc`; most land at DC 8-11). Only pure conversation, observation, or trivially safe choices stay untagged (no skill, no dc).',
 }
 
+export interface CheckTaggingOptions {
+  /**
+   * Absolute growth rule (research/66): false for cosmology stories — growth is
+   * never an action there (it comes only from the story's act), so the tagger
+   * must not offer growth-intent choices or growth-spell casts.
+   */
+  offerGrowth?: boolean
+}
+
 export function buildCheckTaggingInstruction(
   sheet: RpgSheet,
   rate: CheckTaggingRate = 'sparing',
+  options: CheckTaggingOptions = {},
 ): string {
   const skillList = SKILLS.map((s) => `${s.id} (${ATTRIBUTE_LABELS[s.attribute]})`).join(', ')
+  const offerGrowth = options.offerGrowth !== false
   return [
     '## Skill Check Tagging',
     `The player has an RPG sheet: ${buildPlayerSheetSummary(sheet)}.`,
@@ -184,6 +195,8 @@ export function buildCheckTaggingInstruction(
     'When the action targets a specific character, set `targetCharacter` to her exact name — her trust and traits modify the check.',
     '`induce_lactation` and `milking` actions use the `milking` skill and must set `targetCharacter`.',
     'Set `spellId` ONLY for an explicit cast of a spell the player already knows, named in the choice text. Physical, sexual, social, and mundane actions are never casts — leave `spellId` off them. Never invent an id, and never point it at a spell the player has not learned.',
-    "Set `growthIntent: true` ONLY when the choice's explicit purpose is to grow or transform that character's body — channeling essence into her, working a transformation, feeding her a growth potion. Always set `targetCharacter` alongside it — but never drop `growthIntent` just because you are unsure of the name. A scene that merely happens to be sexual, or where growth is an incidental side effect, is NOT growth intent.",
+    offerGrowth
+      ? "Set `growthIntent: true` ONLY when the choice's explicit purpose is to grow or transform that character's body — channeling essence into her, working a transformation, feeding her a growth potion. Always set `targetCharacter` alongside it — but never drop `growthIntent` just because you are unsure of the name. A scene that merely happens to be sexual, or where growth is an incidental side effect, is NOT growth intent."
+      : 'In this story growth comes ONLY from its growth act (see the genre rules) — growth is never an action. Never set `growthIntent`, and do not propose choices whose purpose is to grow or transform her body (no growth-spell casts, no channeling essence to make her bigger); power used for other ends is tagged as an ordinary check.',
   ].join('\n')
 }

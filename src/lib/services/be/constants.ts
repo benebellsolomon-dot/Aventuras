@@ -70,12 +70,29 @@ export const GUARANTEED_GROWTH_ROLL = ROLL_BANDS.critical - 2 * INTENSITY_ROLL_B
 /** Fluid drained per milking event, scaled by intensity (percent points). */
 export const MILKING_DRAIN_PER_INTENSITY = 40
 
+/**
+ * Growth magnitude model for cosmology stories (research/66 §magnitude, Ben's
+ * ruling): every completed act grows her by the story's BASELINE cm of bust
+ * (+ whatever spells/skills/magic banked since the last act). Tiers are
+ * derived from cm through the natural bust curve; sub-tier remainders carry.
+ */
+export const DEFAULT_GROWTH_BASELINE_CM = 2.5
+export const GROWTH_BASELINE_CM_MIN = 0.25
+export const GROWTH_BASELINE_CM_MAX = 30
+/** cm of bust a cast/check growth effect banks per intensity step (band already folded into intensity). */
+export const SPELL_GROWTH_CM_PER_INTENSITY = 1.5
+/** Ceiling on the banked modifier — a debt that pays out on the next act, never a runaway. */
+export const MAX_GROWTH_BONUS_CM = 10
+/** Note for cast/check growth banked into her next act (cosmology stories — casts never count as the act). */
+export const GROWTH_BONUS_NOTE = 'banked into her next act'
+
 export const DEFAULT_BE_STORY_CONFIG: Readonly<BeStoryConfig> = {
   enabled: false,
   sizeCapTier: null,
   growthCooldownBeats: DEFAULT_GROWTH_COOLDOWN_BEATS,
   fluidType: 'milk',
   passiveFillEnabled: true,
+  growthBaselineCm: DEFAULT_GROWTH_BASELINE_CM,
 }
 
 /**
@@ -130,11 +147,6 @@ export const BE_CONDITION_NOTE_MAX = 200
 export const BE_TRIGGER_EVIDENCE_MAX = 240
 /** Player-visible AND dev-log note for every growth channel the absolute growth rule blocks (research/66). */
 export const GROWTH_TRIGGER_BLOCK_NOTE = "the story's growth act did not complete on the page"
-/** Most tiers the absolute growth rule will bank from blocked earned growth (review F11: an unbounded bank becomes a debt that pays out on every act turn). */
-export const MAX_TRIGGER_BANK = 2
-/** Note for earned (cast/check) growth banked on an untriggered turn — lands on the next triggered one. */
-export const GROWTH_TRIGGER_BANK_NOTE =
-  "earned growth banked — lands when the story's growth act completes on the page"
 /** Hard cap on classifier events per turn — bounds reducer work and the persisted
  * cadence log. Lives here (not schema.ts) so module-scope consumers like
  * presence.ts get it cycle-free: schema.ts sits on a be↔worldsim import cycle
@@ -270,3 +282,35 @@ export const SUPPLY_SURGE_MAX_DELTA = 2
 export const CHECK_DEBUFF_DC_PENALTY = 2
 /** Condition-label prefix the RPG modifier layer recognizes as a spell check-debuff. */
 export const CHECK_DEBUFF_CONDITION_PREFIX = 'hex:'
+
+/** Finite baseline clamped to the sane range; anything else = the default. */
+export function clampGrowthBaselineCm(value: unknown): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  if (!Number.isFinite(n)) return DEFAULT_GROWTH_BASELINE_CM
+  return Math.min(GROWTH_BASELINE_CM_MAX, Math.max(GROWTH_BASELINE_CM_MIN, n))
+}
+
+/**
+ * BE story config from story settings — the ONE derivation the store, the
+ * check-time preview and the context builder share, so they can never disagree
+ * about this story's cosmology, fluid, kinds or growth baseline.
+ */
+export function beStoryConfigFromSettings(
+  settings:
+    | { beFluidType?: unknown; beGrowthEligibleKinds?: unknown; beGrowthBaselineCm?: unknown }
+    | null
+    | undefined,
+): BeStoryConfig {
+  const rawKinds = settings?.beGrowthEligibleKinds
+  const eligibleKinds = parseGrowthEligibleKinds(
+    Array.isArray(rawKinds) ? (rawKinds as ReadonlyArray<string>) : undefined,
+  )
+  const fluid = settings?.beFluidType
+  return {
+    ...DEFAULT_BE_STORY_CONFIG,
+    enabled: true,
+    ...(typeof fluid === 'string' && fluid.trim() ? { fluidType: fluid.trim() } : {}),
+    ...(eligibleKinds ? { growthEligibleKinds: eligibleKinds } : {}),
+    growthBaselineCm: clampGrowthBaselineCm(settings?.beGrowthBaselineCm),
+  }
+}

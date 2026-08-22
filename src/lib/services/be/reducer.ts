@@ -35,11 +35,11 @@ import {
   PRESSURE_RELEASE,
   SUPPLY_TIER_MAX,
   fluidProfile,
-  GROWTH_TRIGGER_BANK_NOTE,
   GROWTH_TRIGGER_BLOCK_NOTE,
-  MAX_TRIGGER_BANK,
+  GROWTH_BONUS_NOTE,
 } from './constants'
 import { growthBankHeadroom } from './preview'
+import { actGrowthCm, bankBonusCm, bonusCmForIntensity, fmtCm, tiersForCm } from './magnitude'
 import { clampIntensity, resolveGrowthOutcome, seededRoll } from './roll'
 import { capacityMlPerSide, measurements } from './measurements'
 import {
@@ -170,9 +170,13 @@ export function reduceCharacterBody(
   let grewThisTurn = false
   let dryBeats = 0
   const ticksEnabled = extras?.ticksEnabled !== false
-  // Absolute growth rule (research/66): gate on unless a verified trigger names her.
-  const triggerBlocked =
-    extras?.growthGate?.requireTrigger === true && extras.growthGate.triggered !== true
+  // Absolute growth rule (research/66): with a cosmology the story is ACT-DRIVEN —
+  // growth is the act's baseline cm (+ banked modifiers), never a roll; blocked
+  // entirely unless a verified trigger names her this turn.
+  const gated = extras?.growthGate?.requireTrigger === true
+  const triggerBlocked = gated && extras?.growthGate?.triggered !== true
+  let growthBonusCm = Math.max(0, state.growthBonusCm ?? 0)
+  let growthCarryCm = Math.max(0, state.growthCarryCm ?? 0)
   // Lactation (research/49): the block materializes ONLY on activation — an
   // untouched girl's state must stay key-identical (R1 neutral passthrough).
   let lactation: LactationState | undefined = state.lactation
@@ -448,45 +452,34 @@ export function reduceCharacterBody(
       return
     }
 
-    // Absolute growth rule (research/66): no verified cosmology trigger on the
-    // page → nothing lands, earned or ambient, and the beat is not "dry" (the
-    // story's canon denied it, exactly like an ineligible kind — pity-firing
-    // growth the canon forbids is the research/41 bug again). EARNED growth
-    // (cast/check — essence paid, dice rolled) BANKS instead of vanishing and
-    // lands on the next triggered turn; ambient growth simply never happened.
-    if (triggerBlocked && GROWTH_KINDS.has(event.kind)) {
+    // Act-driven story (research/66): growth-kind events never ROLL. A cast /
+    // check-backed (guaranteed) effect banks cm into her next act — casts never
+    // count as the act (Ben's ruling) but build toward a bigger one; an ambient
+    // event is just the classifier's observation: on a triggered turn the act
+    // itself lands the baseline (step 6b), on any other turn nothing happens.
+    if (gated && GROWTH_KINDS.has(event.kind)) {
       if (event.guaranteed === true) {
-        const bankOutcome = resolveGrowthOutcome(GUARANTEED_GROWTH_ROLL, intensity)
-        const bankDelta = GROWTH_DELTA_BY_OUTCOME[bankOutcome] ?? 0
-        const alreadyStaged = pendingGrowth?.delta ?? 0
-        // Bounded: never more than MAX_TRIGGER_BANK tiers in the bank from
-        // blocked earned growth — an unbounded bank is a growth debt that pays
-        // out on every later act turn, the opposite of the rule (review F11).
-        const staged = Math.min(
-          bankDelta,
-          growthBankHeadroom(tier, alreadyStaged, config.sizeCapTier),
-          Math.max(0, MAX_TRIGGER_BANK - alreadyStaged),
-        )
-        if (staged > 0) {
-          pendingGrowth = { delta: (pendingGrowth?.delta ?? 0) + staged, source: event.kind }
-          log.push({
-            character: event.character,
-            kind: event.kind,
-            outcome: 'banked',
-            delta: 0,
-            tierAfter: tier,
-            note: `cast @i${intensity} (guaranteed) → ${GROWTH_TRIGGER_BANK_NOTE} (+${staged} staged)`,
-          })
-          return
-        }
+        const before = growthBonusCm
+        growthBonusCm = bankBonusCm(growthBonusCm, bonusCmForIntensity(intensity))
+        log.push({
+          character: event.character,
+          kind: event.kind,
+          outcome: 'banked',
+          delta: 0,
+          tierAfter: tier,
+          note: `cast @i${intensity} → +${fmtCm(growthBonusCm - before)} cm ${GROWTH_BONUS_NOTE} (bank ${fmtCm(growthBonusCm)} cm)`,
+        })
+        return
       }
       log.push({
         character: event.character,
         kind: event.kind,
-        outcome: 'ineligible',
+        outcome: triggerBlocked ? 'ineligible' : 'none',
         delta: 0,
         tierAfter: tier,
-        note: GROWTH_TRIGGER_BLOCK_NOTE,
+        note: triggerBlocked
+          ? GROWTH_TRIGGER_BLOCK_NOTE
+          : 'act-driven story: the act sets the growth (see the act row)',
       })
       return
     }
@@ -606,6 +599,53 @@ export function reduceCharacterBody(
     })
   })
 
+  // ---- Step 6b: act growth (research/66 §magnitude) — cosmology stories only ----
+  // The verified act grows her by the story's baseline cm + whatever spells /
+  // skills / magic banked since the last act (+ the sub-tier carry). Exactly
+  // that many cm, every act — the narrator was told the same number up front
+  // (ACT GROWTH line), so prose and stats agree by construction. Cooldown does
+  // not apply: acts ARE the pacing. Lock and the size cap still bind.
+  if (gated && !triggerBlocked && ticksEnabled) {
+    const bankedCm = growthBonusCm
+    const carriedCm = growthCarryCm
+    const actCm = actGrowthCm(config, { growthBonusCm: bankedCm, growthCarryCm: carriedCm })
+    if (state.locked) {
+      log.push({
+        character: characterName,
+        kind: 'act',
+        outcome: 'muzzled',
+        delta: 0,
+        tierAfter: tier,
+        note: `act growth ${fmtCm(actCm)} cm blocked (locked) — bank and carry kept`,
+      })
+    } else {
+      const { tiers, carryCm } = tiersForCm(tier, actCm, config.sizeCapTier)
+      const landed = tiers > 0 ? landGrowth(tiers) : 0
+      // Cast, not annotated: TS narrows the `let` to its initializer (undefined)
+      // because landGrowth assigns it from inside a closure.
+      const landedGrowth = lastGrowth as BodyState['lastGrowth']
+      if (landed > 0 && landedGrowth) {
+        lastGrowth = { ...landedGrowth, cm: Math.round(actCm * 10) / 10 }
+      }
+      const atCap = config.sizeCapTier !== null && tier >= config.sizeCapTier
+      growthBonusCm = 0
+      growthCarryCm = atCap ? 0 : carryCm
+      const parts = [`baseline ${fmtCm(config.growthBaselineCm)}`]
+      if (bankedCm > 0) parts.push(`banked ${fmtCm(bankedCm)}`)
+      if (carriedCm > 0) parts.push(`carry ${fmtCm(carriedCm)}`)
+      log.push({
+        character: characterName,
+        kind: 'act',
+        outcome: landed > 0 ? 'success' : atCap ? 'cooldown' : 'partial',
+        delta: landed,
+        tierAfter: tier,
+        note: `act growth ${fmtCm(actCm)} cm (${parts.join(' + ')}) → +${landed} tier${landed === 1 ? '' : 's'}${
+          atCap ? ', at the size cap' : `, carry ${fmtCm(growthCarryCm)} cm`
+        }`,
+      })
+    }
+  }
+
   // ---- Step 7: lactation — supply surge (Phase 4) + adapt + chronic growth (research/49 R3/R5, research/50 R2) ----
   // Magical supply surge first: an explicit spell push applied before organic
   // adaptation. It raises EXISTING supply only (a surge does not induce), clamped
@@ -688,10 +728,9 @@ export function reduceCharacterBody(
           tierAfter: tier,
           note: 'chronic supply blocked (cooldown)',
         })
-      } else if (triggerBlocked) {
-        // Absolute growth rule: held silently, not reset — the beats stay
-        // banked (tickChronic pins them at the threshold) and roll on the next
-        // triggered turn. No log row: it would repeat every turn (review F8/D4).
+      } else if (gated) {
+        // Act-driven story: growth comes only from the act's baseline — the
+        // chronic channel never rolls here (beats stay pinned, silently).
       } else {
         const roll = seededRoll(`${seed}:chronic`)
         const outcome = resolveGrowthOutcome(roll, 1)
@@ -858,10 +897,10 @@ export function reduceCharacterBody(
     growthPressure >= PRESSURE_FIRE &&
     !state.locked &&
     cooldown === 0 &&
-    triggerBlocked
+    gated
   ) {
-    // Absolute growth rule: pressure holds at the wall (capped) until a
-    // triggered turn — silently, or the row would repeat every turn (review).
+    // Act-driven story: no pity roll — growth is the act's baseline, nothing
+    // else (pressure stays capped, silently).
   } else if (ticksEnabled && growthPressure >= PRESSURE_FIRE && !state.locked && cooldown === 0) {
     // One non-guaranteed pity roll, then reset regardless (fire-once-then-reset).
     const roll = seededRoll(`${seed}:pressure`)
@@ -938,9 +977,13 @@ export function reduceCharacterBody(
       ? { note: extras.driftFindings.map((f) => f.note).join('; ') }
       : undefined
 
+  // Drop the cosmology carriers from the spread so a cleared bank cannot survive.
+  const { growthBonusCm: _staleBonus, growthCarryCm: _staleCarry, ...restState } = state
+  void _staleBonus
+  void _staleCarry
   return {
     state: {
-      ...state,
+      ...restState,
       tier,
       cooldown,
       conditions,
@@ -954,6 +997,10 @@ export function reduceCharacterBody(
       // Finite-guard: a NaN here would silently nuke the whole persisted record
       // on the next readBodyState (all-or-nothing schema parse).
       growthPressure: Number.isFinite(growthPressure) ? growthPressure : 0,
+      // Cosmology-story carriers: present only when non-zero (key-identical
+      // output for every legacy girl; a cleared bank is dropped from restState).
+      ...(growthBonusCm > 0 ? { growthBonusCm } : {}),
+      ...(growthCarryCm > 0 ? { growthCarryCm } : {}),
       driftNote,
       // Track fields spread conditionally: an untouched girl's state stays
       // key-identical (the store's stringify no-op-write skip depends on it).

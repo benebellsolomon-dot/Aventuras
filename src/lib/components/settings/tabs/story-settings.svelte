@@ -282,6 +282,8 @@
       story.updateStorySettings({ bePacingFlavor: v.trim() ? v : undefined })}
     onBeGrowthEligibleKindsChange={(v) =>
       story.updateStorySettings({ beGrowthEligibleKinds: v.length > 0 ? v : undefined })}
+    beGrowthBaselineCm={storySettings.beGrowthBaselineCm}
+    onBeGrowthBaselineCmChange={(v) => story.updateStorySettings({ beGrowthBaselineCm: v })}
     disabledFields={{ pov: true, tense: true, visualProseMode: true }}
     disabledReason="Cannot be changed mid-story. Set during story creation."
   />

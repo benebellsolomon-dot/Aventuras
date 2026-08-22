@@ -25,6 +25,8 @@
     bePacingFlavor?: string
     /** Growth-eligible event kinds; empty = every kind may land growth. */
     beGrowthEligibleKinds?: string[]
+    /** Cosmology stories: cm of bust each completed act grows her (research/66 §magnitude). */
+    beGrowthBaselineCm?: number
     onPOVChange: (v: POV) => void
     onTenseChange: (v: Tense) => void
     onToneChange: (v: string) => void
@@ -37,6 +39,7 @@
     onBeGrowthCosmologyChange?: (v: string) => void
     onBePacingFlavorChange?: (v: string) => void
     onBeGrowthEligibleKindsChange?: (v: string[]) => void
+    onBeGrowthBaselineCmChange?: (v: number | undefined) => void
     /** Offer the hybrid POV option (adventure mode only — 3rd-person narration, 2nd-person sensations). */
     allowHybridPov?: boolean
     disabledFields?: {
@@ -61,6 +64,7 @@
     beGrowthCosmology,
     bePacingFlavor,
     beGrowthEligibleKinds,
+    beGrowthBaselineCm,
     onPOVChange,
     onTenseChange,
     onToneChange,
@@ -73,6 +77,7 @@
     onBeGrowthCosmologyChange,
     onBePacingFlavorChange,
     onBeGrowthEligibleKindsChange,
+    onBeGrowthBaselineCmChange,
     allowHybridPov,
     disabledFields,
     disabledReason,
@@ -373,6 +378,31 @@
           lands on any other turn (earned growth waits for the next such turn). With a cosmology set
           the event-kind list below is ignored — the verified act decides. Leave empty for the
           looser event-kind rule.
+        </p>
+      </div>
+    {/if}
+    {#if beMode && onBeGrowthBaselineCmChange && (beGrowthCosmology ?? '').trim()}
+      <div class="grid w-full items-center gap-2 pb-2">
+        <Input
+          label="Baseline growth per act (cm of bust)"
+          id="be-growth-baseline-cm"
+          type="number"
+          step="0.5"
+          min="0.25"
+          max="30"
+          value={beGrowthBaselineCm ?? ''}
+          placeholder="2.5"
+          oninput={(e) => {
+            const n = Number(e.currentTarget.value)
+            onBeGrowthBaselineCmChange(
+              e.currentTarget.value.trim() === '' || !Number.isFinite(n) ? undefined : n,
+            )
+          }}
+        />
+        <p class="text-muted-foreground text-xs">
+          Every completed act grows her by exactly this much (the narrator is told the number before
+          it writes, so prose and stats agree). Spells, skills and magic never grow her directly —
+          they bank extra cm into her next act. Blank = 2.5 cm (about one cup letter).
         </p>
       </div>
     {/if}

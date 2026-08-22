@@ -46,7 +46,14 @@ export {
   fluidProfile,
   parseGrowthEligibleKinds,
   type FluidProfile,
-  GROWTH_TRIGGER_BANK_NOTE,
+  GROWTH_BONUS_NOTE,
+  DEFAULT_GROWTH_BASELINE_CM,
+  GROWTH_BASELINE_CM_MAX,
+  GROWTH_BASELINE_CM_MIN,
+  MAX_GROWTH_BONUS_CM,
+  SPELL_GROWTH_CM_PER_INTENSITY,
+  beStoryConfigFromSettings,
+  clampGrowthBaselineCm,
   GROWTH_TRIGGER_BLOCK_NOTE,
 } from './constants'
 export { buildBeGenreRules, type BeGenreRuleOptions } from './genre-rules'
@@ -127,6 +134,14 @@ export {
   growthTriggersFromResult,
   type BeCharacterCondition,
 } from './schema'
+export {
+  actGrowthCm,
+  bankBonusCm,
+  bonusCmForIntensity,
+  cmPerTierAt,
+  fmtCm,
+  tiersForCm,
+} from './magnitude'
 export {
   GROWTH_TRIGGER_MIN_EVIDENCE_CHARS,
   GROWTH_TRIGGER_MIN_EVIDENCE_WORDS,

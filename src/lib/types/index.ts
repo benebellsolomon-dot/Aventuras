@@ -158,6 +158,7 @@ export interface StorySettings {
   beGrowthCosmology?: string // BE engine: what drives growth in this world — threaded into classifier + narrator instructions (research/41)
   bePacingFlavor?: string // BE engine: free-text pacing note interpolated into the genre rules
   beGrowthEligibleKinds?: string[] // BE engine: which event kinds may land growth (subset of catalyst/contact/attempt); empty/unset = all
+  beGrowthBaselineCm?: number // BE engine (research/66 §magnitude): cm of bust each completed growth act grows her in a cosmology story (unset = 2.5); spells/skills/magic bank on top
   contentRating?: ContentRating // Content guidance level injected into narrative prompts (default: standard)
   // FF5.2 prose package (research/58 D1/D4, research/59):
   proseStyle?: 'cinematic' | 'literary' // Narrative voice: observable-only cinematic realism (default) vs lyrical literary

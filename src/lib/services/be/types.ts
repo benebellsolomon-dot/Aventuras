@@ -67,7 +67,16 @@ export interface BodyState {
    * Set when growth landed THIS turn, cleared by the next reduce — drives the
    * magnitude-scaled narration directive (31a §3.5) for exactly one narration.
    */
-  lastGrowth?: { delta: number; tierBefore: number }
+  lastGrowth?: {
+    delta: number
+    tierBefore: number
+    /** cm of bust the act grew her (cosmology stories) — the narrator states exactly this. */
+    cm?: number
+  }
+  /** Cosmology stories: cm of bust banked by spells/skills/magic since the last act; consumed by the next act. */
+  growthBonusCm?: number
+  /** Cosmology stories: sub-tier cm remainder carried from the last act. */
+  growthCarryCm?: number
   /**
    * Soft emotional states — classifier-proposed and clamped (LLM-set tier of the
    * single-writer spectrum; transformation attitude only, NOT the D2 relationship
@@ -250,11 +259,10 @@ export type GrowthVerdict =
   | 'blocked_recovery'
   | 'at_cap'
   | 'blocked'
-  /** Absolute growth rule (research/66): the story has a cosmology, so the earned
-   * growth lands ONLY if the narration shows the driving act completing — the
-   * narrator is told growth is conditional on the page, and the classifier's
-   * verified trigger decides after the fact. */
-  | 'conditional'
+  /** Absolute growth rule (research/66): the story has a cosmology, so a cast or
+   * check-backed growth effect never lands by itself — it BANKS into her next
+   * act (+cm) and the narrator is told her size does not change now. */
+  | 'banks_for_act'
 
 /**
  * A classifier-reported completion of the story's growth driver for one
@@ -299,6 +307,7 @@ export interface BeLogRecord {
     | 'withdrawal'
     | 'supply'
     | 'yield'
+    | 'act'
   outcome: GrowthOutcome
   delta: number
   tierAfter: number
@@ -333,6 +342,8 @@ export interface BeStoryConfig {
   fluidType: string
   /** Per-turn passive fill tick (Spec 1 Task 2); the FIL loop's intake side. */
   passiveFillEnabled: boolean
+  /** Cosmology stories: cm of bust every completed act grows her (research/66 §magnitude). */
+  growthBaselineCm: number
 }
 
 export interface ReducerResult {

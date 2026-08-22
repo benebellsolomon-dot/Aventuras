@@ -125,11 +125,20 @@ describe('buildCheckResultBlock', () => {
     expect(blocked).toContain('holds her body fixed')
   })
 
-  it('a conditional verdict (absolute growth rule) tells the narrator growth needs the act on the page', () => {
-    const block = buildCheckResultBlock(record({ band: 'success', growthVerdict: 'conditional' }))
-    expect(block).toContain('ABSOLUTE')
-    expect(block).toContain('COMPLETING')
+  it('a banks_for_act verdict (act-driven story) tells the narrator the power banks and her size does not change', () => {
+    const block = buildCheckResultBlock(record({ band: 'success', growthVerdict: 'banks_for_act' }))
+    expect(block).toContain('BANKS into her next act')
     expect(block).toContain('does NOT change')
+  })
+
+  it('tagging: offerGrowth=false replaces the growthIntent rule with the never-an-action rule', () => {
+    const offered = buildCheckTaggingInstruction(sheet())
+    const notOffered = buildCheckTaggingInstruction(sheet(), 'sparing', { offerGrowth: false })
+    expect(offered).toContain('growthIntent: true')
+    expect(notOffered).not.toContain('growthIntent: true')
+    expect(notOffered).toContain('Never set `growthIntent`')
+    expect(notOffered).toContain('no growth-spell casts')
+    expect(buildCheckTaggingInstruction(sheet(), 'sparing', { offerGrowth: true })).toBe(offered)
   })
 
   it('a landing verdict adds nothing — the band directive already licenses it', () => {

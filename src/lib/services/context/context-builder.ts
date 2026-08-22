@@ -22,6 +22,11 @@ import {
   readBodyState,
   selectScenePresent,
   type BeStateEntry,
+  growthGateRequired,
+  beStoryConfigFromSettings,
+  actGrowthCm,
+  tiersForCm,
+  coerceEffectTags,
 } from '$lib/services/be'
 import {
   buildCheckTaggingInstruction,
@@ -300,10 +305,30 @@ export class ContextBuilder {
     try {
       let beStateBlock = ''
       if (story.settings?.beMode === true) {
+        // Cosmology stories (research/66 §magnitude): tell the narrator, per
+        // girl, exactly what the act grows her by THIS scene — the same numbers
+        // the reducer will apply if the classifier's trigger verifies.
+        const gateRequired = growthGateRequired(story.settings)
+        const beConfig = gateRequired ? beStoryConfigFromSettings(story.settings) : null
         const entries: BeStateEntry[] = []
         for (const character of characters) {
           const state = readBodyState(character.metadata)
-          if (state) entries.push({ name: character.name, state })
+          if (!state) continue
+          if (beConfig && character.relationship !== 'self') {
+            const cm = actGrowthCm(beConfig, state)
+            const { tiers } = tiersForCm(state.tier, cm, beConfig.sizeCapTier)
+            entries.push({
+              name: character.name,
+              state,
+              actGrowth: {
+                cm,
+                tierAfter: state.tier + tiers,
+                bankedCm: Math.max(0, state.growthBonusCm ?? 0),
+              },
+            })
+          } else {
+            entries.push({ name: character.name, state })
+          }
         }
         const onBranch = await this.loadPresenceEntries(story)
         // The PC is always in her own scene; so is anyone the player just named
@@ -424,9 +449,18 @@ export class ContextBuilder {
         // Resolve knownSpells ids → compact display strings (name · school · cost),
         // preserving learn order; a stale id (entry deleted) is silently skipped.
         const spellById = new Map(spellEntries.map((e) => [e.id, e]))
+        // Absolute growth rule (research/66): in a cosmology story growth spells
+        // are not offered — growth comes only from the act (casts bank into it).
+        const offerGrowth = !growthGateRequired(story.settings)
         const knownSpellDisplays = sheet.knownSpells.flatMap((id) => {
           const entry = spellById.get(id)
           if (!entry || entry.state.type !== 'spell') return []
+          if (
+            !offerGrowth &&
+            coerceEffectTags(entry.state.effects).some((effect) => effect.kind === 'growth')
+          ) {
+            return []
+          }
           return [`${entry.name} (${entry.state.school}, ⬡${entry.state.essenceCost})`]
         })
         playerSheetBlock = buildPlayerSheetBlock(
@@ -459,6 +493,7 @@ export class ContextBuilder {
           buildCheckTaggingInstruction(
             sheet,
             story.settings?.rpgCheckTaggingRate === 'frequent' ? 'frequent' : 'sparing',
+            { offerGrowth },
           ),
           buildGatedActionsInstruction(gateInputs),
         ]

@@ -15,15 +15,14 @@ import { createLogger } from '$lib/log'
 import type { ActionChoice } from '$lib/services/ai/sdk/schemas/actionchoices'
 import type { RiskAssessResult } from '$lib/services/ai/sdk/schemas/riskassess'
 import {
-  DEFAULT_BE_STORY_CONFIG,
   coerceEffectTags,
-  parseGrowthEligibleKinds,
   previewGuaranteedGrowth,
   readBodyState,
   type BeStoryConfig,
   type BodyState,
   type GrowthVerdict,
   growthGateRequired,
+  beStoryConfigFromSettings,
 } from '$lib/services/be'
 import {
   buildTargetCheckModifiers,
@@ -57,20 +56,10 @@ export interface CheckInput {
   choiceTag: ActionChoice | null
 }
 
-/** BE config exactly as StoryStore.applyBeEvents builds it, so the preview is
- * gated by the same story cosmology the reducer will apply an hour later. */
-function beConfigFor(story: GenerationContext['story']): BeStoryConfig {
-  const eligibleKinds = parseGrowthEligibleKinds(story.settings?.beGrowthEligibleKinds)
-  const settingsFluid = story.settings?.beFluidType
-  return {
-    ...DEFAULT_BE_STORY_CONFIG,
-    enabled: true,
-    ...(typeof settingsFluid === 'string' && settingsFluid.trim()
-      ? { fluidType: settingsFluid.trim() }
-      : {}),
-    ...(eligibleKinds ? { growthEligibleKinds: eligibleKinds } : {}),
-  }
-}
+/** BE config exactly as StoryStore.applyBeEvents builds it (one shared derivation),
+ * so the preview is gated by the same story cosmology the reducer will apply later. */
+const beConfigFor = (story: GenerationContext['story']): BeStoryConfig =>
+  beStoryConfigFromSettings(story.settings)
 
 /** True when this cast's spell actually grows her — the cast channel's own gate
  * (a buff/condition spell must not claim a growth verdict it never earns). */
