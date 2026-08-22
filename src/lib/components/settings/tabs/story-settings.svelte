@@ -457,7 +457,8 @@
         <Label for="gm-notebook" class="text-sm font-medium">GM's notebook</Label>
         <p class="text-muted-foreground mt-1 text-xs">
           A short list of continuity notes the engine keeps and shows the narrator every turn — who
-          knows what, standing pretenses, open threads. Applies from the next turn.
+          knows what, standing pretenses, open threads. Read it at the bottom of the Quests tab.
+          Applies from the next turn.
         </p>
       </div>
       <Switch
@@ -472,7 +473,8 @@
         <Label for="npc-thoughts" class="text-sm font-medium">NPC inner voices</Label>
         <p class="text-muted-foreground mt-1 text-xs">
           The narrator may close a response with up to three characters' private thoughts, shown
-          under the entry instead of inside the prose. Flavor only — never engine state.
+          under the entry (or behind the VN textbox's "Inner voices" button) instead of inside the
+          prose. Flavor only — never engine state.
         </p>
       </div>
       <Switch
@@ -487,8 +489,8 @@
         <div>
           <Label for="rpg-titles" class="text-sm font-medium">Earned titles</Label>
           <p class="text-muted-foreground mt-1 text-xs">
-            Clear accomplishments earn titles ("Charmer", "Slayer") on the sheet; each grants +1 on
-            the skills it covers. At most one per turn, eight in all.
+            Clear accomplishments earn titles ("Charmer", "Slayer") on the sheet, announced with a
+            toast; each grants +1 on the skills it covers. At most one per turn, eight in all.
           </p>
         </div>
         <Switch

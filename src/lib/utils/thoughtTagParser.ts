@@ -148,3 +148,35 @@ export function hasIncompleteThoughtTag(content: string): {
     ? { incomplete: true, safeEnd: prefix.index }
     : { incomplete: false, safeEnd: content.length }
 }
+
+/** The slice of a character the inner-voice resolver needs. */
+export interface InnerVoiceCastMember {
+  name: string
+  relationship: string | null
+}
+
+/**
+ * Inner voices ready for a panel: parsed straight off the stored content (like
+ * `<pic>` tags — nothing is persisted separately), the protagonist's dropped
+ * (the prompt forbids it; the filter enforces it), every other `who` rendered —
+ * with the canonical cast name when known, the raw name otherwise (a character
+ * the classifier missed must not make the monologue vanish, research/65 F11).
+ * Shared by the feed entry panel and the VN reader.
+ */
+export function resolveInnerVoices(
+  content: string,
+  cast: ReadonlyArray<InnerVoiceCastMember>,
+): ParsedThoughtTag[] {
+  const canonical = new Map<string, string>()
+  const selfNames = new Set<string>()
+  for (const member of cast) {
+    const key = member.name.trim().toLowerCase()
+    if (member.relationship === 'self') selfNames.add(key)
+    else canonical.set(key, member.name)
+  }
+  return extractThoughtTags(content).flatMap((voice) => {
+    const key = voice.who.trim().toLowerCase()
+    if (selfNames.has(key)) return []
+    return [{ ...voice, who: canonical.get(key) ?? voice.who }]
+  })
+}

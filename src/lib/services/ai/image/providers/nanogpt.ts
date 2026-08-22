@@ -97,7 +97,7 @@ export function wavespeedKreaSizeParams(
   height: number,
 ): { aspect_ratio: string; resolution: string } | null {
   if (!(width > 0 && height > 0)) return null
-  if (WAVESPEED_KREA_TURBO.test(model)) {
+  if (isWavespeedKreaTurboModel(model)) {
     return {
       aspect_ratio: nearestAspect(width, height, KREA_TURBO_ASPECTS),
       resolution: width * height >= KREA_TWO_K_MIN_PIXELS ? '2k' : '1k',
@@ -109,6 +109,29 @@ export function wavespeedKreaSizeParams(
     return { aspect_ratio: aspect, resolution: aspect }
   }
   return null
+}
+
+/**
+ * wavespeed Krea img2img strength — "how strongly to repaint the uploaded
+ * image" (NanoGPT metadata: 0–1, step 0.05, endpoint default 0.65). The
+ * non-routed scene path sends the portrait as the reference, so this is the
+ * knob between "anchored to the portrait's composition" (low) and "fresh scene
+ * that merely resembles her" (high). Unset = the endpoint's default.
+ */
+const KREA_STRENGTH_MIN = 0
+const KREA_STRENGTH_MAX = 1
+
+/** A finite profile value clamped to 0–1 (two decimals); anything else = leave unset. */
+export function sanitizeKreaStrength(raw: unknown): number | undefined {
+  const n =
+    typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN
+  if (!Number.isFinite(n)) return undefined
+  return Math.round(Math.min(KREA_STRENGTH_MAX, Math.max(KREA_STRENGTH_MIN, n)) * 100) / 100
+}
+
+/** Whether the model is a wavespeed Krea turbo endpoint (the img2img-capable family). */
+export function isWavespeedKreaTurboModel(model: string): boolean {
+  return WAVESPEED_KREA_TURBO.test(model)
 }
 
 /** Whether a NanoGPT image model id looks like a LoRA-capable endpoint. */
@@ -189,6 +212,13 @@ export function createNanoGPTProvider(config: ImageProviderConfig): ImageProvide
       // img2img: pass reference as imageDataUrl
       if (referenceImages?.length) {
         body.imageDataUrl = `data:image/png;base64,${referenceImages[0]}`
+        // Repaint strength rides only with a reference, only where it is a
+        // documented knob (the Krea turbo family) — other endpoints keep their
+        // own defaults and never see an unknown field.
+        const strength = sanitizeKreaStrength(config.providerOptions?.strength)
+        if (strength !== undefined && isWavespeedKreaTurboModel(model)) {
+          body.strength = strength
+        }
       }
 
       const response = await imageFetch({

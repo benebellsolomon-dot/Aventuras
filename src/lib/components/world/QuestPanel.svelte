@@ -24,6 +24,7 @@
   import { cn } from '$lib/utils/cn'
   import { database } from '$lib/services/database'
   import RuntimeVariableDisplay from './RuntimeVariableDisplay.svelte'
+  import GmNotebookSection from './GmNotebookSection.svelte'
 
   let showAddForm = $state(false)
   let newTitle = $state('')
@@ -687,4 +688,7 @@
       </div>
     {/if}
   {/if}
+
+  <!-- E5 GM's notebook (research/65): read-only continuity notes, setting-gated -->
+  <GmNotebookSection />
 </div>

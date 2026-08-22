@@ -9,6 +9,7 @@ import {
   extractThoughtTags,
   hasIncompleteThoughtTag,
   hasThoughtTags,
+  resolveInnerVoices,
   stripThoughtTags,
 } from './thoughtTagParser'
 
@@ -179,5 +180,35 @@ describe('fix-diff follow-ups (research/65)', () => {
       incomplete: true,
       safeEnd: 35,
     })
+  })
+})
+
+describe('resolveInnerVoices', () => {
+  const cast = [
+    { name: 'Amelia', relationship: 'self' },
+    { name: 'Mira Vale', relationship: 'friend' },
+    { name: 'Doran', relationship: null },
+  ]
+
+  it('maps a who to the canonical cast name, any case, trimmed', () => {
+    const out = resolveInnerVoices('<thought who=" mira vale ">Not tonight.</thought>', cast)
+    expect(out).toEqual([{ who: 'Mira Vale', text: 'Not tonight.' }])
+  })
+
+  it('drops the protagonist voice', () => {
+    const out = resolveInnerVoices(
+      '<thought who="Amelia">Mine.</thought><thought who="Doran">His.</thought>',
+      cast,
+    )
+    expect(out).toEqual([{ who: 'Doran', text: 'His.' }])
+  })
+
+  it('keeps an unknown who with its raw name (a missed character must not vanish)', () => {
+    const out = resolveInnerVoices('<thought who="Stranger">Who is she?</thought>', cast)
+    expect(out).toEqual([{ who: 'Stranger', text: 'Who is she?' }])
+  })
+
+  it('returns nothing for content without tags', () => {
+    expect(resolveInnerVoices('Plain prose.', cast)).toEqual([])
   })
 })

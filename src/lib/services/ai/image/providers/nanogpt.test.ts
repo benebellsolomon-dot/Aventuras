@@ -13,7 +13,12 @@ vi.mock('./fetchAdapter', () => ({
   imageGetFetch: vi.fn(),
 }))
 
-import { createNanoGPTProvider, sanitizeNanoGptLoras, wavespeedKreaSizeParams } from './nanogpt'
+import {
+  createNanoGPTProvider,
+  sanitizeKreaStrength,
+  sanitizeNanoGptLoras,
+  wavespeedKreaSizeParams,
+} from './nanogpt'
 import type { ImageProviderConfig } from './types'
 
 function lastBody(): Record<string, unknown> {
@@ -153,5 +158,47 @@ describe('wavespeed Krea size params', () => {
     expect(body.height).toBe(1216)
     expect(body.aspect_ratio).toBe('2:3')
     expect(body.resolution).toBe('1k')
+  })
+})
+
+describe('wavespeed Krea img2img strength (research/64 §4 open item)', () => {
+  const REF = ['QUJD']
+  function genRef(config: Partial<ImageProviderConfig>, model: string, refs?: string[]) {
+    const provider = createNanoGPTProvider({ apiKey: 'k', ...config })
+    return provider.generate({
+      model,
+      prompt: 'a woman by a window',
+      size: '1536x1536',
+      referenceImages: refs,
+    })
+  }
+
+  it('sends providerOptions.strength with a reference image on the Krea turbo family', async () => {
+    await genRef({ providerOptions: { strength: 0.4 } }, 'wavespeed-ai/krea-v2/turbo-lora', REF)
+    expect(lastBody().strength).toBe(0.4)
+    expect(lastBody().imageDataUrl).toBe('data:image/png;base64,QUJD')
+  })
+
+  it('omits strength when unset (endpoint default 0.65 applies)', async () => {
+    await genRef({}, 'wavespeed-ai/krea-v2/turbo-lora', REF)
+    expect(lastBody().strength).toBeUndefined()
+  })
+
+  it('omits strength without a reference image, and on non-Krea models', async () => {
+    await genRef({ providerOptions: { strength: 0.4 } }, 'wavespeed-ai/krea-v2/turbo')
+    expect(lastBody().strength).toBeUndefined()
+    await genRef({ providerOptions: { strength: 0.4 } }, 'wai-illustrious-sdxl', REF)
+    expect(lastBody().strength).toBeUndefined()
+  })
+
+  it('sanitizeKreaStrength: clamps to 0–1, accepts numeric strings, rejects junk', () => {
+    expect(sanitizeKreaStrength(1.7)).toBe(1)
+    expect(sanitizeKreaStrength(-2)).toBe(0)
+    expect(sanitizeKreaStrength('0.35')).toBe(0.35)
+    expect(sanitizeKreaStrength(0.123)).toBe(0.12)
+    expect(sanitizeKreaStrength('')).toBeUndefined()
+    expect(sanitizeKreaStrength(undefined)).toBeUndefined()
+    expect(sanitizeKreaStrength(NaN)).toBeUndefined()
+    expect(sanitizeKreaStrength('abc')).toBeUndefined()
   })
 })

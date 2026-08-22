@@ -39,7 +39,8 @@
   } from '$lib/services/events'
   import { inlineImageService, retryImageGeneration } from '$lib/services/ai/image'
   import { matchAttribute } from '$lib/utils/inlineImageParser'
-  import { extractThoughtTags, stripThoughtTags } from '$lib/utils/thoughtTagParser'
+  import { resolveInnerVoices, stripThoughtTags } from '$lib/utils/thoughtTagParser'
+  import InnerVoicesList from './InnerVoicesList.svelte'
   import { database } from '$lib/services/database'
   import { onMount } from 'svelte'
   import ReasoningBlock from './ReasoningBlock.svelte'
@@ -55,31 +56,11 @@
 
   let { entry }: { entry: StoryEntry } = $props()
 
-  // NPC inner voices (E6, research/65): parsed straight off the stored content,
-  // exactly like <pic> tags — nothing about them is persisted separately.
-  // Only voices of known non-protagonist characters render (review finding 12):
-  // the prompt forbids protagonist/absent-character thoughts, the filter enforces it.
-  const innerVoices = $derived.by(() => {
-    if (entry.type !== 'narration') return []
-    const cast = new Map(
-      story.characters
-        .filter((c) => c.relationship !== 'self')
-        .map((c) => [c.name.trim().toLowerCase(), c.name]),
-    )
-    const selfNames = new Set(
-      story.characters
-        .filter((c) => c.relationship === 'self')
-        .map((c) => c.name.trim().toLowerCase()),
-    )
-    return extractThoughtTags(entry.content).flatMap((voice) => {
-      const key = voice.who.trim().toLowerCase()
-      // The protagonist never gets a panel voice; anyone else renders — with the
-      // canonical name when known, the raw who otherwise (a missed character
-      // must not make the monologue vanish, fix-diff F11).
-      if (selfNames.has(key)) return []
-      return [{ ...voice, who: cast.get(key) ?? voice.who }]
-    })
-  })
+  // NPC inner voices (E6, research/65): parsed straight off the stored content
+  // by the shared resolver (protagonist dropped, canonical names, unknown kept).
+  const innerVoices = $derived(
+    entry.type === 'narration' ? resolveInnerVoices(entry.content, story.characters) : [],
+  )
   let innerVoicesOpen = $state(false)
 
   // Separate token counts for content and reasoning
@@ -1419,14 +1400,7 @@
             />
           </button>
           {#if innerVoicesOpen}
-            <ul class="mt-2 space-y-1.5">
-              {#each innerVoices as voice, i (i)}
-                <li class="text-muted-foreground text-xs italic">
-                  <span class="text-foreground/80 font-medium not-italic">{voice.who}</span>
-                  <span class="text-muted-foreground/60"> — </span>{voice.text}
-                </li>
-              {/each}
-            </ul>
+            <InnerVoicesList voices={innerVoices} class="mt-2 text-xs" />
           {/if}
         </div>
       {/if}

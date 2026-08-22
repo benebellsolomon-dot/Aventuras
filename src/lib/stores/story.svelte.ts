@@ -145,6 +145,8 @@ const log = createLogger('StoryStore')
  * at once against the provider.
  */
 const IDENTITY_HYGIENE_CONCURRENCY = 2
+/** How long the E7 "Title earned" toast stays up (longer than the 4 s default — it names the title). */
+const TITLE_TOAST_DURATION_MS = 6000
 
 /**
  * Merge LLM-extracted inline runtime vars into entity metadata.runtimeVars.
@@ -2102,6 +2104,8 @@ class StoryStore {
    * a turn; it is kept as the guard for any future non-turn wrapUpdate caller.
    */
   private transactionalTurn = false
+  /** E7 titles awarded by applyRpgTurn this turn — toasted only after the commit. */
+  private titlesAwardedThisTurn: string[] = []
 
   /**
    * Shared identity-hygiene work pool (D-13): ids queue here and at most
@@ -2388,6 +2392,7 @@ class StoryStore {
     // post-commit hasChanges block below reads them.
     let beLog: BeLogRecord[] = []
     let checkLog: CheckRecord[] = []
+    this.titlesAwardedThisTurn = []
 
     // CR-1: the turn's entity/engine writes + the delta write are wrapped so
     // they commit all-or-nothing. Defined as a closure so it can run either
@@ -3198,6 +3203,16 @@ class StoryStore {
     if (trackingEnabled && entryId) {
       // Auto-snapshot only after the turn durably committed.
       await this.maybeCreateAutoSnapshot(entryId)
+    }
+    // E7 title notice (research/65): only once the award is durable; the sheet
+    // panel stays the record, this just says it happened.
+    if (this.titlesAwardedThisTurn.length > 0) {
+      ui.showToast(
+        `Title earned: ${this.titlesAwardedThisTurn.join(', ')} — see the Sheet tab`,
+        'info',
+        TITLE_TOAST_DURATION_MS,
+      )
+      this.titlesAwardedThisTurn = []
     }
 
     log('applyClassificationResult complete', {
@@ -4597,7 +4612,11 @@ class StoryStore {
       if (titleLoads.length > 0) {
         const awarded = awardTitles(sheet, titleLoads)
         if (awarded.awarded.length > 0) {
-          log('titles awarded', { titles: awarded.awarded.map((t) => t.name) })
+          const names = awarded.awarded.map((t) => t.name)
+          log('titles awarded', { titles: names })
+          // Player-facing notice (research/65 deferred UI) is toasted by the
+          // caller AFTER the turn commits — a toast here would outlive a rollback.
+          this.titlesAwardedThisTurn = names
         }
         sheet = awarded.sheet
       }

@@ -12,13 +12,18 @@
   import { ui } from '$lib/stores/ui.svelte'
   import { settings, STORY_WIDTH_OPTIONS } from '$lib/stores/settings.svelte'
   import { parseMarkdown } from '$lib/utils/markdown'
-  import { hasIncompleteThoughtTag, stripThoughtTags } from '$lib/utils/thoughtTagParser'
+  import {
+    hasIncompleteThoughtTag,
+    resolveInnerVoices,
+    stripThoughtTags,
+  } from '$lib/utils/thoughtTagParser'
   import { database } from '$lib/services/database'
   import { eventBus, type ImageQueuedEvent, type ImageReadyEvent } from '$lib/services/events'
   import ActionChoices from './ActionChoices.svelte'
+  import InnerVoicesList from './InnerVoicesList.svelte'
   import ActionInput from './ActionInput.svelte'
   import { fade } from 'svelte/transition'
-  import { ChevronDown, Loader2 } from 'lucide-svelte'
+  import { ChevronDown, Loader2, MessageCircle } from 'lucide-svelte'
   import type { Character, EmbeddedImage } from '$lib/types'
   import { readBodyState, selectSprite } from '$lib/services/be'
   import { spriteAnchorService } from '$lib/services/ai/image/SpriteService'
@@ -229,6 +234,15 @@
     return splitHtmlBlocks(html)
   })
 
+  // Inner voices (E6, research/65) for the finished beat — the VN reader strips
+  // them from the prose, so this is their only surface here. Closed per beat.
+  const innerVoices = $derived(
+    !ui.isStreaming && latestNarration
+      ? resolveInnerVoices(latestNarration.content, story.characters)
+      : [],
+  )
+  let voicesOpen = $state(false)
+
   let paraIndex = $state(0)
   let beatKey = $state<string | null>(null)
   // User toggled from the choice menu back to re-reading the beat.
@@ -242,6 +256,7 @@
       const wasStreamingSameBeat = beatKey === '__streaming__' && key !== null
       beatKey = key
       choicesHidden = false
+      voicesOpen = false
       if (!wasStreamingSameBeat) paraIndex = 0
     }
   })
@@ -417,7 +432,29 @@
             {#if awaitingStream}
               <div class="text-muted-foreground mt-1 text-sm italic">…</div>
             {/if}
+            {#if voicesOpen && innerVoices.length > 0}
+              <InnerVoicesList
+                voices={innerVoices}
+                class="border-border/50 mt-3 border-t pt-2 text-sm"
+              />
+            {/if}
           </div>
+          {#if innerVoices.length > 0}
+            <button
+              type="button"
+              class="text-muted-foreground hover:text-foreground absolute bottom-1.5 left-3 flex items-center gap-1 text-[10px] font-bold tracking-wider uppercase"
+              aria-expanded={voicesOpen}
+              title="Inner voices"
+              onclick={(e) => {
+                e.stopPropagation()
+                voicesOpen = !voicesOpen
+              }}
+            >
+              <MessageCircle class="h-3.5 w-3.5" />
+              <span>Inner voices</span>
+              <span class="font-normal normal-case">({innerVoices.length})</span>
+            </button>
+          {/if}
           {#if hasMore}
             <div class="text-primary absolute right-3 bottom-1.5 animate-bounce" aria-hidden="true">
               <ChevronDown class="h-5 w-5" />

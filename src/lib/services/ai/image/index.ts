@@ -50,3 +50,4 @@ export {
 } from './constants'
 // Provider types
 export { ComfyMode } from './providers/comfy'
+export { sanitizeKreaStrength } from './providers/nanogpt'

@@ -16,6 +16,7 @@
     listLoras,
     generateImage,
     ComfyMode,
+    sanitizeKreaStrength,
     type ImageModelInfo,
   } from '$lib/services/ai/image'
   import {
@@ -170,6 +171,8 @@
   let profileNegativePrompt = $state('')
   /** NanoGPT LoRA adapters for LoRA-capable endpoints (Krea 2 Turbo LoRA): up to 3 {path, scale}. */
   let profileNanoLoras = $state<{ path: string; scale: number }[]>([])
+  /** NanoGPT wavespeed-Krea img2img repaint strength (0–1); '' = endpoint default (0.65). */
+  let profileNanoStrength = $state('')
   let profileSamplers = $state<{ value: string; label: string }[]>([])
   let profileSchedulers = $state<{ value: string; label: string }[]>([])
   let profileLoraName = $state('')
@@ -459,7 +462,11 @@
   function buildProviderOptions(): Record<string, any> {
     if (profileProviderType === 'nanogpt') {
       const loras = profileNanoLoras.filter((l) => l.path.trim() !== '')
-      return loras.length > 0 ? { loras } : {}
+      const strength = sanitizeKreaStrength(profileNanoStrength)
+      return {
+        ...(loras.length > 0 ? { loras } : {}),
+        ...(strength !== undefined ? { strength } : {}),
+      }
     }
     if (profileProviderType === 'a1111') {
       return {
@@ -532,6 +539,7 @@
         // Read the NESTED fields, not just the array: typing a LoRA URL or scale
         // mutates a row in place and must trigger the autosave too.
         JSON.stringify(profileNanoLoras),
+        profileNanoStrength,
         profileLoraName,
         profileLoraStrengthModel,
         profileLoraStrengthClip,
@@ -576,6 +584,7 @@
     profilePositivePrompt = ''
     profileNegativePrompt = ''
     profileNanoLoras = []
+    profileNanoStrength = ''
     prevComfyBaseUrl = null
     profileCustomWorkflow = null
     pendingWorkflowData = null
@@ -616,8 +625,11 @@
             .filter((l): l is { path: string; scale: number } => !!l && typeof l.path === 'string')
             .map((l) => ({ path: l.path, scale: Number(l.scale) || 1 }))
         : []
+      const strength = sanitizeKreaStrength((profile.providerOptions || {}).strength)
+      profileNanoStrength = strength === undefined ? '' : String(strength)
     } else {
       profileNanoLoras = []
+      profileNanoStrength = ''
     }
 
     if (profile.providerType === 'a1111') {
@@ -1610,6 +1622,25 @@
               >The selected model id does not look LoRA-capable — these will be ignored.</span
             >
           {/if}
+        </p>
+        <div class="flex items-center justify-between gap-3 pt-1">
+          <Label for="nano-krea-strength">Reference repaint strength</Label>
+          <Input
+            id="nano-krea-strength"
+            type="number"
+            class="w-24"
+            bind:value={profileNanoStrength}
+            step="0.05"
+            min="0"
+            max="1"
+            placeholder="0.65"
+          />
+        </div>
+        <p class="text-muted-foreground text-xs">
+          Krea 2 turbo only, and only when a scene is rendered against a portrait reference
+          (img2img). 0 keeps the portrait's composition, 1 repaints freely; blank = the endpoint's
+          0.65 default. Lower if scenes inherit the portrait's pose, higher if she stops looking
+          like herself.
         </p>
       </div>
     {/if}
