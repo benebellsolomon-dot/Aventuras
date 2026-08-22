@@ -61,7 +61,7 @@ export const CHEKHOV_MAX_RESOLVED_PER_TURN = 8
  * ACTIVE SETUPS prompt line before read-validation drops it). */
 const CHEKHOV_ID_RENDER_MAX = 16
 
-const NARRATIVE_DEBT_DESCRIPTION = `NEW unresolved setups this response introduced: planted objects, explicit promises, secrets, appointments, pointedly-noted details that should pay off later. NOT quests or plot arcs (tracked separately), NOT relationship shifts. Empty most turns; at most ${CHEKHOV_MAX_LOADS_PER_TURN}.`
+const NARRATIVE_DEBT_DESCRIPTION = `NEW unresolved setups this response introduced: planted objects, explicit promises, secrets, appointments, pointedly-noted details that should pay off LATER — after this scene moves on (a later beat, another place, another day). NOT quests or plot arcs (tracked separately), NOT relationship shifts, NOT a request, demand, plea, or question the very next response will answer within the same scene (that is the current beat, not a setup). Empty most turns; at most ${CHEKHOV_MAX_LOADS_PER_TURN}.`
 
 const RESOLVED_DEBTS_DESCRIPTION =
   'Ids from the ACTIVE SETUPS list that this response clearly paid off or rendered moot. Empty when none were.'
@@ -102,7 +102,7 @@ export function buildChekhovInstructions(bullets: ReadonlyArray<ChekhovBullet>):
       : '(none)'
   return `## Narrative Debt (Setup / Payoff Tracking)
 This story tracks unresolved setups so earlier details can resurface later. Additionally fill two top-level arrays:
-- \`narrativeDebt\`: NEW concrete, payoff-able setups this response introduced — a planted object, an explicit promise, a secret, an appointment, a pointedly-noted detail. If you cannot name the specific object, promise, or appointment, log nothing. Do NOT log quests or plot arcs (story beats track those), relationship shifts (tracked separately), or vague moods. \`weight\` = 1 minor / 2 meaningful / 3 major. \`subjects\` = named characters involved. \`lockTurns\` ONLY for setups due at a stated future moment. Most responses introduce none; at most ${CHEKHOV_MAX_LOADS_PER_TURN}.
+- \`narrativeDebt\`: NEW concrete, payoff-able setups this response introduced — a planted object, an explicit promise, a secret, an appointment, a pointedly-noted detail. If you cannot name the specific object, promise, or appointment, log nothing. A setup must be able to pay off LATER, after this scene moves on — a request, demand, plea, or question the very next response will answer within the same scene is the current beat, not a setup. Do NOT log quests or plot arcs (story beats track those), relationship shifts (tracked separately), or vague moods. \`weight\` = 1 minor / 2 meaningful / 3 major. \`subjects\` = named characters involved. \`lockTurns\` ONLY for setups due at a stated future moment. Most responses introduce none; at most ${CHEKHOV_MAX_LOADS_PER_TURN}.
 - \`resolvedDebts\`: ids from ACTIVE SETUPS below that this response clearly paid off or rendered moot. Empty when none were.
 ACTIVE SETUPS:
 ${active}`

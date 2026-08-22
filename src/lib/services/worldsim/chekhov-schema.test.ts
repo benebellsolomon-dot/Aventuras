@@ -45,6 +45,12 @@ describe('buildChekhovInstructions', () => {
     expect(buildChekhovInstructions([])).toContain('(none)')
   })
 
+  it("excludes same-scene requests from setups (D5 round 2: live loads were the current beat's own pleas, resolved 1-2 turns later)", () => {
+    const instructions = buildChekhovInstructions([])
+    expect(instructions).toContain('pay off LATER')
+    expect(instructions).toContain('not a setup')
+  })
+
   it('marks time-locked setups so the classifier does not resolve the not-yet-due', () => {
     const instructions = buildChekhovInstructions([bullet({ lockTurns: 3 })])
     expect(instructions).toContain('(scheduled — not yet due)')
