@@ -54,6 +54,10 @@ import {
   writeBooruScenePrompt,
   type BooruPromptWriterInput,
   type BooruSceneSections,
+  resolveArrangementConflict,
+  estimateTokens,
+  estimateTagTokens,
+  BOORU_SINGLE_WINDOW_TOKEN_BUDGET,
 } from './booruPromptWriter'
 import {
   apparentTier,
@@ -1289,5 +1293,80 @@ describe('image-booru-scene-prompt template contract', () => {
     expect(example.expressions).toHaveLength(example.characters.length)
     expect(example.expressions[0]).toBe('') // no face to render
     expect(example.expressions[1].split(', ').length).toBeLessThanOrEqual(3)
+  })
+})
+
+describe('arrangement conflicts (research/64 live: face-to-face + from-behind in one action)', () => {
+  const base = {
+    rating: 'explicit, uncensored, detailed anatomy',
+    camera: 'medium shot',
+    countTags: '1boy, 1girl',
+    actInProgress: true,
+    action:
+      'hetero, vaginal, standing sex, pressed together, arms around neck, vaginal from behind, impaled',
+    characters: ['long hair, blonde hair, yellow eyes, medium breasts'],
+    expressions: ['blush'],
+    scene: 'attic, dusty',
+  }
+
+  it('detectActDefects flags the mixed arrangement', () => {
+    const defect = detectActDefects(base)
+    expect(defect?.conflictingArrangement).toBe(true)
+    expect(defect?.note).toMatch(/ONE arrangement/)
+    expect(
+      detectActDefects({
+        ...base,
+        action: 'hetero, vaginal, standing sex, pressed together, arms around neck',
+      }),
+    ).toBeNull()
+  })
+
+  it("resolveArrangementConflict keeps the writer's lead family and drops the other", () => {
+    const fixed = resolveArrangementConflict(base)
+    expect(fixed.action).toBe(
+      'hetero, vaginal, standing sex, pressed together, arms around neck, impaled',
+    )
+    const behindFirst = resolveArrangementConflict({
+      ...base,
+      action: 'hetero, doggystyle, vaginal from behind, kiss',
+    })
+    expect(behindFirst.action).toBe('hetero, doggystyle, vaginal from behind')
+    const clean = { ...base, action: 'hetero, missionary' }
+    expect(resolveArrangementConflict(clean)).toBe(clean)
+  })
+})
+
+describe('single-window token budget', () => {
+  it('trims multi-word-heavy prompts to the estimated 77-token window, scene tail first, keeping identity', () => {
+    const sections = {
+      rating: 'explicit, uncensored, detailed anatomy',
+      camera: 'medium shot, pov',
+      countTags: '1boy, 1girl',
+      actInProgress: true,
+      action:
+        'hetero, vaginal, standing sex, pressed together, arms around neck, impaled, heavy breathing, holding hips',
+      characters: [
+        'long hair, straight hair, bangs, blonde hair, yellow eyes, fair skin, slim, wide hips, young adult, only skirt, bare shoulders, topless',
+      ],
+      expressions: ['blush, half-closed eyes, open mouth'],
+      scene:
+        'attic, dusty, wooden beams, dormer window, rain, night, warm lantern light, dust motes, depth of field',
+    }
+    const prompt = composeBooruScenePrompt(sections, [], [], { singleWindow: true })
+    const tags = prompt.split(', ')
+    expect(estimateTokens(tags)).toBeLessThanOrEqual(BOORU_SINGLE_WINDOW_TOKEN_BUDGET)
+    // Identity core survives; the scene gave way first (down to its floor).
+    expect(prompt).toContain('blonde hair')
+    expect(prompt).toContain('yellow eyes')
+    expect(
+      tags.filter((t) => ['attic', 'dusty', 'wooden beams'].includes(t)).length,
+    ).toBeGreaterThanOrEqual(3)
+    expect(prompt).not.toContain('depth of field')
+  })
+
+  it('estimateTagTokens charges a token per word plus the comma, two for long words', () => {
+    expect(estimateTagTokens('attic')).toBe(2)
+    expect(estimateTagTokens('vaginal from behind')).toBe(4)
+    expect(estimateTagTokens('masterpiece')).toBe(3)
   })
 })

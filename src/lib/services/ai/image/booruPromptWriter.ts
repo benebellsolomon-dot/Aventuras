@@ -97,9 +97,33 @@ export const BOORU_MAX_TAGS_SINGLE_WINDOW = 36
  * identity runs alone could fill the window before any scene tag. */
 export const BOORU_MAX_RUN_TAGS_SINGLE_WINDOW = 13
 
+/**
+ * Single-window endpoints render ONE 77-token CLIP window (measured on nanogpt,
+ * research/63). A tag-count cap alone under-protects it: multi-word tags
+ * ("vaginal from behind", "detailed anatomy") cost 3-4 tokens each, so a 36-tag
+ * prompt full of them still loses its tail (D5 live: the environment and part
+ * of the identity run truncated on an explicit beat). After the tag-count trim,
+ * single-window prompts are trimmed again against this ESTIMATED token budget:
+ * 77 minus the 3-tag quality prefix (~8 tokens) minus EOS, rounded down.
+ */
+export const BOORU_SINGLE_WINDOW_TOKEN_BUDGET = 66
+/** Identity core a character run never trims below under the token budget. */
+const MIN_RUN_BASE_TAGS = 6
+
 /** Floors for the trimmable blocks — a scene still needs a place and a beat. */
 const MIN_SCENE_TAGS = 3
 const MIN_ACTION_TAGS = 2
+
+/** Rough CLIP token cost of one tag: a token per word (two for long words) plus its comma. */
+export function estimateTagTokens(tag: string): number {
+  return tag
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .reduce((n, word) => n + (word.length > 9 ? 2 : 1), 1)
+}
+export const estimateTokens = (tags: ReadonlyArray<string>): number =>
+  tags.reduce((n, tag) => n + estimateTagTokens(tag), 0)
 
 /**
  * A face never loses its LAST expression tag: an expressionless character is the
@@ -465,15 +489,95 @@ export function composeBooruScenePrompt(
   const trimmedAction =
     actionOver > 0 ? action.slice(0, Math.max(MIN_ACTION_TAGS, action.length - actionOver)) : action
 
+  const assembled = options.singleWindow
+    ? fitTokenBudget(
+        {
+          rating,
+          camera,
+          count,
+          action: trimmedAction,
+          size,
+          runs: trimmedRuns,
+          scene: trimmedScene,
+        },
+        BOORU_SINGLE_WINDOW_TOKEN_BUDGET,
+      )
+    : { action: trimmedAction, runs: trimmedRuns, scene: trimmedScene }
+
   return joinTags([
     ...rating,
     ...camera,
     ...count,
-    ...trimmedAction,
+    ...assembled.action,
     ...size,
-    ...trimmedRuns.flatMap((run) => [...run.base, ...run.expression]),
-    ...trimmedScene,
+    ...assembled.runs.flatMap((run) => [...run.base, ...run.expression]),
+    ...assembled.scene,
   ])
+}
+
+interface BudgetedBlocks {
+  rating: string[]
+  camera: string[]
+  count: string[]
+  action: string[]
+  size: string[]
+  runs: PreparedRun[]
+  scene: string[]
+}
+
+/**
+ * Token-budget post-pass for single-window endpoints: same trim priority as the
+ * tag-count pass (scene tail → expressions → action → character-run tails),
+ * same floors, one tag at a time until the ESTIMATED token total fits. Pure.
+ */
+export function fitTokenBudget(
+  blocks: BudgetedBlocks,
+  budget: number,
+): { action: string[]; runs: PreparedRun[]; scene: string[] } {
+  let scene = [...blocks.scene]
+  let action = [...blocks.action]
+  let runs = blocks.runs.map((run) => ({ base: [...run.base], expression: [...run.expression] }))
+  const total = (): number =>
+    estimateTokens([
+      ...blocks.rating,
+      ...blocks.camera,
+      ...blocks.count,
+      ...action,
+      ...blocks.size,
+      ...runs.flatMap((run) => [...run.base, ...run.expression]),
+      ...scene,
+    ])
+  // Bounded: every iteration removes exactly one tag or stops.
+  while (total() > budget) {
+    if (scene.length > MIN_SCENE_TAGS) {
+      scene = scene.slice(0, -1)
+      continue
+    }
+    const expressive = runs
+      .map((run, i) => ({ i, n: run.expression.length }))
+      .filter((r) => r.n > MIN_EXPRESSION_TAGS)
+      .sort((a, b) => b.n - a.n)[0]
+    if (expressive) {
+      runs = runs.map((run, i) =>
+        i === expressive.i ? { ...run, expression: run.expression.slice(0, -1) } : run,
+      )
+      continue
+    }
+    if (action.length > MIN_ACTION_TAGS) {
+      action = action.slice(0, -1)
+      continue
+    }
+    const longest = runs
+      .map((run, i) => ({ i, n: run.base.length }))
+      .filter((r) => r.n > MIN_RUN_BASE_TAGS)
+      .sort((a, b) => b.n - a.n)[0]
+    if (longest) {
+      runs = runs.map((run, i) => (i === longest.i ? { ...run, base: run.base.slice(0, -1) } : run))
+      continue
+    }
+    break
+  }
+  return { action, runs, scene }
 }
 
 // ============================================================================
@@ -811,8 +915,71 @@ export interface ActReliabilityDefect {
   missingActTag: boolean
   /** An act with a male participant, but no male in the count tags. */
   missingMaleCount: boolean
+  /** Face-to-face AND from-behind arrangement tags in the same action block. */
+  conflictingArrangement: boolean
   /** The correction appended to the system prompt on the single retry. */
   note: string
+}
+
+/**
+ * Mutually exclusive body arrangements. A writer that emits both ("pressed
+ * together, arms around neck" AND "vaginal from behind") asks the image model
+ * for two poses at once — the live result was tangled anatomy (D5, research/64).
+ */
+const FACING_TAGS: ReadonlySet<string> = new Set([
+  'face to face',
+  'face-to-face',
+  'pressed together',
+  'arms around neck',
+  'arm around neck',
+  'hug',
+  'hugging',
+  'kiss',
+  'kissing',
+  'french kiss',
+  'missionary',
+  'cowgirl position',
+  'upright straddle',
+  'suspended congress',
+  'mating press',
+  'leg lock',
+  'eye contact',
+])
+const BEHIND_TAGS: ReadonlySet<string> = new Set([
+  'from behind',
+  'sex from behind',
+  'vaginal from behind',
+  'anal from behind',
+  'standing sex from behind',
+  'doggystyle',
+  'doggy style',
+  'prone bone',
+  'bent over',
+  'bent over table',
+  'reverse cowgirl position',
+  'looking back',
+])
+
+const CONFLICTING_ARRANGEMENT_NOTE =
+  'Your previous output mixed a face-to-face arrangement (pressed together / arms around neck / ' +
+  'kiss / missionary) with a from-behind one (from behind / doggystyle / prone bone / bent over) in ' +
+  'the same action field — the image model cannot draw both. Re-emit with ONE arrangement, ' +
+  'the one the narrative beat actually describes, and only tags consistent with it.'
+
+/**
+ * Deterministic backstop when the writer still mixes arrangements after the
+ * retry: keep the family whose first tag appears EARLIEST in the action run
+ * (the writer's own lead), drop the other family's tags. Pure.
+ */
+export function resolveArrangementConflict<T extends Partial<BooruSceneSections>>(sections: T): T {
+  const tags = toTags(sections.action)
+  const lower = tags.map((t) => t.toLowerCase())
+  const firstFacing = lower.findIndex((t) => FACING_TAGS.has(t))
+  const firstBehind = lower.findIndex((t) => BEHIND_TAGS.has(t))
+  if (firstFacing === -1 || firstBehind === -1) return sections
+  const dropBehind = firstFacing < firstBehind
+  const kept = tags.filter((t, i) => !(dropBehind ? BEHIND_TAGS : FACING_TAGS).has(lower[i]))
+  return { ...sections, action: joinTags(kept) }
 }
 
 /**
@@ -856,12 +1023,19 @@ export function detectActDefects(
     !actionTags.includes('yuri') &&
     (povMale || actionTags.includes('hetero') || (loneFemale && hasPartneredActTag(actionTags)))
   const missingMaleCount = maleImplied && !hasMaleCount
+  const conflictingArrangement =
+    actionTags.some((t) => FACING_TAGS.has(t)) && actionTags.some((t) => BEHIND_TAGS.has(t))
 
-  if (!missingActTag && !missingMaleCount) return null
+  if (!missingActTag && !missingMaleCount && !conflictingArrangement) return null
   return {
     missingActTag,
     missingMaleCount,
-    note: [missingActTag ? MISSING_ACT_NOTE : '', missingMaleCount ? MISSING_MALE_NOTE : '']
+    conflictingArrangement,
+    note: [
+      missingActTag ? MISSING_ACT_NOTE : '',
+      missingMaleCount ? MISSING_MALE_NOTE : '',
+      conflictingArrangement ? CONFLICTING_ARRANGEMENT_NOTE : '',
+    ]
       .filter(Boolean)
       .join(' '),
   }
@@ -948,6 +1122,7 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
       log('act-reliability validation failed', {
         missingActTag: defect.missingActTag,
         missingMaleCount: defect.missingMaleCount,
+        conflictingArrangement: defect.conflictingArrangement,
         action: raw.action,
         countTags: raw.countTags,
       })
@@ -967,6 +1142,7 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
           log('WARN: retry still fails act validation — using it anyway (best effort)', {
             missingActTag: stillWrong.missingActTag,
             missingMaleCount: stillWrong.missingMaleCount,
+            conflictingArrangement: stillWrong.conflictingArrangement,
           })
         } else {
           log('retry satisfied act validation')
@@ -977,6 +1153,10 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
         log('corrective retry threw — keeping the first output', error)
       }
     }
+
+    // A still-mixed arrangement after the retry is resolved mechanically (keep
+    // the writer's lead family) — two poses at once is never a usable prompt.
+    raw = resolveArrangementConflict(raw)
 
     // Order is imposed here, not asked of the model: the sections come back
     // labelled, so the attention-critical action-before-identity ordering and
