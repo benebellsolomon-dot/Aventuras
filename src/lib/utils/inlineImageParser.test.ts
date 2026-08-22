@@ -18,3 +18,14 @@ describe('extractPicTags rating', () => {
     expect(tags[0].rating).toBe('explicit')
   })
 })
+
+describe('extractPicTags rating fallback from prompt text', () => {
+  it('upgrades an omitted or under-declared rating when the prompt is explicit', () => {
+    const tags = extractPicTags(
+      '<pic prompt="one woman, completely nude on the bed, bare breasts, legs spread" characters="Amelia"></pic>' +
+        '<pic prompt="he thrusts into her as she moans against the wall" characters="Amelia" rating="general"></pic>' +
+        '<pic prompt="a quiet kitchen at dawn with bread cooling on the table" characters="" rating="general"></pic>',
+    )
+    expect(tags.map((t) => t.rating)).toEqual(['explicit', 'explicit', 'general'])
+  })
+})

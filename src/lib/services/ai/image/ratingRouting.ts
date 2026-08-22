@@ -47,6 +47,48 @@ export function ratingFromPromptPrefix(prompt: string): ImageBeatRating | null {
   return match ? parseBeatRating(match[1]) : null
 }
 
+const RATING_RANK: Readonly<Record<ImageBeatRating, number>> = {
+  general: 0,
+  sensitive: 1,
+  explicit: 2,
+}
+
+/**
+ * Explicit-content vocabulary in the prompt TEXT. Word-bounded, case-insensitive;
+ * covers nudity, anatomy and sex acts in both the prose and booru dialects.
+ * Deliberately excludes suggestive-only words (cleavage, lingerie) — those are
+ * `sensitive`, and routing only acts on `explicit`.
+ */
+const EXPLICIT_TEXT =
+  /\b(?:nude|naked|topless|bottomless|unclothed|undressed|fully bare|completely bare|bare(?:d)? (?:breasts?|chest|nipples?|pussy|ass|buttocks|genitals?)|nipples?|areolae?|genitals?|pussy|vagina|vulva|labia|clit(?:oris)?|cock|penis|dick|erection|erect|cum|semen|ejaculat\w*|sex|intercourse|penetrat\w*|thrust\w*|orgasm\w*|climax\w*|moan\w*|blowjob|fellatio|irrumatio|cunnilingus|paizuri|naizuri|titfuck|titjob|handjob|footjob|rimming|cowgirl position|missionary|doggy ?style|sex from behind|spread (?:legs|thighs)|fucks?|fucking|fucked|masturbat\w*|fingering|grinding|lactat\w*|milk (?:spray\w*|leak\w*|dripp\w*|squirt\w*)|breast milk|squirting|creampie|gangbang|orgy|bukkake|ahegao|hentai|nsfw|explicit)\b/i
+
+const SENSITIVE_TEXT =
+  /\b(?:lingerie|underwear|panties|bra|cleavage|bikini|swimsuit|see-through|sheer|wet (?:shirt|blouse|top)|thigh-?highs?|garter|stockings|strip(?:ping|ped|s)?|undressing|half-dressed|partially (?:undressed|clothed)|towel|bath(?:ing|tub)?|shower\w*|kiss\w*|making out|straddl\w*|groping|fondl\w*|arous\w*|breasts?|bust|chest)\b/i
+
+/** Rating implied by the prompt's own wording (explicit > sensitive > null). */
+export function inferRatingFromText(prompt: string): ImageBeatRating | null {
+  if (EXPLICIT_TEXT.test(prompt)) return 'explicit'
+  if (SENSITIVE_TEXT.test(prompt)) return 'sensitive'
+  return null
+}
+
+/**
+ * The rating a beat is ROUTED on: the higher of what the narrator declared and
+ * what the prompt text implies. Text can upgrade a missing or under-declared
+ * rating (D5 live: narrators omit or under-set it), never downgrade one — a
+ * false upgrade only sends a suggestive beat to the explicit profile, a miss
+ * renders a doll.
+ */
+export function effectiveBeatRating(
+  declared: ImageBeatRating | null | undefined,
+  prompt: string,
+): ImageBeatRating | null {
+  const inferred = inferRatingFromText(prompt)
+  if (!declared) return inferred
+  if (!inferred) return declared
+  return RATING_RANK[inferred] > RATING_RANK[declared] ? inferred : declared
+}
+
 export interface RatingRouteSettings {
   profileId: string | null
   size: string

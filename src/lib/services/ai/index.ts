@@ -67,7 +67,7 @@ import {
 } from './image'
 import type { InlineImageContext, ImageAnalysisContext } from './image'
 import { generateImage as registryGenerateImage } from './image/providers/registry'
-import { resolveRatingRoute } from './image/ratingRouting'
+import { effectiveBeatRating, resolveRatingRoute } from './image/ratingRouting'
 import { assembleInlineImage } from './image/inlineAssembly'
 import { resolveBooruScenePrompt } from './image/booruPromptWriter'
 import { type ResolvedLora } from './image/loraBinding'
@@ -1047,7 +1047,10 @@ class AIService {
 
     // Determine profile and model. Explicit beats route to the explicit profile
     // when configured (research/64 option B); portraits are never routed.
-    const route = resolveRatingRoute(scene.generatePortrait ? null : scene.rating, imageSettings)
+    const route = resolveRatingRoute(
+      scene.generatePortrait ? null : effectiveBeatRating(scene.rating, scene.prompt),
+      imageSettings,
+    )
     let profileId = route.profileId
     let modelToUse = getImageProfile(profileId ?? '')?.model ?? ''
     let sizeToUse = route.size

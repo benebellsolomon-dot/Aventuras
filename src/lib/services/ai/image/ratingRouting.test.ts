@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseBeatRating, ratingFromPromptPrefix, resolveRatingRoute } from './ratingRouting'
+import {
+  effectiveBeatRating,
+  inferRatingFromText,
+  parseBeatRating,
+  ratingFromPromptPrefix,
+  resolveRatingRoute,
+} from './ratingRouting'
 
 describe('parseBeatRating', () => {
   it('folds case, whitespace and aliases', () => {
@@ -58,5 +64,44 @@ describe('resolveRatingRoute', () => {
 
   it('falls back to the primary size when the explicit size is unset', () => {
     expect(resolveRatingRoute('explicit', { ...base, explicitSize: '' }).size).toBe('1024x1024')
+  })
+})
+
+describe('inferRatingFromText / effectiveBeatRating (narrator-omitted rating fallback)', () => {
+  it('reads explicit vocabulary out of prose and booru prompts', () => {
+    expect(
+      inferRatingFromText('one woman, completely nude, her bare breasts and nipples visible'),
+    ).toBe('explicit')
+    expect(inferRatingFromText('two lovers on the bed, he thrusts into her, she moans')).toBe(
+      'explicit',
+    )
+    expect(inferRatingFromText('1girl, solo, paizuri, nude, bedroom')).toBe('explicit')
+    expect(
+      inferRatingFromText(
+        'a young woman in a damp white blouse, cleavage showing, leaning in for a kiss',
+      ),
+    ).toBe('sensitive')
+    expect(
+      inferRatingFromText('a quiet kitchen at dawn with bread cooling on the table'),
+    ).toBeNull()
+  })
+
+  it('does not fire on near-words', () => {
+    expect(
+      inferRatingFromText(
+        'the sextant on the chart table, a cockatoo on the rail, the Sussex coast',
+      ),
+    ).toBeNull()
+  })
+
+  it('upgrades a missing or under-declared rating, never downgrades a declared one', () => {
+    expect(effectiveBeatRating(null, 'she stands naked in the rain')).toBe('explicit')
+    expect(effectiveBeatRating('general', 'she stands naked in the rain')).toBe('explicit')
+    expect(effectiveBeatRating('sensitive', 'bare breasts pressed against the glass')).toBe(
+      'explicit',
+    )
+    expect(effectiveBeatRating('explicit', 'a quiet kitchen at dawn')).toBe('explicit')
+    expect(effectiveBeatRating('general', 'a quiet kitchen at dawn')).toBe('general')
+    expect(effectiveBeatRating(null, 'a quiet kitchen at dawn')).toBeNull()
   })
 })
