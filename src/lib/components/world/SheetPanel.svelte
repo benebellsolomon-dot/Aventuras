@@ -5,6 +5,7 @@
   import { BedDouble } from 'lucide-svelte'
   import { story } from '$lib/stores/story.svelte'
   import { ui } from '$lib/stores/ui.svelte'
+  import { readBodyState } from '$lib/services/be'
   import {
     ATTRIBUTE_IDS,
     ATTRIBUTE_LABELS,
@@ -12,6 +13,7 @@
     checkBonus,
     essenceMax,
     isStoredRpgSheetInvalid,
+    levelProgress,
     sheetOrDefault,
     sheetTitles,
     SKILL_BY_ID,
@@ -26,6 +28,16 @@
   import SpellbookSection from './SpellbookSection.svelte'
 
   const protagonist = $derived(story.characters.find((c) => c.relationship === 'self') ?? null)
+  // Next level = the next interaction milestone any tracked girl crosses.
+  const progress = $derived(
+    levelProgress(
+      story.characters.flatMap((c) => {
+        if (c.relationship === 'self') return []
+        const state = readBodyState(c.metadata)
+        return state ? [{ name: c.name, state }] : []
+      }),
+    ),
+  )
   const sheet = $derived.by<RpgSheet | null>(() => {
     if (!protagonist) return null
     return sheetOrDefault(protagonist.metadata)
@@ -92,6 +104,43 @@
         <BedDouble class="h-3.5 w-3.5" /> Rest (full restore)
       </Button>
     </div>
+
+    <!-- Next level: one level per milestone a girl's body crosses (research/47 Step 8) -->
+    {#if progress.length > 0}
+      <div>
+        <div class="text-muted-foreground mb-1 text-xs uppercase">Next level</div>
+        <p class="text-muted-foreground mb-2 text-[11px]">
+          You gain a level each time a girl's body crosses an interaction milestone.
+        </p>
+        <div class="space-y-2">
+          {#each progress.slice(0, 3) as row (row.name)}
+            <div>
+              <div class="flex items-baseline justify-between text-xs">
+                <span class="text-foreground">{row.name}</span>
+                {#if row.next}
+                  <span class="text-muted-foreground">
+                    {row.next.remainingKg < 0.1 ? '<0.1' : row.next.remainingKg.toFixed(1)} kg to go
+                  </span>
+                {:else}
+                  <span class="text-muted-foreground">past the last milestone</span>
+                {/if}
+              </div>
+              {#if row.next}
+                <div class="bg-muted mt-1 h-1.5 overflow-hidden rounded" title={row.next.label}>
+                  <div
+                    class="h-full rounded bg-emerald-500/80"
+                    style="width: {row.next.pct}%"
+                  ></div>
+                </div>
+                <div class="text-muted-foreground mt-0.5 text-[11px]">
+                  at {row.next.massKg} kg: {row.next.label}
+                </div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Attributes -->
     <div>

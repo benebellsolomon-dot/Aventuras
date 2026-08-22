@@ -107,3 +107,4 @@ export {
   CHECK_RESULT_HEADER,
   PLAYER_SHEET_HEADER,
 } from './context'
+export { levelProgress, type LevelProgressRow } from './progress'
