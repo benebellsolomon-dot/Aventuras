@@ -58,6 +58,9 @@ import {
   estimateTokens,
   estimateTagTokens,
   BOORU_SINGLE_WINDOW_TOKEN_BUDGET,
+  applyDressStateFallback,
+  detectMissingDressState,
+  detectWriterDefects,
 } from './booruPromptWriter'
 import {
   apparentTier,
@@ -1368,5 +1371,138 @@ describe('single-window token budget', () => {
     expect(estimateTagTokens('attic')).toBe(2)
     expect(estimateTagTokens('vaginal from behind')).toBe(4)
     expect(estimateTagTokens('masterpiece')).toBe(3)
+  })
+})
+
+/**
+ * Dress-state backstop (D5 round 2). The live failures: the narrator's intent
+ * said "standing bare and pressed against a man" and "sitting bare on a wooden
+ * crate, legs open" — anticipation beats, so actInProgress was false — and the
+ * writer kept her in the dossier's "damp halter top" / wrote no dress state at
+ * all. The image model drew her clothed, or got "explicit" with nothing to draw.
+ */
+describe('dress-state backstop', () => {
+  const BARE_INTENT =
+    'one woman: long straight blonde hair, yellow eyes, standing bare and pressed against a man, her hand on his belt buckle'
+  const girlRun = 'long hair, straight hair, bangs, blonde hair, yellow eyes, fair skin, slim'
+  const povRun = 'pov, male pov, faceless male, muscular'
+
+  it('flags the live failure — bare in the intent, clothed in her run', () => {
+    const s = sections({
+      countTags: '1boy, 1girl',
+      characters: [povRun, `${girlRun}, clothed, damp halter top, medium breasts`],
+    })
+    expect(detectMissingDressState(s, BARE_INTENT)).toBe(true)
+    const defect = detectWriterDefects(s, BARE_INTENT)
+    expect(defect?.missingDressState).toBe(true)
+    expect(defect?.missingActTag).toBe(false)
+    expect(defect?.note).toContain('completely nude')
+  })
+
+  it('passes once her run states any dress state — nude or clothes-displaced', () => {
+    expect(
+      detectMissingDressState(
+        sections({ characters: [povRun, `${girlRun}, completely nude, medium breasts`] }),
+        BARE_INTENT,
+      ),
+    ).toBe(false)
+    expect(
+      detectMissingDressState(
+        sections({ characters: [`${girlRun}, halter top, clothes pull, medium breasts`] }),
+        'her halter top pulled down, breasts exposed',
+      ),
+    ).toBe(false)
+  })
+
+  it('never fires when the intent names no exposure', () => {
+    expect(
+      detectMissingDressState(
+        sections({ characters: [`${girlRun}, clothed, damp halter top`] }),
+        'she leans on the rail, halter top damp from the rain, smiling',
+      ),
+    ).toBe(false)
+    expect(
+      detectWriterDefects(
+        sections({ characters: [`${girlRun}, clothed`] }),
+        'a quiet conversation over tea',
+      ),
+    ).toBeNull()
+  })
+
+  it('the faceless POV run never satisfies the check on its own', () => {
+    expect(
+      detectMissingDressState(
+        sections({ characters: [`${povRun}, nude`, `${girlRun}, clothed`] }),
+        BARE_INTENT,
+      ),
+    ).toBe(true)
+  })
+
+  it('merges with the act defects into one retry note', () => {
+    const defect = detectWriterDefects(
+      sections({
+        actInProgress: true,
+        countTags: '1boy, 1girl',
+        action: 'lying on back, breast expansion',
+        characters: [povRun, `${girlRun}, clothed`],
+      }),
+      'naked on the bed beneath him',
+    )
+    expect(defect?.missingActTag).toBe(true)
+    expect(defect?.missingDressState).toBe(true)
+    expect(defect?.note).toContain('named no act tag')
+    expect(defect?.note).toContain('dress state')
+  })
+
+  describe('applyDressStateFallback', () => {
+    const amelia = {
+      imageTags: 'long hair, straight hair, bangs, blonde hair, yellow eyes, fair skin',
+    }
+
+    it('undresses the single named subject: drops "clothed", appends the intent tag', () => {
+      const out = applyDressStateFallback(
+        sections({ characters: [povRun, `${girlRun}, clothed, damp halter top, medium breasts`] }),
+        BARE_INTENT,
+        [amelia],
+      )
+      expect(out.characters).toEqual([
+        povRun,
+        `${girlRun}, damp halter top, medium breasts, completely nude`,
+      ])
+    })
+
+    it('uses topless / bottomless for partial exposure', () => {
+      const out = applyDressStateFallback(
+        sections({ characters: [`${girlRun}, halter top`] }),
+        'her halter top pulled down, breasts exposed',
+        [amelia],
+      )
+      expect(out.characters?.[0]).toBe(`${girlRun}, halter top, topless`)
+    })
+
+    it('picks her run by bank overlap when an unnamed partner is described', () => {
+      const out = applyDressStateFallback(
+        sections({
+          characters: ['muscular, short dark hair, shirt', `${girlRun}, damp halter top`],
+        }),
+        BARE_INTENT,
+        [amelia],
+      )
+      expect(out.characters?.[0]).toBe('muscular, short dark hair, shirt')
+      expect(out.characters?.[1]).toBe(`${girlRun}, damp halter top, completely nude`)
+    })
+
+    it('returns the same object when nothing applies', () => {
+      const dressed = sections({ characters: [`${girlRun}, completely nude`] })
+      expect(applyDressStateFallback(dressed, BARE_INTENT, [amelia])).toBe(dressed)
+      const clothedIntent = sections({ characters: [`${girlRun}, clothed`] })
+      expect(applyDressStateFallback(clothedIntent, 'tea on the terrace', [amelia])).toBe(
+        clothedIntent,
+      )
+      const twoSubjects = sections({ characters: [`${girlRun}, clothed`, 'red hair, clothed'] })
+      expect(
+        applyDressStateFallback(twoSubjects, BARE_INTENT, [amelia, { imageTags: 'red hair' }]),
+      ).toBe(twoSubjects)
+    })
   })
 })

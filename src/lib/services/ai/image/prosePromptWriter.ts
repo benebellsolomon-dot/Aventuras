@@ -32,6 +32,7 @@ import {
   buildStorySettingBlock,
   expressionPhrase,
   narrativeContext,
+  normalizeBank,
   resolveSubjects,
   type ResolveBooruSceneInput,
 } from './booruPromptWriter'
@@ -72,6 +73,10 @@ export function buildProseSubjectDossier(
   return subjects
     .map((c) => {
       const lines: string[] = [`- ${c.name}:`]
+      const bank = normalizeBank(c.imageTags)
+      if (bank) {
+        lines.push(`  identity anchors (locked — restate every one in plain words): ${bank}`)
+      }
       const appearance = appearanceReference(c.currentVisualDescriptors ?? c.visualDescriptors)
       lines.push(
         appearance
@@ -81,7 +86,10 @@ export function buildProseSubjectDossier(
       const clothing = (
         c.currentVisualDescriptors?.clothing ?? c.visualDescriptors?.clothing
       )?.trim()
-      if (clothing) lines.push(`  current clothing: ${clothing}`)
+      if (clothing)
+        lines.push(
+          `  current clothing (what she wore as the beat began — the scene intent decides whether it is still on): ${clothing}`,
+        )
       if (beMode) {
         const body = bodyStatePhrase(c.metadata)
         if (body)

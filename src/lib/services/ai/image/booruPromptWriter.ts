@@ -65,6 +65,12 @@ import {
   type SizeSanction,
 } from './booruTags'
 import { engineExpressionTags, isExpressionTag } from './expressionTags'
+import {
+  CLOTHED_ASSERTION_TAGS,
+  DRESS_TAG_FOR_STATE,
+  hasDressStateTag,
+  inferImpliedDressState,
+} from './dressState'
 import type { Character, ImageProviderType, Location, VisualDescriptors } from '$lib/types'
 
 const log = createLogger('BooruPromptWriter')
@@ -167,7 +173,7 @@ const booruScenePromptSchema = z.object({
   characters: z
     .array(z.string())
     .describe(
-      'One FLAT comma-separated tag run per person, in the same order as the count tags: locked identity tags copied verbatim, then clothing, breast-size band. No parentheses. A male who is the story protagonist (the scene addresses him as "you") gets "pov, male pov, faceless male" plus at most "muscular" instead of a described 1boy.',
+      'One FLAT comma-separated tag run per person, in the same order as the count tags: locked identity tags copied verbatim, then THIS beat\'s dress state (her current clothing while she still wears it; "completely nude" / "topless" / "bottomless" when the scene intent says it is off — never "clothed" then), then breast-size band. No parentheses. A male who is the story protagonist (the scene addresses him as "you") gets "pov, male pov, faceless male" plus at most "muscular" instead of a described 1boy.',
     ),
   expressions: z
     .array(z.string())
@@ -625,7 +631,7 @@ const APPEARANCE_FIELDS: ReadonlyArray<keyof VisualDescriptors> = [
 ]
 
 /** Join a character's identity-bank string into a single comma-separated tag run. */
-function normalizeBank(imageTags: string | null | undefined): string {
+export function normalizeBank(imageTags: string | null | undefined): string {
   return (imageTags ?? '')
     .replace(/\s*\n+\s*/g, ', ')
     .replace(/\s{2,}/g, ' ')
@@ -909,6 +915,14 @@ const MISSING_MALE_NOTE =
   'count tag controls who renders — re-emit countTags with him counted (e.g. "1boy, 1girl"), ' +
   'keeping his character run in the faceless protagonist-POV form when he is the viewer.'
 
+const MISSING_DRESS_NOTE =
+  'The scene intent says a subject is bare ("naked", "standing bare", "topless", "breasts exposed" …) ' +
+  'but no character run states a dress state. The dossier\'s "current clothing" is what she WORE when ' +
+  "the beat began — when the intent says it is off, her run must carry THIS beat's dress state " +
+  'instead: "completely nude", "topless" or "bottomless" (plus where the clothes went — "clothes pull", ' +
+  '"halter top pulled down" — if they are in frame), and never "clothed". Re-emit with the dress ' +
+  'state in her run.'
+
 /** What the deterministic check found wrong, and the correction to re-prompt with. */
 export interface ActReliabilityDefect {
   /** `actInProgress` was declared but the action block names no act. */
@@ -917,6 +931,8 @@ export interface ActReliabilityDefect {
   missingMaleCount: boolean
   /** Face-to-face AND from-behind arrangement tags in the same action block. */
   conflictingArrangement: boolean
+  /** The scene intent says a subject is bare, but no character run states a dress state. */
+  missingDressState: boolean
   /** The correction appended to the system prompt on the single retry. */
   note: string
 }
@@ -1031,6 +1047,7 @@ export function detectActDefects(
     missingActTag,
     missingMaleCount,
     conflictingArrangement,
+    missingDressState: false,
     note: [
       missingActTag ? MISSING_ACT_NOTE : '',
       missingMaleCount ? MISSING_MALE_NOTE : '',
@@ -1039,6 +1056,93 @@ export function detectActDefects(
       .filter(Boolean)
       .join(' '),
   }
+}
+
+/** Character runs as tag arrays, minus the faceless protagonist-POV run (he has no dress state to state). */
+function describedRuns(sections: Partial<BooruSceneSections>): string[][] {
+  return (sections.characters ?? [])
+    .map((run) => toTags(run))
+    .filter((run) => !run.some((tag) => POV_MALE_TAGS.has(tag.toLowerCase())))
+}
+
+/**
+ * Dress-state check (D5 round 2, research/64 §4.1). The live failure: the
+ * narrator's intent said "standing bare" / "sitting bare on a crate" and the
+ * writer still wrote `clothed, damp halter top` (or no dress state at all),
+ * because the dossier's "current clothing" line — what she wore when the beat
+ * began — beat the beat. Independent of `actInProgress`: both live cases were
+ * anticipation beats. True when the intent names exposure and no described run
+ * states ANY dress state (nude family or clothes-displaced family). Pure.
+ */
+export function detectMissingDressState(
+  sections: Partial<BooruSceneSections>,
+  sceneIntent: string,
+): boolean {
+  if (!inferImpliedDressState(sceneIntent)) return false
+  const described = describedRuns(sections)
+  // Nobody described (a faceless-POV-only cast): nothing to state, nothing to check.
+  if (described.length === 0) return false
+  return !described.some((run) => hasDressStateTag(run))
+}
+
+/**
+ * Every mechanical check in one pass, so the single corrective retry carries
+ * every note at once. `null` on the hot path (nothing wrong, no extra call).
+ */
+export function detectWriterDefects(
+  sections: Partial<BooruSceneSections>,
+  sceneIntent: string,
+): ActReliabilityDefect | null {
+  const act = detectActDefects(sections)
+  const missingDressState = detectMissingDressState(sections, sceneIntent)
+  if (!act && !missingDressState) return null
+  return {
+    missingActTag: act?.missingActTag ?? false,
+    missingMaleCount: act?.missingMaleCount ?? false,
+    conflictingArrangement: act?.conflictingArrangement ?? false,
+    missingDressState,
+    note: [act?.note ?? '', missingDressState ? MISSING_DRESS_NOTE : ''].filter(Boolean).join(' '),
+  }
+}
+
+/**
+ * Deterministic backstop when the writer still leaves the bare subject dressed
+ * after the retry: with exactly ONE named subject (so there is no doubt who the
+ * intent means), her run — the described run sharing the most of her locked
+ * bank, else the first described run — drops any "clothed" assertion and gains
+ * the intent's dress tag (completely nude / topless / bottomless). With several
+ * named subjects the intent is ambiguous about who is bare, so nothing changes.
+ * Pure; returns the same object when it does nothing.
+ */
+export function applyDressStateFallback<T extends Partial<BooruSceneSections>>(
+  sections: T,
+  sceneIntent: string,
+  subjects: ReadonlyArray<Pick<Character, 'imageTags'>>,
+): T {
+  const implied = inferImpliedDressState(sceneIntent)
+  if (!implied || subjects.length !== 1) return sections
+  const runs = (sections.characters ?? []).map((run) => toTags(run))
+  const described = runs
+    .map((run, index) => ({ run, index }))
+    .filter(({ run }) => !run.some((tag) => POV_MALE_TAGS.has(tag.toLowerCase())))
+  if (described.length === 0 || described.some(({ run }) => hasDressStateTag(run))) return sections
+
+  const bank = new Set(toTags(normalizeBank(subjects[0].imageTags)).map((t) => t.toLowerCase()))
+  const scored = described.map(({ run, index }) => ({
+    index,
+    score: run.filter((tag) => bank.has(tag.toLowerCase())).length,
+  }))
+  const target = scored.reduce((best, cur) => (cur.score > best.score ? cur : best), scored[0])
+
+  const rewritten = runs.map((run, index) =>
+    index === target.index
+      ? joinTags([
+          ...run.filter((tag) => !CLOTHED_ASSERTION_TAGS.has(tag.toLowerCase())),
+          DRESS_TAG_FOR_STATE[implied],
+        ])
+      : joinTags(run),
+  )
+  return { ...sections, characters: rewritten }
 }
 
 // ============================================================================
@@ -1113,18 +1217,21 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
       SERVICE_ID,
     )
 
-    // Mechanical act-reliability backstop. Off the hot path by construction:
-    // a compliant output detects no defect and costs zero extra calls. ONE
-    // corrective retry covers both defects; the retry's output is used even if
-    // it is still wrong, because a mediocre prompt beats no image at all.
-    const defect = detectActDefects(raw)
+    // Mechanical act-reliability + dress-state backstop. Off the hot path by
+    // construction: a compliant output detects no defect and costs zero extra
+    // calls. ONE corrective retry covers every defect; the retry's output is
+    // used even if it is still wrong, because a mediocre prompt beats no image.
+    const sceneIntent = input.scenePrompt
+    const defect = detectWriterDefects(raw, sceneIntent)
     if (defect) {
       log('act-reliability validation failed', {
         missingActTag: defect.missingActTag,
         missingMaleCount: defect.missingMaleCount,
         conflictingArrangement: defect.conflictingArrangement,
+        missingDressState: defect.missingDressState,
         action: raw.action,
         countTags: raw.countTags,
+        characters: raw.characters,
       })
       try {
         log('issuing single corrective retry')
@@ -1137,12 +1244,13 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
           },
           SERVICE_ID,
         )
-        const stillWrong = detectActDefects(retried)
+        const stillWrong = detectWriterDefects(retried, sceneIntent)
         if (stillWrong) {
           log('WARN: retry still fails act validation — using it anyway (best effort)', {
             missingActTag: stillWrong.missingActTag,
             missingMaleCount: stillWrong.missingMaleCount,
             conflictingArrangement: stillWrong.conflictingArrangement,
+            missingDressState: stillWrong.missingDressState,
           })
         } else {
           log('retry satisfied act validation')
@@ -1157,6 +1265,13 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
     // A still-mixed arrangement after the retry is resolved mechanically (keep
     // the writer's lead family) — two poses at once is never a usable prompt.
     raw = resolveArrangementConflict(raw)
+    // A still-dressed bare subject after the retry gets the intent's dress tag
+    // mechanically (single named subject only — see applyDressStateFallback).
+    const dressed = applyDressStateFallback(raw, sceneIntent, subjects)
+    if (dressed !== raw) {
+      log('dress-state fallback applied', { characters: dressed.characters })
+      raw = dressed
+    }
 
     // Order is imposed here, not asked of the model: the sections come back
     // labelled, so the attention-critical action-before-identity ordering and

@@ -61,6 +61,56 @@ export function sanitizeNanoGptLoras(raw: unknown): NanoGptLora[] {
   return out
 }
 
+/**
+ * wavespeed Krea 2 on NanoGPT IGNORES width/height (measured live, research/64
+ * §4: a 1536x1536 request rendered 1024x1024 on `krea-v2/turbo`, and on
+ * `turbo-lora` took the portrait reference's 2:3). The endpoint's own knobs are
+ * `aspect_ratio` (W:H from a fixed option list) and `resolution` — '1k' | '2k'
+ * on the turbo family, the aspect string itself on krea-v2-large / medium. The
+ * requested size is mapped onto those so the profile's size means something.
+ */
+const WAVESPEED_KREA_TURBO = /^wavespeed-ai\/krea-v2\/turbo(?:-lora)?$/i
+const WAVESPEED_KREA_SIZED = /^wavespeed-ai\/krea-v2-(large|medium|medium-turbo)\/text-to-image$/i
+const KREA_TURBO_ASPECTS = ['1:1', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16', '2:1', '1:2']
+const KREA_SIZED_ASPECTS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  large: ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '2:3', '9:16'],
+  medium: ['1:1', '4:3', '3:4', '16:9', '9:16'],
+  'medium-turbo': ['1:1', '4:3', '3:2', '16:9', '2.35:1', '4:5', '2:3', '9:16'],
+}
+/** At or above this many requested pixels the turbo family renders '2k' (~4 MP) instead of '1k' (~1 MP). */
+export const KREA_TWO_K_MIN_PIXELS = 2_000_000
+
+function nearestAspect(width: number, height: number, options: ReadonlyArray<string>): string {
+  const target = Math.log(width / height)
+  return options.reduce((best, option) => {
+    const [w, h] = option.split(':').map(Number)
+    const distance = Math.abs(Math.log(w / h) - target)
+    const [bw, bh] = best.split(':').map(Number)
+    return distance < Math.abs(Math.log(bw / bh) - target) ? option : best
+  }, options[0])
+}
+
+/** The wavespeed Krea size parameters for a requested WxH, or null for any other model. */
+export function wavespeedKreaSizeParams(
+  model: string,
+  width: number,
+  height: number,
+): { aspect_ratio: string; resolution: string } | null {
+  if (!(width > 0 && height > 0)) return null
+  if (WAVESPEED_KREA_TURBO.test(model)) {
+    return {
+      aspect_ratio: nearestAspect(width, height, KREA_TURBO_ASPECTS),
+      resolution: width * height >= KREA_TWO_K_MIN_PIXELS ? '2k' : '1k',
+    }
+  }
+  const sized = WAVESPEED_KREA_SIZED.exec(model)
+  if (sized) {
+    const aspect = nearestAspect(width, height, KREA_SIZED_ASPECTS[sized[1].toLowerCase()])
+    return { aspect_ratio: aspect, resolution: aspect }
+  }
+  return null
+}
+
 /** Whether a NanoGPT image model id looks like a LoRA-capable endpoint. */
 export const isLoraCapableNanoGptModel = (model: string): boolean => LORA_MODEL_PATTERN.test(model)
 
@@ -87,6 +137,13 @@ export function createNanoGPTProvider(config: ImageProviderConfig): ImageProvide
         // the Krea endpoints advertise max_images 4 (the default is 1 but a
         // per-model default must never be able to bill four renders for one).
         n: 1,
+      }
+
+      // wavespeed Krea ignores width/height — send its own size knobs too.
+      const kreaSize = wavespeedKreaSizeParams(model, width || 1024, height || 1024)
+      if (kreaSize) {
+        body.aspect_ratio = kreaSize.aspect_ratio
+        body.resolution = kreaSize.resolution
       }
 
       // LoRA adapters (wavespeed `loras: [{path, scale}]`) — only on LoRA-capable

@@ -54,7 +54,10 @@ import type { PresetPack, FullPack } from './types'
 // sensitive / explicit) — drives explicit-beat image routing (research/64 B).
 // v14: new `image-prose-scene-prompt` service template — the dedicated prose
 // scene writer for LLM-encoder image models (Krea 2 / Flux), research/64 §3c.
-const SERVICE_TEMPLATE_SYNC_VERSION = 14
+// v15: booru writer — per-run DRESS STATE rule (the beat's nudity beats the
+//     dossier's current-clothing line; live: "standing bare" rendered clothed)
+//     + prose writer identity anchors / expression-twice rules (research/64 §4).
+const SERVICE_TEMPLATE_SYNC_VERSION = 15
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

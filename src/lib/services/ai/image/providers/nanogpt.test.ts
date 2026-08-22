@@ -13,7 +13,7 @@ vi.mock('./fetchAdapter', () => ({
   imageGetFetch: vi.fn(),
 }))
 
-import { createNanoGPTProvider, sanitizeNanoGptLoras } from './nanogpt'
+import { createNanoGPTProvider, sanitizeNanoGptLoras, wavespeedKreaSizeParams } from './nanogpt'
 import type { ImageProviderConfig } from './types'
 
 function lastBody(): Record<string, unknown> {
@@ -93,5 +93,65 @@ describe('NanoGPT image count + LoRA pass-through (research/63, Krea 2 Turbo LoR
       { path: 'https://c/z.safetensors', scale: 0 },
     ])
     expect(sanitizeNanoGptLoras('nope')).toEqual([])
+  })
+})
+
+/**
+ * wavespeed Krea ignores width/height (live: 1536x1536 rendered 1024x1024 on
+ * turbo, 832x1248 on turbo-lora via the portrait reference). The request maps
+ * the size onto the endpoint's own aspect_ratio / resolution knobs.
+ */
+describe('wavespeed Krea size params', () => {
+  it('maps a square 1536 request to 1:1 at 2k on the turbo family', () => {
+    expect(wavespeedKreaSizeParams('wavespeed-ai/krea-v2/turbo-lora', 1536, 1536)).toEqual({
+      aspect_ratio: '1:1',
+      resolution: '2k',
+    })
+    expect(wavespeedKreaSizeParams('wavespeed-ai/krea-v2/turbo', 1024, 1024)).toEqual({
+      aspect_ratio: '1:1',
+      resolution: '1k',
+    })
+  })
+
+  it('picks the nearest listed aspect for portrait / landscape sizes', () => {
+    expect(wavespeedKreaSizeParams('wavespeed-ai/krea-v2/turbo', 832, 1216)?.aspect_ratio).toBe(
+      '2:3',
+    )
+    expect(wavespeedKreaSizeParams('wavespeed-ai/krea-v2/turbo', 1216, 832)?.aspect_ratio).toBe(
+      '3:2',
+    )
+    expect(wavespeedKreaSizeParams('wavespeed-ai/krea-v2/turbo', 1920, 1080)?.aspect_ratio).toBe(
+      '16:9',
+    )
+  })
+
+  it("uses the aspect string as the resolution on the sized family, from that model's own list", () => {
+    expect(wavespeedKreaSizeParams('wavespeed-ai/krea-v2-medium/text-to-image', 832, 1216)).toEqual(
+      {
+        aspect_ratio: '3:4',
+        resolution: '3:4',
+      },
+    )
+    expect(wavespeedKreaSizeParams('wavespeed-ai/krea-v2-large/text-to-image', 832, 1216)).toEqual({
+      aspect_ratio: '2:3',
+      resolution: '2:3',
+    })
+  })
+
+  it('returns null for every other model, and sends nothing extra for them', async () => {
+    expect(wavespeedKreaSizeParams('wai-illustrious-sdxl', 832, 1216)).toBeNull()
+    expect(wavespeedKreaSizeParams('fal-ai/krea-2/turbo', 1024, 1024)).toBeNull()
+    await gen({}, 'wai-illustrious-sdxl')
+    expect(lastBody().aspect_ratio).toBeUndefined()
+    expect(lastBody().resolution).toBeUndefined()
+  })
+
+  it('puts the knobs on the wire next to width/height for a Krea turbo request', async () => {
+    await gen({}, 'wavespeed-ai/krea-v2/turbo-lora')
+    const body = lastBody()
+    expect(body.width).toBe(832)
+    expect(body.height).toBe(1216)
+    expect(body.aspect_ratio).toBe('2:3')
+    expect(body.resolution).toBe('1k')
   })
 })

@@ -31,8 +31,19 @@ describe('buildProseSubjectDossier', () => {
     expect(out).toContain('- Amelia:')
     expect(out).toContain('appearance:')
     expect(out).toContain('yellow eyes')
-    expect(out).toContain('current clothing: rain-soaked halter top')
+    expect(out).toMatch(/current clothing \(.*\): rain-soaked halter top/)
     expect(out).not.toContain('Nobody')
+  })
+  it('leads with the locked identity bank as anchors when the character has one', () => {
+    const banked = {
+      ...amelia,
+      imageTags: 'long hair, straight hair, blonde hair, yellow eyes, fair skin',
+    } as Character
+    const out = buildProseSubjectDossier([banked], ['Amelia'], false)
+    expect(out).toContain('identity anchors (locked')
+    expect(out.indexOf('identity anchors')).toBeLessThan(out.indexOf('appearance:'))
+    expect(out).toContain('current clothing (what she wore as the beat began')
+    expect(buildProseSubjectDossier([amelia], ['Amelia'], false)).not.toContain('identity anchors')
   })
   it('falls back to a no-subjects line', () => {
     expect(buildProseSubjectDossier([amelia], [], false)).toMatch(/no named subjects/)
