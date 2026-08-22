@@ -27,7 +27,9 @@ export function parseImageSize(size: string): { width: number; height: number } 
   if (size === '2048x2048') return { width: 2048, height: 2048 }
 
   try {
-    const parts = size.toLowerCase().split('x')
+    // Accept the typographic multiplication sign too — the live settings held
+    // '832×1216' (typed/pasted), which used to fall through to 1024x1024.
+    const parts = size.toLowerCase().replace(/[×✕✖]/g, 'x').split('x')
     if (parts.length === 2) {
       const width = parseInt(parts[0], 10)
       const height = parseInt(parts[1], 10)
