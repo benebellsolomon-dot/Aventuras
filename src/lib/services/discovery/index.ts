@@ -8,6 +8,7 @@ import { WyvernProvider } from './providers/wyvern'
 import { PygmalionProvider } from './providers/pygmalion'
 import { MlpchagProvider } from './providers/mlpchag'
 import { QuillGenProvider } from './providers/quillgen'
+import { BotbooruProvider } from './providers/botbooru'
 
 export type { DiscoveryProvider, DiscoveryCard, SearchOptions, SearchResult }
 
@@ -36,6 +37,7 @@ class DiscoveryService {
     this.registerProvider(new PygmalionProvider())
     this.registerProvider(new MlpchagProvider())
     this.registerProvider(new QuillGenProvider())
+    this.registerProvider(new BotbooruProvider())
   }
 
   registerProvider(provider: DiscoveryProvider): void {
