@@ -107,13 +107,18 @@ export const AROUSAL_PEAK_THRESHOLD = 85
  * flush threshold (the one `imageStateCues` and the sprite cell already key on)
  * so the face, the sprite, and the body-state cue can never disagree.
  *
- * `heavy breathing` is deliberately absent: at or above the flush threshold
- * `imageStateCues` already emits the flushed cue, which `compressStateCues`
- * renders as "blush, heavy breathing" into the same character's run.
+ * `heavy breathing` rides the flush rung here (research/64 §3g): it used to be
+ * supplied by the post-hoc state-cue append (`compressStateCues` → "blush,
+ * heavy breathing"), but a writer-composed booru prompt no longer receives
+ * that append, so the ladder is the one source. Second in the rung on purpose:
+ * the single-window trim takes expression tags from the tail, so the breath
+ * outlives `half-closed eyes` / `open mouth` when the budget binds. The peak
+ * rung keeps `open mouth` over `half-closed eyes` so the block stays within
+ * MAX_ENGINE_EXPRESSION_TAGS.
  */
 const AROUSAL_LADDER: ReadonlyArray<readonly [number, ReadonlyArray<string>]> = [
-  [AROUSAL_PEAK_THRESHOLD, ['blush', 'half-closed eyes', 'open mouth']],
-  [SPRITE_AROUSAL_FLUSH_THRESHOLD, ['blush', 'half-closed eyes']],
+  [AROUSAL_PEAK_THRESHOLD, ['blush', 'heavy breathing', 'open mouth']],
+  [SPRITE_AROUSAL_FLUSH_THRESHOLD, ['blush', 'heavy breathing', 'half-closed eyes']],
   [AROUSAL_BLUSH_THRESHOLD, ['blush']],
 ]
 

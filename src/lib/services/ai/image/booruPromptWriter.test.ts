@@ -218,7 +218,7 @@ describe('buildSubjectDossier', () => {
       metadata: writeBodyState(null, { ...defaultBodyState(20), arousal: 90 }),
     })
     expect(buildSubjectDossier([aroused], ['Cora'], true)).toContain(
-      'expression (engine state — copy VERBATIM into her expression run, then add what the beat shows): blush, half-closed eyes, open mouth',
+      'expression (engine state — copy VERBATIM into her expression run, then add what the beat shows): blush, heavy breathing, open mouth',
     )
     expect(buildSubjectDossier([aroused], ['Cora'], false)).not.toContain('expression (engine')
   })
@@ -262,7 +262,7 @@ describe('buildExpressionCues', () => {
       { identityTags: ['1girl', 'red hair'], expressionTags: ['scowl'] },
       {
         identityTags: ['1girl', 'black hair', 'red eyes'],
-        expressionTags: ['blush', 'half-closed eyes', 'open mouth'],
+        expressionTags: ['blush', 'heavy breathing', 'open mouth'],
       },
     ])
   })
@@ -1096,7 +1096,7 @@ describe('writeBooruScenePrompt', () => {
     // injection does not depend on the writer having written any size at all.
     expect(result).toBe(
       '1girl, solo, large breasts, black hair, red eyes, nude, ' +
-        'blush, half-closed eyes, open mouth, smile, bedroom',
+        'blush, heavy breathing, open mouth, smile, bedroom',
     )
   })
 

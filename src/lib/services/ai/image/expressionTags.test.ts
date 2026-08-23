@@ -50,11 +50,12 @@ describe('arousalExpressionTags', () => {
     expect(arousalExpressionTags(AROUSAL_BLUSH_THRESHOLD)).toEqual(['blush'])
     expect(arousalExpressionTags(SPRITE_AROUSAL_FLUSH_THRESHOLD)).toEqual([
       'blush',
+      'heavy breathing',
       'half-closed eyes',
     ])
     expect(arousalExpressionTags(AROUSAL_PEAK_THRESHOLD)).toEqual([
       'blush',
-      'half-closed eyes',
+      'heavy breathing',
       'open mouth',
     ])
   })
@@ -98,7 +99,7 @@ describe('engineExpressionTags', () => {
         attitude: 'fearful',
       }),
     )
-    expect(tags).toEqual(['blush', 'half-closed eyes', 'open mouth'])
+    expect(tags).toEqual(['blush', 'heavy breathing', 'open mouth'])
     expect(tags).toHaveLength(MAX_ENGINE_EXPRESSION_TAGS)
   })
 
