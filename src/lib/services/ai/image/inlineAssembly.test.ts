@@ -316,6 +316,22 @@ describe('assembleInlineImage', () => {
       expect(result.fullPrompt).not.toMatch(/swollen with/i)
       expect(result.fullPrompt).not.toContain('Milk')
     })
+
+    it('skips the cue append for a writer-composed booru prompt — the composer already placed them and fitted the window (research/64 §3g)', () => {
+      const composed = assembleInlineImage({
+        beMode: true,
+        stylePrompt: 'STYLE',
+        narrativeText: 'She pulled him down onto the bed.',
+        providerType: 'nanogpt' as const,
+        model: 'wai-illustrious-sdxl',
+        presentCharacters: [amelia, rowan],
+        tagPrompt: COMPOSED,
+        tagCharacters: ['Amelia', 'Rowan'],
+        writerComposed: true,
+      })
+      expect(composed.fullPrompt).toBe(`masterpiece, best quality, highly detailed, ${COMPOSED}`)
+      expect(composed.fullPrompt).not.toContain('heavy breathing')
+    })
   })
 
   it('flattens a pseudo-regional clause written by the story model itself', () => {

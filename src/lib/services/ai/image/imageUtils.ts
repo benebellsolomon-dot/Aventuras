@@ -206,6 +206,7 @@ async function assembleInlineRetry(
   return assembleInlineImage({
     presentCharacters: context.presentCharacters,
     tagPrompt,
+    writerComposed: !override && tagPrompt !== rawPrompt,
     tagCharacters,
     beMode: context.beMode,
     stylePrompt: await resolveStylePrompt(styleId),

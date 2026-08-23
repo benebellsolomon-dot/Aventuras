@@ -56,6 +56,17 @@ export interface InlineAssemblyInput {
   providerType?: ImageProviderType
   /** Image model id — selects the prompt dialect (booru vs prose). */
   model?: string
+  /**
+   * True when `tagPrompt` is the booru writer's COMPOSED prompt (research/64
+   * §3g): the composer already places the engine's expression cues inside her
+   * run and her lactation/engorgement state in the size block, and it has
+   * fitted the whole thing to the single-window token budget — so the post-hoc
+   * state-cue append below would only restate those tags past the window
+   * (live: every routed render overflowed 77 by the appended cues). False for
+   * the narrator's raw prompt (writer off / failed / user override), where the
+   * append is still the enforcement backstop.
+   */
+  writerComposed?: boolean
 }
 
 export interface InlineAssemblyResult {
@@ -128,7 +139,7 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
   // Booru dialect renders them as the tags the model actually knows
   // (`lactation`, `breast expansion`, `blush`) — the engine's prose wording
   // costs ~10 tokens of CLIP attention for vocabulary the model has never seen.
-  if (beMode) {
+  if (beMode && !(dialect === 'booru' && input.writerComposed === true)) {
     const solo = soloBodyState(presentCharacters, tagCharacters)
     const engineCues = solo ? imageStateCues(solo) : []
     const dialectCues = dialect === 'booru' ? compressStateCues(engineCues) : engineCues

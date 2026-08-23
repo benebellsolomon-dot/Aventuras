@@ -1137,6 +1137,7 @@ class AIService {
     const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters,
       tagPrompt,
+      writerComposed: tagPrompt !== scene.prompt,
       tagCharacters: scene.characters,
       beMode,
       stylePrompt,

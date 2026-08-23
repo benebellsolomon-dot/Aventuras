@@ -180,6 +180,7 @@ export class InlineImageTracker {
     const { fullPrompt, bridgeSpec, loraOverride } = assembleInlineImage({
       presentCharacters: this.getCharacters(),
       tagPrompt,
+      writerComposed: tagPrompt !== tag.prompt,
       tagCharacters: tag.characters,
       beMode: this.getBeMode(),
       stylePrompt,
