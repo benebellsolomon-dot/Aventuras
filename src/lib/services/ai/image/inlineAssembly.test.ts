@@ -329,7 +329,8 @@ describe('assembleInlineImage', () => {
         tagCharacters: ['Amelia', 'Rowan'],
         writerComposed: true,
       })
-      expect(composed.fullPrompt).toBe(`masterpiece, best quality, highly detailed, ${COMPOSED}`)
+      // Single-window endpoint: the short quality prefix, no appended cues.
+      expect(composed.fullPrompt).toBe(`masterpiece, best quality, ${COMPOSED}`)
       expect(composed.fullPrompt).not.toContain('heavy breathing')
     })
   })

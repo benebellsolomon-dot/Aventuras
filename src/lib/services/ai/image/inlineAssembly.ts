@@ -21,9 +21,13 @@ import {
   uniformBodyStateTier,
 } from '$lib/services/be'
 import { sizeBandMarker, tierMarker } from './sizeBandMarker'
-import { detectPromptDialect, BOORU_QUALITY_PREFIX } from './dialect'
+import {
+  detectPromptDialect,
+  BOORU_QUALITY_PREFIX,
+  BOORU_QUALITY_PREFIX_SINGLE_WINDOW,
+} from './dialect'
 import { compressStateCues, flattenTagGroups } from './booruTags'
-import { parsesPromptWeighting } from './providerCapabilities'
+import { chunksLongPrompts, parsesPromptWeighting } from './providerCapabilities'
 import { maybeBuildBridgeSpec } from './bridgeSpec'
 import { resolveLora, loraTriggerText, type ResolvedLora } from './loraBinding'
 import type { StructuredImageSpecInput } from './providers/types'
@@ -198,7 +202,7 @@ export function assembleInlineImage(input: InlineAssemblyInput): InlineAssemblyR
 
   const fullPrompt =
     dialect === 'booru'
-      ? `${marker}${BOORU_QUALITY_PREFIX}, ${groundedPrompt}`
+      ? `${marker}${chunksLongPrompts(input.providerType) ? BOORU_QUALITY_PREFIX : BOORU_QUALITY_PREFIX_SINGLE_WINDOW}, ${groundedPrompt}`
       : `${marker}${groundedPrompt}. ${stylePrompt}`
 
   const bridgeSpec =

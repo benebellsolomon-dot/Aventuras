@@ -26,6 +26,13 @@ export function detectPromptDialect(model: string | null | undefined): PromptDia
 
 /** Quality prefix prepended to booru-dialect prompts (replaces the prose style block). */
 export const BOORU_QUALITY_PREFIX = 'masterpiece, best quality, highly detailed'
+/**
+ * The same prefix for single-window endpoints (research/64 §3g): `highly
+ * detailed` is 3 of the 77 CLIP tokens — one position tag — and Illustrious'
+ * own recommendation is `masterpiece, best quality`; chunking backends keep
+ * the long form.
+ */
+export const BOORU_QUALITY_PREFIX_SINGLE_WINDOW = 'masterpiece, best quality'
 
 /** Default negative prompt for booru models when the profile doesn't configure one. */
 export const BOORU_DEFAULT_NEGATIVE =

@@ -112,10 +112,11 @@ export const BOORU_MAX_RUN_TAGS_SINGLE_WINDOW = 13
  * prompt full of them still loses its tail (D5 live: the environment and part
  * of the identity run truncated on an explicit beat). After the tag-count trim,
  * single-window prompts are trimmed again against this ESTIMATED token budget:
- * 77 minus BOS/EOS minus the 3-tag quality prefix (8 real tokens) = 67 usable,
- * minus the estimator's measured ≈4 % under-count (see estimateTagTokens) → 63.
+ * 77 minus BOS/EOS minus the single-window quality prefix (`masterpiece, best
+ * quality` = 5 real tokens) = 70 usable, minus the estimator's measured ≈4 %
+ * under-count (see estimateTagTokens) → 67.
  */
-export const BOORU_SINGLE_WINDOW_TOKEN_BUDGET = 63
+export const BOORU_SINGLE_WINDOW_TOKEN_BUDGET = 67
 /** Identity core a character run never trims below under the token budget. */
 const MIN_RUN_BASE_TAGS = 6
 
@@ -138,10 +139,11 @@ const LACTATION_VISIBLE_FILL = 70
  * splits the way CLIP's pre-tokenizer does — letter runs, SINGLE digits, and
  * punctuation runs are separate tokens (`1boy` = 2, `face-to-face` = 5) — and a
  * letter run over 9 characters costs two. Residual under-count ≈ 4 %, absorbed
- * by the budget above (63 × 1.04 ≈ 65.5 < 67 = 77 − BOS/EOS − the 8-token
- * quality prefix); 63 is also where the floors of a two-person explicit beat
- * land (rating 2, shot, count 2, act 4, POV 2, identity 6 + dress, face 1,
- * place 3), so the common case fits AT its floors instead of breaking past them.
+ * by the budget above (67 × 1.04 ≈ 69.7 < 70 = 77 − BOS/EOS − the 5-token
+ * single-window quality prefix). The floors of a 1boy+1girl explicit beat
+ * (rating 2, shot, count 2, act 4, size + lactation state, POV 2, identity 6 +
+ * dress, face 1, place 3) land around 70 — at the edge; see research/64 §3g for
+ * the remaining floor rulings.
  */
 export function estimateTagTokens(tag: string): number {
   const pieces = tag.trim().match(/[0-9]|[A-Za-z]+|[^\sA-Za-z0-9]+/g) ?? []
