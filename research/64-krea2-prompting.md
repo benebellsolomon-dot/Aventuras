@@ -115,6 +115,24 @@ Method: a read-only copy of the live DB, every stored routed WAI prompt, counted
   - negativePrompt: `low quality, ugly, unfinished, out of focus, deformed, disfigure, blurry, smudged, restricted palette, flat colors, extra arms, extra limbs, bad hands, fused fingers, watermark, signature, text, patreon username`
   - The provider passes these through as `guidance_scale`/`num_inference_steps`/`negative_prompt`; prose dialect auto-selected, so the configured negative is sent verbatim. The prose writer must NOT emit "no watermark/signature/text" in the prompt body (see retraction above). Writer integration (Chroma `engineSizeTags` dialect, bidirectional size-negatives from the §3g tier table) stays DEFERRED per Ben's ruling.
 
+## 3i. Style round 3 — the doujin register is the TAG HEADER's, not Chroma's (2026-08-23 ~20:15Z, 11 renders, CFG 4.0 / steps 40 / 1024x1536; Ben: "I know it can do other styles")
+
+- **ROOT CAUSE OF THE MONOLITHIC-STYLE VERDICT: the danbooru tag header is the style anchor.** Controlled pair on the identical oil-painting style line: pure-PROSE body → full break-out into a textured painterly graphic-novel register (visible brushwork, body hair, moody chiaroscuro — nothing like the doujin look); TAG-header body → collapsed straight back to flat-cel doujin AND re-summoned the watermark despite the negative. `1boy, 1girl, hetero, sex…` vocabulary co-occurs almost exclusively with doujin art (and patreon watermarks) in Chroma's training data — the tags drag the register and the watermark prior with them. **Round 1/round 2's "monolithic explicit register" was an artifact of the hybrid tag+prose shape. For Chroma, explicit beats must be PURE PROSE + a leading descriptive style anchor.** (This vindicates the app's existing prose writer as the right path — the §3g hybrid recommendation is superseded for style-sensitive use.)
+- **Validated style menu at CFG 4.0 (pure prose, per-style identity-fidelity notes):**
+  | style anchor (leading) | register shift | identity held? | notes |
+  |---|---|---|---|
+  | dark-fantasy oils, chiaroscuro, textured brushstrokes | STRONG — painterly graphic-novel | ~50% (2 of 4 drifted dark/white hair; double-anchoring did NOT fix it) | the register imposes its own palette; accept drift or avoid for locked characters |
+  | photorealistic cinematic photograph, 35mm | STRONG — full photoreal, works on explicit | mostly (hair lightened) | one foreground geometry slip; realistic skin/lighting excellent |
+  | 1990s retro anime production cel | REAL — retro face/linework, muted palette | YES | modest anatomy prior (smaller bust); clean |
+  | soft shoujo pastels, fine linework | REAL — airy pastel shoujo | YES | clean |
+  | watercolor and ink, paper texture | partial — muted soft palette | YES | not true watercolor |
+  | fantasy game splash-art (descriptive) | soft-cel gloss | drifted (silver + braids — pulls game-character priors) | occasional watermark |
+  | default (crisp cel key frame) | doujin-adjacent clean cel | YES | the round-2 baseline |
+- **Named-entity anchors restyle hardest but LEAK:** "Genshin Impact splash art" → gorgeous Genshin shading *plus* the franchise logo rendered twice and the girl morphed toward Lumine (ornaments, star pupils); artist name "sakimichan" → the artist's @signature rendered as a watermark in two corners + hair went black. **Rule: descriptive medium anchors only — no franchise names, no artist names in Chroma positives.**
+- **Trade-off to record:** tags = style-locked + identity-locked (the booru path's virtue); prose = style freedom + occasional identity wobble on strong registers. Anime-family registers (retro, shoujo, default cel) hold identity fine; oil/splash impose their own priors and repetition ("pale-blonde" stated twice) does not overcome them.
+- **Prose-adjacency hazard:** "Milk sprays from her breasts as she moves, her mouth open" rendered milk spraying from her MOUTH — T5 binds clauses by proximity. Reworded ("Thin jets of milk spray from her nipples… Her mouth hangs open") fixed it. Keep one subject per sentence in writer templates.
+- **In-app implication (still zero code):** the Chroma profile's STYLE PRESET should lead with one of the validated descriptive anchors above (e.g. the retro-90s or shoujo line for variety, default cel for the WAI-adjacent look); the prose writer already emits prose. If Ben adopts a style with drift risk for a locked character, expect hair-color misses and regenerate — or stay in the anime-family registers.
+
 ## Live configuration at session close (2026-08-22)
 
 - Branch `claude/opus-agents-orchestration-82d727` @ this doc's commit, pushed. Suite 1394, check/lint clean.
