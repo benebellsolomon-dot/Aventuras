@@ -848,8 +848,20 @@ describe('buildSizeSanctions', () => {
 
   it('reads the apparent tier and growth flag of each tagged subject, in tag order', () => {
     expect(buildSizeSanctions([cora, grown], ['Dana', 'Cora'], true)).toEqual([
-      { identityTags: ['1girl', 'red hair'], tier: 31, grewThisTurn: true },
-      { identityTags: ['1girl', 'black hair', 'red eyes'], tier: 24, grewThisTurn: false },
+      {
+        identityTags: ['1girl', 'red hair'],
+        tier: 31,
+        grewThisTurn: true,
+        engorged: false,
+        lactating: false,
+      },
+      {
+        identityTags: ['1girl', 'black hair', 'red eyes'],
+        tier: 24,
+        grewThisTurn: false,
+        engorged: false,
+        lactating: false,
+      },
     ])
   })
 
@@ -865,6 +877,41 @@ describe('buildSizeSanctions', () => {
     const [sanction] = buildSizeSanctions([engorged], ['Eve'], true)
     expect(sanction.tier).toBe(apparentTier(readBodyState(engorged.metadata)!))
     expect(sanction.tier).toBeGreaterThan(24)
+    expect(sanction.engorged).toBe(true)
+    // Full but not lactating: no lactation tag.
+    expect(sanction.lactating).toBe(false)
+  })
+
+  it('marks a lactating, full girl so the engine states `lactation` in the size block (research/64 §3g)', () => {
+    const milky = makeChar({
+      name: 'Fay',
+      imageTags: '1girl, blonde hair',
+      metadata: writeBodyState(null, {
+        ...defaultBodyState(7),
+        fluids: { fillPercent: 85, fluidType: 'milk' },
+        lactation: { active: true, supplyTier: 3 },
+      }),
+    })
+    const [sanction] = buildSizeSanctions([milky], ['Fay'], true)
+    expect(sanction.lactating).toBe(true)
+    const prompt = composeBooruScenePrompt(
+      sections({
+        countTags: '1boy, 1girl',
+        action: 'hetero, sex, cowgirl position, straddling',
+        characters: ['male pov, faceless male', '1girl, blonde hair, completely nude'],
+        expressions: ['', 'blush'],
+        scene:
+          'cluttered attic, pile of cushions, wooden crates, dormer window, rain, night, lactation, leaking milk, heavy breathing',
+      }),
+      [],
+      [sanction],
+      { singleWindow: true },
+    )
+    const tags = prompt.split(', ')
+    // Stated once, in the size block right behind the act — not at the trimmed scene tail.
+    expect(tags.filter((t) => t === 'lactation')).toHaveLength(1)
+    expect(tags.indexOf('lactation')).toBeLessThan(tags.indexOf('male pov'))
+    expect(tags.indexOf('lactation')).toBeGreaterThan(tags.indexOf('straddling'))
   })
 
   it('is empty outside BE mode and skips a subject with no body state', () => {

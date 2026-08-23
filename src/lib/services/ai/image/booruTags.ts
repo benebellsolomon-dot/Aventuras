@@ -142,6 +142,10 @@ export interface SizeSanction {
   tier: number
   /** True when the engine recorded growth on THIS turn — gates the growth tag. */
   grewThisTurn: boolean
+  /** Engorged condition live (fill at/over her threshold) — visible veins. */
+  engorged?: boolean
+  /** Lactating and full enough to leak — the lactation tag rides the size block. */
+  lactating?: boolean
 }
 
 /**
@@ -298,6 +302,10 @@ const IMMOBILITY_PATTERNS: ReadonlyArray<RegExp> = [
 
 /** The growth EVENT tag — the one the engine's own cue table maps its growth cue to. */
 const GROWTH_EVENT_TAG = 'breast expansion'
+/** Danbooru: visible veins — the Engorged condition's one unambiguous visual. */
+const ENGORGED_TAG = 'veiny breasts'
+/** Danbooru: milk visibly expressed. */
+const LACTATION_TAG = 'lactation'
 
 /** True when the tag names breasts in any of the vocabularies the writer reaches for. */
 const mentionsBreasts = (tag: string): boolean => BREAST_MENTION.test(tag)
@@ -460,6 +468,12 @@ export function engineSizeTags(sanction: SizeSanction): string[] {
   const tags = [bandWord(sanction.tier)]
   const anchor = imageSizeAnchor(sanction.tier)
   if (anchor) tags.push(anchor)
+  // Lactation state is engine truth too (research/64 §3g, Ben: "lactation,
+  // fullness, visible veins missed"): the writer put `lactation, leaking milk`
+  // at the SCENE tail where the single-window trim cut it first; stated here
+  // it rides the size block right behind the act.
+  if (sanction.engorged) tags.push(ENGORGED_TAG)
+  if (sanction.lactating) tags.push(LACTATION_TAG)
   if (sanction.grewThisTurn) tags.push(GROWTH_EVENT_TAG)
   return tags
 }

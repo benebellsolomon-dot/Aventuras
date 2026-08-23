@@ -49,6 +49,7 @@ import {
   imageSizeAnchor,
   imageStateCues,
   readBodyState,
+  isEngorged,
 } from '$lib/services/be'
 import { generateStructured } from '../sdk/generate'
 import { chunksLongPrompts } from './providerCapabilities'
@@ -128,6 +129,8 @@ const MIN_ACTION_TAGS = 4
 const MIN_CAMERA_TAGS = 1
 /** The faceless protagonist-POV run keeps nothing beyond its (protected) POV tags. */
 const MIN_POV_RUN_TAGS = 0
+/** A lactating girl filled to at least this much is drawn leaking (engine lactation tag). */
+const LACTATION_VISIBLE_FILL = 70
 
 /**
  * Rough CLIP token cost of one tag, plus its comma. Calibrated against the real
@@ -340,6 +343,8 @@ function sceneWideSanction(
   return {
     tier: Math.max(...sanctions.map((s) => s.tier)),
     grewThisTurn: sanctions.some((s) => s.grewThisTurn),
+    engorged: sanctions.some((s) => s.engorged === true),
+    lactating: sanctions.some((s) => s.lactating === true),
   }
 }
 
@@ -984,6 +989,9 @@ export function buildSizeSanctions(
       identityTags: toTags(normalizeBank(character.imageTags)),
       tier: apparentTier(state),
       grewThisTurn: (state.lastGrowth?.delta ?? 0) > 0,
+      engorged: isEngorged(state),
+      lactating:
+        state.lactation?.active === true && state.fluids.fillPercent >= LACTATION_VISIBLE_FILL,
     })
   }
   return sanctions

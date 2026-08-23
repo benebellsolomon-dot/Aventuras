@@ -239,6 +239,16 @@ describe('engineSizeTags', () => {
       'breast expansion',
     ])
   })
+
+  it('states the engine lactation state after the size and before the growth event', () => {
+    expect(
+      engineSizeTags({ tier: 24, grewThisTurn: true, engorged: true, lactating: true }),
+    ).toEqual(['huge breasts', 'veiny breasts', 'lactation', 'breast expansion'])
+    expect(engineSizeTags({ tier: 24, grewThisTurn: false, lactating: true })).toEqual([
+      'huge breasts',
+      'lactation',
+    ])
+  })
 })
 
 /**
