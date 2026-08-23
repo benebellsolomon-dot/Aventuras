@@ -29,8 +29,12 @@ import {
   buildCurrentClothingReinforcementBlock,
   buildCurrentLocationReinforcementBlock,
   buildInlineImageInstructions,
+  ensureNpcThoughtInstructions,
+  buildNpcThoughtInstructions,
 } from './NarrativeService'
 import type { Character, Location, StoryEntry } from '$lib/types'
+import { templateEngine } from '$lib/services/templates/engine'
+import { storyTemplates } from '$lib/services/prompts/templates/narrative'
 
 function char(name: string, opts: { clothing?: string; currentClothing?: string } = {}): Character {
   return {
@@ -238,5 +242,48 @@ describe('buildUserPrompt — inner voices never reach the narrator (E6, researc
     ])
     expect(prompt).toContain('She sets the cup down.')
     expect(prompt).toContain('ask her about the letter')
+  })
+})
+
+/**
+ * E6 live gap (2026-08-23, research/65 follow-up): the live story ran on a
+ * user-customized pack whose `adventure` template predates E6 and has no
+ * `{{ npcThoughtInstructions }}` placeholder, so `npcThoughts: true` built the
+ * instruction and silently dropped it — zero `<thought>` tags in 60+ turns. The
+ * rendered system prompt is backstopped: a story with the setting on always
+ * carries the instruction, appended when the template did not place it.
+ */
+describe('ensureNpcThoughtInstructions (E6 backstop for templates without the placeholder)', () => {
+  const instructions = buildNpcThoughtInstructions('second', 'Warden')
+
+  it('leaves the prompt byte-identical when the setting is off (empty instructions)', () => {
+    expect(ensureNpcThoughtInstructions('SYSTEM PROMPT', '')).toBe('SYSTEM PROMPT')
+  })
+
+  it('leaves the prompt byte-identical when the template already placed the instructions', () => {
+    const rendered = `SYSTEM PROMPT\n${instructions}\nTAIL`
+    expect(ensureNpcThoughtInstructions(rendered, instructions)).toBe(rendered)
+  })
+
+  it('is a no-op on the REAL templates rendered through Liquid (the placeholder inserts the bare variable)', () => {
+    for (const template of storyTemplates) {
+      const rendered = templateEngine.render(template.content, {
+        npcThoughtInstructions: instructions,
+        mode: template.id,
+        pov: 'second',
+        tense: 'present',
+        protagonistName: 'Warden',
+      })
+      expect(rendered).not.toBeNull()
+      expect(rendered).toContain('<InnerVoices>')
+      expect(ensureNpcThoughtInstructions(rendered as string, instructions)).toBe(rendered)
+    }
+  })
+
+  it('appends the instructions when a (custom-pack) template never placed them', () => {
+    const out = ensureNpcThoughtInstructions('SYSTEM PROMPT', instructions)
+    expect(out.startsWith('SYSTEM PROMPT')).toBe(true)
+    expect(out.endsWith(instructions)).toBe(true)
+    expect(out.match(/<InnerVoices>/g)).toHaveLength(1)
   })
 })

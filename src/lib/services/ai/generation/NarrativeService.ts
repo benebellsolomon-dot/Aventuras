@@ -368,6 +368,23 @@ RULES:
 }
 
 /**
+ * E6 backstop (research/65 follow-up, live 2026-08-23): a story whose
+ * `npcThoughts` setting is on must carry the inner-voice instruction even when
+ * its pack's narrative template predates E6 and never placed
+ * `{{ npcThoughtInstructions }}` (a user-customized pack is version-gated
+ * against template sync, so the placeholder never arrives on its own). Pure:
+ * the prompt is returned unchanged when the instructions are empty (setting
+ * off) or already rendered by the template; otherwise they are appended.
+ */
+export function ensureNpcThoughtInstructions(systemPrompt: string, instructions: string): string {
+  // `includes` is a sound "already placed" test because the templates insert
+  // the bare variable (no Liquid filter, no output escaping); a custom prompt
+  // that filters the variable would get the block appended a second time.
+  if (instructions === '' || systemPrompt.includes(instructions)) return systemPrompt
+  return `${systemPrompt}\n\n${instructions}`
+}
+
+/**
  * World state context for prompt building
  */
 export interface WorldStateContext {
@@ -736,15 +753,14 @@ export class NarrativeService {
     // NPC inner voices (E6, research/65). Always set — empty string when the
     // setting is unset, so the template's guard renders a byte-identical prompt
     // for every existing story.
-    ctx.add({
-      npcThoughtInstructions:
-        story?.settings?.npcThoughts === true
-          ? buildNpcThoughtInstructions(
-              (preRenderContext.pov as string) ?? 'second',
-              (preRenderContext.protagonistName as string) ?? 'the protagonist',
-            )
-          : '',
-    })
+    const npcThoughtInstructions =
+      story?.settings?.npcThoughts === true
+        ? buildNpcThoughtInstructions(
+            (preRenderContext.pov as string) ?? 'second',
+            (preRenderContext.protagonistName as string) ?? 'the protagonist',
+          )
+        : ''
+    ctx.add({ npcThoughtInstructions })
 
     // Content guidelines based on the story's content rating.
     // Always set (empty string for 'standard') so templates can safely test it.
@@ -771,6 +787,9 @@ export class NarrativeService {
       const { system } = await ctx.render(templateId)
       systemPrompt = system
     }
+    // A template that never placed the placeholder (custom pack predating E6)
+    // still gets the instruction when the setting is on; no-op otherwise.
+    systemPrompt = ensureNpcThoughtInstructions(systemPrompt, npcThoughtInstructions)
 
     // Build priming message based on mode/pov/tense
     const context = ctx.getContext()
