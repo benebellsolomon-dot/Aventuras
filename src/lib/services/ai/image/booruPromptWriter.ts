@@ -117,8 +117,10 @@ export const BOORU_MAX_RUN_TAGS_SINGLE_WINDOW = 13
  * under-count (see estimateTagTokens) → 67.
  */
 export const BOORU_SINGLE_WINDOW_TOKEN_BUDGET = 67
-/** Identity core a character run never trims below under the token budget. */
-const MIN_RUN_BASE_TAGS = 6
+/** Identity core a character run never trims below under the token budget
+ * (Ben's ruling 2026-08-23, research/64 §3g: 5 — the locked bank leads the run,
+ * so the sixth tag is the least identity-bearing one). */
+const MIN_RUN_BASE_TAGS = 5
 
 /** Floors for the trimmable blocks — a scene still needs a place, and an act
  * needs its family (act + arrangement + two position tags): the action block
@@ -132,6 +134,8 @@ const MIN_CAMERA_TAGS = 1
 const MIN_POV_RUN_TAGS = 0
 /** A lactating girl filled to at least this much is drawn leaking (engine lactation tag). */
 const LACTATION_VISIBLE_FILL = 70
+/** Rating-block restatements dropped on single-window endpoints (research/64 §3g). */
+const SINGLE_WINDOW_RATING_DROPS: ReadonlySet<string> = new Set(['detailed anatomy', 'uncensored'])
 
 /**
  * Rough CLIP token cost of one tag, plus its comma. Calibrated against the real
@@ -531,12 +535,15 @@ export function composeBooruScenePrompt(
     return out
   }
 
-  // Single-window only: `detailed anatomy` is a prompt-ism the rating pair
-  // already carries (chunking backends keep it). The matching `pov` dedupe
-  // happens after assembly, against the runs that actually survived.
+  // Single-window only: `detailed anatomy` is a prompt-ism and `uncensored`
+  // buys nothing on Illustrious-family models (they render explicit from the
+  // act tags; Ben's ruling 2026-08-23) — the rating block is `explicit` alone,
+  // 5 tokens back for content. Chunking backends keep the full triple. The
+  // matching `pov` dedupe happens after assembly, against the runs that
+  // actually survived.
   const rating = dedupe(
     toTags(sections.rating).filter(
-      (tag) => !(options.singleWindow && tag.toLowerCase() === 'detailed anatomy'),
+      (tag) => !(options.singleWindow && SINGLE_WINDOW_RATING_DROPS.has(tag.toLowerCase())),
     ),
   )
   const camera = dedupe(toTags(sections.camera))

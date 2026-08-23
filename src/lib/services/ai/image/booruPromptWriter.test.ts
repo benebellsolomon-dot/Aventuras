@@ -1748,7 +1748,7 @@ describe('single-window budget — calibration and allocation (research/64 §3g)
     expect(tags).not.toContain('pov')
   })
 
-  it('an untrimmed single-window prompt equals the chunked one minus the two restatements', () => {
+  it('an untrimmed single-window prompt equals the chunked one minus the rating/pov restatements', () => {
     const small = sections({
       rating: 'explicit, uncensored, detailed anatomy',
       camera: 'medium shot, pov',
@@ -1760,21 +1760,22 @@ describe('single-window budget — calibration and allocation (research/64 §3g)
       scene: 'attic, night',
     })
     expect(composeBooruScenePrompt(small, [], [], { singleWindow: true })).toBe(
-      'explicit, uncensored, medium shot, 1boy, 1girl, hetero, sex, male pov, faceless male, long hair, blonde hair, completely nude, blush, attic, night',
+      'explicit, medium shot, 1boy, 1girl, hetero, sex, male pov, faceless male, long hair, blonde hair, completely nude, blush, attic, night',
     )
     expect(composeBooruScenePrompt(small)).toBe(
       'explicit, uncensored, detailed anatomy, medium shot, pov, 1boy, 1girl, hetero, sex, male pov, faceless male, long hair, blonde hair, completely nude, blush, attic, night',
     )
   })
 
-  it('drops the restated `pov` and `detailed anatomy` in single-window mode only', () => {
+  it('drops the restated `pov`, `detailed anatomy` and `uncensored` in single-window mode only', () => {
     const single = composeBooruScenePrompt(liveSections(), [], [], { singleWindow: true }).split(
       ', ',
     )
     expect(single).not.toContain('pov')
     expect(single).toContain('male pov')
     expect(single).not.toContain('detailed anatomy')
-    expect(single.slice(0, 2)).toEqual(['explicit', 'uncensored'])
+    expect(single).not.toContain('uncensored')
+    expect(single.slice(0, 2)).toEqual(['explicit', 'medium shot'])
     const chunked = composeBooruScenePrompt(liveSections()).split(', ')
     expect(chunked).toContain('pov')
     expect(chunked).toContain('detailed anatomy')
