@@ -111,23 +111,38 @@ export const BOORU_MAX_RUN_TAGS_SINGLE_WINDOW = 13
  * prompt full of them still loses its tail (D5 live: the environment and part
  * of the identity run truncated on an explicit beat). After the tag-count trim,
  * single-window prompts are trimmed again against this ESTIMATED token budget:
- * 77 minus the 3-tag quality prefix (~8 tokens) minus EOS, rounded down.
+ * 77 minus BOS/EOS minus the 3-tag quality prefix (8 real tokens) = 67 usable,
+ * minus the estimator's measured ≈4 % under-count (see estimateTagTokens) → 63.
  */
-export const BOORU_SINGLE_WINDOW_TOKEN_BUDGET = 66
+export const BOORU_SINGLE_WINDOW_TOKEN_BUDGET = 63
 /** Identity core a character run never trims below under the token budget. */
 const MIN_RUN_BASE_TAGS = 6
 
-/** Floors for the trimmable blocks — a scene still needs a place and a beat. */
+/** Floors for the trimmable blocks — a scene still needs a place, and an act
+ * needs its family (act + arrangement + two position tags): the action block
+ * is trimmed LAST and never below this, because positions are what the failed
+ * renders left out (research/64 §3g). */
 const MIN_SCENE_TAGS = 3
-const MIN_ACTION_TAGS = 2
+const MIN_ACTION_TAGS = 4
+/** The shot type always stays; the angle tag is the first camera tag to go. */
+const MIN_CAMERA_TAGS = 1
+/** The faceless protagonist-POV run keeps nothing beyond its (protected) POV tags. */
+const MIN_POV_RUN_TAGS = 0
 
-/** Rough CLIP token cost of one tag: a token per word (two for long words) plus its comma. */
+/**
+ * Rough CLIP token cost of one tag, plus its comma. Calibrated against the real
+ * CLIP BPE over 273 live booru tags (research/64 §3g): each whitespace word
+ * splits the way CLIP's pre-tokenizer does — letter runs, SINGLE digits, and
+ * punctuation runs are separate tokens (`1boy` = 2, `face-to-face` = 5) — and a
+ * letter run over 9 characters costs two. Residual under-count ≈ 4 %, absorbed
+ * by the budget above (63 × 1.04 ≈ 65.5 < 67 = 77 − BOS/EOS − the 8-token
+ * quality prefix); 63 is also where the floors of a two-person explicit beat
+ * land (rating 2, shot, count 2, act 4, POV 2, identity 6 + dress, face 1,
+ * place 3), so the common case fits AT its floors instead of breaking past them.
+ */
 export function estimateTagTokens(tag: string): number {
-  return tag
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .reduce((n, word) => n + (word.length > 9 ? 2 : 1), 1)
+  const pieces = tag.trim().match(/[0-9]|[A-Za-z]+|[^\sA-Za-z0-9]+/g) ?? []
+  return pieces.reduce((n, piece) => n + (/^[A-Za-z]+$/.test(piece) && piece.length > 9 ? 2 : 1), 1)
 }
 export const estimateTokens = (tags: ReadonlyArray<string>): number =>
   tags.reduce((n, tag) => n + estimateTagTokens(tag), 0)
@@ -388,25 +403,46 @@ function protectedDressIndex(run: ReadonlyArray<string>): number {
   return best
 }
 
-function capRunKeepingDressState(run: ReadonlyArray<string>, cap: number): string[] {
-  if (run.length <= cap) return [...run]
-  const keep = protectedDressIndex(run)
-  if (keep < 0 || keep < cap) return run.slice(0, cap)
-  return [...run.slice(0, cap - 1), run[keep]]
+/**
+ * Indices no run trim may take: the protected dress-state tag and the
+ * faceless-POV tags (`male pov`, `faceless male`) — the POV run's whole job is
+ * those two tags, so trimming it by count could keep `muscular` and drop them.
+ */
+function protectedIndices(run: ReadonlyArray<string>): ReadonlySet<number> {
+  const keep = new Set<number>()
+  const dress = protectedDressIndex(run)
+  if (dress >= 0) keep.add(dress)
+  run.forEach((tag, i) => {
+    if (POV_MALE_TAGS.has(tag.toLowerCase())) keep.add(i)
+  })
+  return keep
 }
 
-/** The run without its last tag that is not its protected dress-state tag. */
+/** Head-cap a run, keeping its protected tags wherever they sit; order preserved. */
+function capRunKeepingProtected(run: ReadonlyArray<string>, cap: number): string[] {
+  if (run.length <= cap) return [...run]
+  const keep = protectedIndices(run)
+  const protectedPastCap = [...keep].filter((i) => i >= cap).sort((a, b) => a - b)
+  if (protectedPastCap.length === 0) return run.slice(0, cap)
+  const headBudget = Math.max(0, cap - protectedPastCap.length)
+  return [
+    ...run.slice(0, cap).filter((_, i) => keep.has(i) || i < headBudget),
+    ...protectedPastCap.map((i) => run[i]),
+  ]
+}
+
+/** The run without its last unprotected tag (unchanged when there is none). */
 function dropLastTrimmableTag(run: ReadonlyArray<string>): string[] {
-  const keep = protectedDressIndex(run)
+  const keep = protectedIndices(run)
   for (let i = run.length - 1; i >= 0; i--) {
-    if (i !== keep) return [...run.slice(0, i), ...run.slice(i + 1)]
+    if (!keep.has(i)) return [...run.slice(0, i), ...run.slice(i + 1)]
   }
   return [...run]
 }
 
-/** Tags the tail trim may take from a run: all but its protected dress-state tag. */
+/** Tags the tail trim may take from a run: all but its protected ones. */
 function trimmableCount(run: ReadonlyArray<string>): number {
-  return run.length - (hasDressStateTag(run) ? 1 : 0)
+  return run.length - protectedIndices(run).size
 }
 
 /**
@@ -446,9 +482,11 @@ function trimmableCount(run: ReadonlyArray<string>): number {
  * because two girls sharing a mood must BOTH render it and a global dedupe would
  * silently blank the second one's face.
  *
- * The total is capped at `BOORU_MAX_TAGS`. Drop order is setting → expression →
- * interaction; identity, size, rating, camera and count are never trimmed, and
- * each floor (3 setting, 1 expression per character, 2 interaction) holds.
+ * The total is capped at `BOORU_MAX_TAGS`. The tag-count drop order is setting →
+ * expression → interaction (floor 4); identity, size, rating, camera and count
+ * are never trimmed by count. Single-window endpoints then run the token pass
+ * (`fitTokenBudget`): setting → expression → camera angle → run tails → the
+ * act LAST, because positions are what the failed renders left out.
  *
  * SIZE SANCTION runs before any of that: for every subject the engine holds body
  * state for, each block (action, setting, her own run) loses every breast claim
@@ -486,7 +524,14 @@ export function composeBooruScenePrompt(
     return out
   }
 
-  const rating = dedupe(toTags(sections.rating))
+  // Single-window only: `detailed anatomy` is a prompt-ism the rating pair
+  // already carries (chunking backends keep it). The matching `pov` dedupe
+  // happens after assembly, against the runs that actually survived.
+  const rating = dedupe(
+    toTags(sections.rating).filter(
+      (tag) => !(options.singleWindow && tag.toLowerCase() === 'detailed anatomy'),
+    ),
+  )
   const camera = dedupe(toTags(sections.camera))
   const count = dedupe(toTags(sections.countTags))
   const action = dedupe(sanitize(toTags(sections.action), sceneSanction))
@@ -512,7 +557,7 @@ export function composeBooruScenePrompt(
     // trailing clothing extras give way before any identity core does — except
     // her dress-state tag, which the cap keeps wherever the writer put it.
     base: options.singleWindow
-      ? capRunKeepingDressState(
+      ? capRunKeepingProtected(
           dedupe(run.filter((tag) => !isExpressionTag(tag))),
           BOORU_MAX_RUN_TAGS_SINGLE_WINDOW,
         )
@@ -564,11 +609,42 @@ export function composeBooruScenePrompt(
         },
         BOORU_SINGLE_WINDOW_TOKEN_BUDGET,
       )
-    : { action: trimmedAction, runs: trimmedRuns, scene: trimmedScene }
+    : { action: trimmedAction, camera, runs: trimmedRuns, scene: trimmedScene }
+
+  // Single-window only: a bare `pov` restates a surviving `male pov` /
+  // `faceless male` run (checked on the FINAL runs, so a trimmed-away POV run
+  // never leaves the prompt with no POV signal at all).
+  const povRunSurvived = assembled.runs.some((run) =>
+    run.base.some((tag) => POV_MALE_TAGS.has(tag.toLowerCase())),
+  )
+  const finalCamera =
+    options.singleWindow && povRunSurvived
+      ? assembled.camera.filter((tag) => tag.toLowerCase() !== 'pov')
+      : assembled.camera
+  if (options.singleWindow) {
+    const fitted = estimateTokens([
+      ...rating,
+      ...finalCamera,
+      ...count,
+      ...assembled.action,
+      ...size,
+      ...assembled.runs.flatMap((run) => [...run.base, ...run.expression]),
+      ...assembled.scene,
+    ])
+    if (fitted > BOORU_SINGLE_WINDOW_TOKEN_BUDGET) {
+      // Every block is at its floor and the window is still over: the
+      // endpoint will truncate the tail. Diagnosable, not silent.
+      log('single-window prompt over budget at floors', {
+        estimated: fitted,
+        budget: BOORU_SINGLE_WINDOW_TOKEN_BUDGET,
+        runs: assembled.runs.length,
+      })
+    }
+  }
 
   return joinTags([
     ...rating,
-    ...camera,
+    ...finalCamera,
     ...count,
     ...assembled.action,
     ...size,
@@ -588,21 +664,23 @@ interface BudgetedBlocks {
 }
 
 /**
- * Token-budget post-pass for single-window endpoints: same trim priority as the
- * tag-count pass (scene tail → expressions → action → character-run tails),
- * same floors, one tag at a time until the ESTIMATED token total fits. Pure.
+ * Token-budget post-pass for single-window endpoints: scene tail → expression
+ * extras → camera angle → character-run tails → action (last; positions are the
+ * beat), each to its floor, one tag at a time until the ESTIMATED token total
+ * fits. Pure.
  */
 export function fitTokenBudget(
   blocks: BudgetedBlocks,
   budget: number,
-): { action: string[]; runs: PreparedRun[]; scene: string[] } {
+): { action: string[]; camera: string[]; runs: PreparedRun[]; scene: string[] } {
   let scene = [...blocks.scene]
   let action = [...blocks.action]
+  let camera = [...blocks.camera]
   let runs = blocks.runs.map((run) => ({ base: [...run.base], expression: [...run.expression] }))
   const total = (): number =>
     estimateTokens([
       ...blocks.rating,
-      ...blocks.camera,
+      ...camera,
       ...blocks.count,
       ...action,
       ...blocks.size,
@@ -625,15 +703,18 @@ export function fitTokenBudget(
       )
       continue
     }
-    if (action.length > MIN_ACTION_TAGS) {
-      action = action.slice(0, -1)
+    // The camera's angle tag goes before any identity does; the shot type stays.
+    if (camera.length > MIN_CAMERA_TAGS) {
+      camera = camera.slice(0, -1)
       continue
     }
-    // Run tails give way last, and a run's protected dress-state tag never
-    // does: the identity floor counts all but that one tag.
+    // Run tails give way before the action block, and a run's protected
+    // dress-state tag never does: the identity floor counts all but that tag.
+    // The faceless protagonist-POV run has no identity to protect — it keeps
+    // just `male pov, faceless male`.
     const longest = runs
-      .map((run, i) => ({ i, n: trimmableCount(run.base) }))
-      .filter((r) => r.n > MIN_RUN_BASE_TAGS)
+      .map((run, i) => ({ i, n: trimmableCount(run.base), floor: runFloor(run.base) }))
+      .filter((r) => r.n > r.floor)
       .sort((a, b) => b.n - a.n)[0]
     if (longest) {
       runs = runs.map((run, i) =>
@@ -641,9 +722,23 @@ export function fitTokenBudget(
       )
       continue
     }
+    // The act and its positions go last, and never below their floor.
+    if (action.length > MIN_ACTION_TAGS) {
+      action = action.slice(0, -1)
+      continue
+    }
     break
   }
-  return { action, runs, scene }
+  return { action, camera, runs, scene }
+}
+
+/** Identity floor (in trimmable tags) for one run under the token budget: the
+ * faceless POV-male run has no identity to keep beyond its protected POV tags;
+ * every described person keeps MIN_RUN_BASE_TAGS. */
+function runFloor(base: ReadonlyArray<string>): number {
+  return base.some((tag) => POV_MALE_TAGS.has(tag.toLowerCase()))
+    ? MIN_POV_RUN_TAGS
+    : MIN_RUN_BASE_TAGS
 }
 
 // ============================================================================

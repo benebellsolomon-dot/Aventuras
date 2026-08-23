@@ -514,9 +514,9 @@ describe('composeBooruScenePrompt', () => {
       scene: scene.join(', '),
     }).split(', ')
     for (const tag of identity) expect(tags).toContain(tag)
-    // Scene floor (3) and action floor (2) both hold — identity is never cut.
+    // Scene floor (3) and action floor (4) both hold — identity is never cut.
     expect(tags.filter((t) => t.startsWith('scenery'))).toHaveLength(3)
-    expect(tags.filter((t) => t.startsWith('action'))).toHaveLength(2)
+    expect(tags.filter((t) => t.startsWith('action'))).toHaveLength(4)
   })
 
   it('is empty when every section is empty', () => {
@@ -1548,9 +1548,11 @@ describe('single-window budget keeps the dress-state tag', () => {
   })
 
   it('survives the 13-tag per-run head cap, keeping 12 identity tags', () => {
-    const run = [...Array.from({ length: 16 }, (_, i) => `identity tag ${i + 1}`), 'topless'].join(
-      ', ',
-    )
+    const words =
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa'.split(
+        ' ',
+      )
+    const run = [...words, 'topless'].join(', ')
     const prompt = composeBooruScenePrompt(
       sections({ countTags: '1girl, solo', characters: [run], scene: 'garden, day, sunlight' }),
       [],
@@ -1559,9 +1561,9 @@ describe('single-window budget keeps the dress-state tag', () => {
     )
     const tags = prompt.split(', ')
     expect(tags).toContain('topless')
-    expect(tags.filter((t) => t.startsWith('identity tag'))).toHaveLength(12)
-    expect(tags).toContain('identity tag 12')
-    expect(tags).not.toContain('identity tag 13')
+    expect(tags.filter((t) => words.includes(t))).toHaveLength(12)
+    expect(tags).toContain('lima')
+    expect(tags).not.toContain('mike')
   })
 
   it('exempts one dress tag per run (most exposed) — the overrun is bounded to that one tag', () => {
@@ -1603,5 +1605,147 @@ describe('single-window budget keeps the dress-state tag', () => {
       estimateTagTokens('completely nude') + estimateTagTokens('topless'),
     )
     expect(withDress.length).toBeLessThanOrEqual(36)
+  })
+})
+
+/**
+ * Live (2026-08-23, Ben's report "the tag converter is under-performing"):
+ * every routed WAI prompt measured 80–84 real CLIP-BPE tokens against the
+ * 77-token window (estimator under-counted digits/hyphens/`hetero`-class words
+ * and 66 sat at the 67-token ceiling), so 2–3 scene tags were silently
+ * truncated on every render — while the action block was trimmed to
+ * `hetero, sex` (positions gone) before a single identity or camera tag gave
+ * way, and `pov` / `detailed anatomy` restated what `male pov` / `explicit,
+ * uncensored` already carried. research/64 §3g.
+ */
+describe('single-window budget — calibration and allocation (research/64 §3g)', () => {
+  const liveSections = () =>
+    sections({
+      rating: 'explicit, uncensored, detailed anatomy',
+      camera: 'medium shot, from below, pov',
+      countTags: '1boy, 1girl',
+      actInProgress: true,
+      action:
+        'hetero, sex, cowgirl position, straddling, girl on top, grabbing another’s breast, lactation, breast sucking',
+      characters: [
+        'male pov, faceless male, muscular',
+        'long hair, straight hair, bangs, blonde hair, yellow eyes, fair skin, slim, wide hips, completely nude',
+      ],
+      expressions: ['', 'blush, half-closed eyes, open mouth'],
+      scene:
+        'cluttered attic, pile of cushions, wooden crates, dormer window, rain, night, warm lantern light, heavy breathing',
+    })
+
+  it('estimateTagTokens counts digit runs and hyphen pieces as CLIP does', () => {
+    expect(estimateTagTokens('1boy')).toBe(3)
+    expect(estimateTagTokens('2girls')).toBe(3)
+    expect(estimateTagTokens('face-to-face')).toBe(6)
+    expect(estimateTagTokens('attic')).toBe(2)
+    expect(estimateTagTokens('vaginal from behind')).toBe(4)
+  })
+
+  it('keeps the act/position tags (floor 4, trimmed last) and fits the calibrated budget', () => {
+    const prompt = composeBooruScenePrompt(liveSections(), [], [], { singleWindow: true })
+    const tags = prompt.split(', ')
+    expect(estimateTokens(tags)).toBeLessThanOrEqual(BOORU_SINGLE_WINDOW_TOKEN_BUDGET)
+    // Positions survive ahead of scene extras and expression extras.
+    expect(tags).toContain('hetero')
+    expect(tags).toContain('sex')
+    expect(tags).toContain('cowgirl position')
+    expect(tags).toContain('straddling')
+    // Identity core, dress state, a face and a place all still present.
+    expect(tags).toContain('blonde hair')
+    expect(tags).toContain('completely nude')
+    expect(tags).toContain('blush')
+    expect(tags).toContain('cluttered attic')
+    // The POV run keeps its POV tags (not `muscular`); the camera angle went
+    // before any identity tag did.
+    expect(tags).toContain('male pov')
+    expect(tags).toContain('faceless male')
+    expect(tags).not.toContain('muscular')
+    expect(tags).not.toContain('from below')
+  })
+
+  it('protects the POV tags wherever the writer put them in the run', () => {
+    const s = liveSections()
+    const tags = composeBooruScenePrompt(
+      sections({ ...s, characters: ['muscular, male pov, faceless male', s.characters[1]] }),
+      [],
+      [],
+      { singleWindow: true },
+    ).split(', ')
+    expect(tags).toContain('male pov')
+    expect(tags).toContain('faceless male')
+    expect(tags).not.toContain('muscular')
+  })
+
+  it('keeps the POV signal when the head cap would have cut the POV tags', () => {
+    const words =
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar'.split(
+        ' ',
+      )
+    const tags = composeBooruScenePrompt(
+      sections({
+        camera: 'medium shot, pov',
+        countTags: '1boy, 1girl',
+        characters: [[...words, 'male pov', 'faceless male'].join(', '), 'long hair, blonde hair'],
+        expressions: ['', 'blush'],
+        scene: 'attic, night',
+      }),
+      [],
+      [],
+      { singleWindow: true },
+    ).split(', ')
+    expect(tags).toContain('male pov')
+    expect(tags).toContain('faceless male')
+    expect(tags).not.toContain('pov')
+  })
+
+  it('an untrimmed single-window prompt equals the chunked one minus the two restatements', () => {
+    const small = sections({
+      rating: 'explicit, uncensored, detailed anatomy',
+      camera: 'medium shot, pov',
+      countTags: '1boy, 1girl',
+      actInProgress: true,
+      action: 'hetero, sex',
+      characters: ['male pov, faceless male', 'long hair, blonde hair, completely nude'],
+      expressions: ['', 'blush'],
+      scene: 'attic, night',
+    })
+    expect(composeBooruScenePrompt(small, [], [], { singleWindow: true })).toBe(
+      'explicit, uncensored, medium shot, 1boy, 1girl, hetero, sex, male pov, faceless male, long hair, blonde hair, completely nude, blush, attic, night',
+    )
+    expect(composeBooruScenePrompt(small)).toBe(
+      'explicit, uncensored, detailed anatomy, medium shot, pov, 1boy, 1girl, hetero, sex, male pov, faceless male, long hair, blonde hair, completely nude, blush, attic, night',
+    )
+  })
+
+  it('drops the restated `pov` and `detailed anatomy` in single-window mode only', () => {
+    const single = composeBooruScenePrompt(liveSections(), [], [], { singleWindow: true }).split(
+      ', ',
+    )
+    expect(single).not.toContain('pov')
+    expect(single).toContain('male pov')
+    expect(single).not.toContain('detailed anatomy')
+    expect(single.slice(0, 2)).toEqual(['explicit', 'uncensored'])
+    const chunked = composeBooruScenePrompt(liveSections()).split(', ')
+    expect(chunked).toContain('pov')
+    expect(chunked).toContain('detailed anatomy')
+  })
+
+  it('keeps bare `pov` when no run states male pov (and the camera is untrimmed)', () => {
+    const single = composeBooruScenePrompt(
+      sections({
+        camera: 'medium shot, pov',
+        countTags: '1girl, solo',
+        characters: ['long hair, blonde hair, yellow eyes'],
+        expressions: ['blush'],
+        scene: 'attic, night',
+      }),
+      [],
+      [],
+      { singleWindow: true },
+    ).split(', ')
+    expect(single).toContain('pov')
   })
 })
