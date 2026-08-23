@@ -114,7 +114,12 @@ export const CLOTHED_ASSERTION_TAGS: ReadonlySet<string> = new Set([
   'fully dressed',
 ])
 
+/** True when the tag states a dress state (case-insensitive). */
+export function isDressStateTag(tag: string): boolean {
+  return DRESS_STATE_TAGS.has(tag.trim().toLowerCase())
+}
+
 /** True when any tag in the run states a dress state (case-insensitive). */
 export function hasDressStateTag(tags: ReadonlyArray<string>): boolean {
-  return tags.some((tag) => DRESS_STATE_TAGS.has(tag.trim().toLowerCase()))
+  return tags.some(isDressStateTag)
 }

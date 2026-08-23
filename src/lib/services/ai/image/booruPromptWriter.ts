@@ -70,6 +70,7 @@ import {
   DRESS_TAG_FOR_STATE,
   hasDressStateTag,
   inferImpliedDressState,
+  isDressStateTag,
 } from './dressState'
 import type { Character, ImageProviderType, Location, VisualDescriptors } from '$lib/types'
 
@@ -357,6 +358,58 @@ function trimExpressionRuns(runs: ReadonlyArray<PreparedRun>, count: number): Pr
 }
 
 /**
+ * ONE dress-state tag per run (nude family / clothes-displaced family) is
+ * exempt from both run trims. The writer — and the dress-state fallback — put
+ * it at the run's TAIL, and live renders lost `completely nude` to the
+ * single-window head cap / token-budget tail trim on every explicit beat
+ * (research/64 §3f): the one tag the beat cannot do without went first. Only
+ * one tag is protected so the exemption is bounded (a run cannot overrun the
+ * cap or hold the token budget hostage); when a run carries several, the
+ * most-exposed wins (nude family, then topless/bottomless, then the
+ * clothes-displaced family; ties → first), and the rest trim like anything
+ * else. Order is preserved throughout.
+ */
+const NUDE_FAMILY: ReadonlySet<string> = new Set(['completely nude', 'nude', 'naked'])
+const TORSO_FAMILY: ReadonlySet<string> = new Set(['topless', 'bottomless'])
+function dressStateRank(tag: string): number {
+  const key = tag.trim().toLowerCase()
+  if (NUDE_FAMILY.has(key)) return 0
+  if (TORSO_FAMILY.has(key)) return 1
+  return 2
+}
+
+/** Index of the run's protected dress-state tag, -1 when it has none. */
+function protectedDressIndex(run: ReadonlyArray<string>): number {
+  let best = -1
+  run.forEach((tag, i) => {
+    if (!isDressStateTag(tag)) return
+    if (best < 0 || dressStateRank(tag) < dressStateRank(run[best])) best = i
+  })
+  return best
+}
+
+function capRunKeepingDressState(run: ReadonlyArray<string>, cap: number): string[] {
+  if (run.length <= cap) return [...run]
+  const keep = protectedDressIndex(run)
+  if (keep < 0 || keep < cap) return run.slice(0, cap)
+  return [...run.slice(0, cap - 1), run[keep]]
+}
+
+/** The run without its last tag that is not its protected dress-state tag. */
+function dropLastTrimmableTag(run: ReadonlyArray<string>): string[] {
+  const keep = protectedDressIndex(run)
+  for (let i = run.length - 1; i >= 0; i--) {
+    if (i !== keep) return [...run.slice(0, i), ...run.slice(i + 1)]
+  }
+  return [...run]
+}
+
+/** Tags the tail trim may take from a run: all but its protected dress-state tag. */
+function trimmableCount(run: ReadonlyArray<string>): number {
+  return run.length - (hasDressStateTag(run) ? 1 : 0)
+}
+
+/**
  * Compose the writer's sections into the final booru tag order.
  *
  * Order is the fix (research/56): rating → camera → count → ACTION → SIZE →
@@ -456,11 +509,14 @@ export function composeBooruScenePrompt(
   const engineByRun = assignEngineExpressions(characterRuns, engineExpressions)
   const runs: PreparedRun[] = characterRuns.map((run, index) => ({
     // Single-window mode caps each run at the head: identity banks lead, so
-    // trailing clothing extras give way before any identity core does.
-    base: dedupe(run.filter((tag) => !isExpressionTag(tag))).slice(
-      0,
-      options.singleWindow ? BOORU_MAX_RUN_TAGS_SINGLE_WINDOW : Number.POSITIVE_INFINITY,
-    ),
+    // trailing clothing extras give way before any identity core does — except
+    // her dress-state tag, which the cap keeps wherever the writer put it.
+    base: options.singleWindow
+      ? capRunKeepingDressState(
+          dedupe(run.filter((tag) => !isExpressionTag(tag))),
+          BOORU_MAX_RUN_TAGS_SINGLE_WINDOW,
+        )
+      : dedupe(run.filter((tag) => !isExpressionTag(tag))),
     expression: dedupeTags([
       ...engineByRun[index],
       ...toTags(sections.expressions?.[index]),
@@ -573,12 +629,16 @@ export function fitTokenBudget(
       action = action.slice(0, -1)
       continue
     }
+    // Run tails give way last, and a run's protected dress-state tag never
+    // does: the identity floor counts all but that one tag.
     const longest = runs
-      .map((run, i) => ({ i, n: run.base.length }))
+      .map((run, i) => ({ i, n: trimmableCount(run.base) }))
       .filter((r) => r.n > MIN_RUN_BASE_TAGS)
       .sort((a, b) => b.n - a.n)[0]
     if (longest) {
-      runs = runs.map((run, i) => (i === longest.i ? { ...run, base: run.base.slice(0, -1) } : run))
+      runs = runs.map((run, i) =>
+        i === longest.i ? { ...run, base: dropLastTrimmableTag(run.base) } : run,
+      )
       continue
     }
     break

@@ -62,6 +62,7 @@ import {
   detectMissingDressState,
   detectWriterDefects,
 } from './booruPromptWriter'
+import { isDressStateTag } from './dressState'
 import {
   apparentTier,
   bandWord,
@@ -1504,5 +1505,103 @@ describe('dress-state backstop', () => {
         applyDressStateFallback(twoSubjects, BARE_INTENT, [amelia, { imageTags: 'red hair' }]),
       ).toBe(twoSubjects)
     })
+  })
+})
+
+/**
+ * Live (2026-08-23, research/64 §3f): twelve routed WAI renders in a row
+ * carried NO dress-state tag although every `<pic>` intent said "fully naked" —
+ * the writer (or the fallback) put `completely nude` at the run's tail, and in
+ * single-window mode the run is head-capped at 13 tags and then tail-trimmed
+ * toward the identity floor, so the dress state was the first tag cut. Dress
+ * state is the beat's most load-bearing tag on an explicit render (clothed sex
+ * dolls are the observed failure) — the run's first dress tag survives both
+ * trims; the exemption is bounded to one tag per run.
+ */
+describe('single-window budget keeps the dress-state tag', () => {
+  const longRun =
+    'long hair, straight hair, bangs, blonde hair, yellow eyes, fair skin, slim, wide hips, young adult, small waist, long legs, pale skin, completely nude'
+  const explicit = {
+    rating: 'explicit, uncensored, detailed anatomy',
+    camera: 'medium shot, from below, pov',
+    countTags: '1boy, 1girl',
+    actInProgress: true,
+    action: 'hetero, sex, male pov, faceless male, muscular, heavy breathing, holding hips',
+    expressions: ['blush, half-closed eyes, open mouth'],
+    scene:
+      'cluttered attic, pile of cushions, wooden crates, dormer window, rain, night, warm lantern light, dust motes',
+  }
+
+  it('survives the token-budget tail trim, in the writer’s position', () => {
+    const prompt = composeBooruScenePrompt(
+      sections({ ...explicit, characters: [longRun] }),
+      [],
+      [],
+      { singleWindow: true },
+    )
+    const tags = prompt.split(', ')
+    expect(estimateTokens(tags)).toBeLessThanOrEqual(BOORU_SINGLE_WINDOW_TOKEN_BUDGET)
+    expect(tags).toContain('completely nude')
+    expect(prompt).toContain('blonde hair')
+    // Order preserved: the dress tag still sits after her identity tags.
+    expect(tags.indexOf('completely nude')).toBeGreaterThan(tags.indexOf('blonde hair'))
+  })
+
+  it('survives the 13-tag per-run head cap, keeping 12 identity tags', () => {
+    const run = [...Array.from({ length: 16 }, (_, i) => `identity tag ${i + 1}`), 'topless'].join(
+      ', ',
+    )
+    const prompt = composeBooruScenePrompt(
+      sections({ countTags: '1girl, solo', characters: [run], scene: 'garden, day, sunlight' }),
+      [],
+      [],
+      { singleWindow: true },
+    )
+    const tags = prompt.split(', ')
+    expect(tags).toContain('topless')
+    expect(tags.filter((t) => t.startsWith('identity tag'))).toHaveLength(12)
+    expect(tags).toContain('identity tag 12')
+    expect(tags).not.toContain('identity tag 13')
+  })
+
+  it('exempts one dress tag per run (most exposed) — the overrun is bounded to that one tag', () => {
+    const dressed = [
+      'long hair, straight hair, bangs, blonde hair, yellow eyes, fair skin, slim, wide hips, panties around one leg, partially undressed, completely nude',
+      'short hair, red hair, green eyes, freckles, athletic, small waist, long legs, see-through, topless',
+    ]
+    const bare = dressed.map((run) =>
+      run
+        .split(', ')
+        .filter((t) => !isDressStateTag(t))
+        .join(', '),
+    )
+    const compose = (characters: string[]): string[] =>
+      composeBooruScenePrompt(
+        sections({
+          ...explicit,
+          countTags: '1boy, 2girls',
+          characters,
+          expressions: ['blush', 'smile'],
+        }),
+        [],
+        [],
+        { singleWindow: true },
+      ).split(', ')
+    const withDress = compose(dressed)
+    const withoutDress = compose(bare)
+    // Each run keeps ONE dress tag — the most exposed; the extras trim like any other tag.
+    expect(withDress).toContain('completely nude')
+    expect(withDress).toContain('topless')
+    expect(withDress).not.toContain('panties around one leg')
+    expect(withDress).not.toContain('see-through')
+    // Two full identity runs already sit at the floors, so the absolute budget
+    // cannot be met either way; the exemption may cost at most the two
+    // protected tags on top of the dress-free composition — never more (the
+    // delta is expected to EQUAL that cost; a trim-order or token-estimate
+    // change that moves it reads as a failure here on purpose).
+    expect(estimateTokens(withDress) - estimateTokens(withoutDress)).toBeLessThanOrEqual(
+      estimateTagTokens('completely nude') + estimateTagTokens('topless'),
+    )
+    expect(withDress.length).toBeLessThanOrEqual(36)
   })
 })
