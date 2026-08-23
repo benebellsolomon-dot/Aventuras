@@ -127,3 +127,13 @@ Evidence tool: `research/_d5_knobs_probe.py` (copies the live DB to a temp dir, 
 | Single-window booru budget 36/13 → 66 tokens | covered by research/64 round 2 | — | — |
 
 Not yet live-verified (Ben played after this was written): the `frequent` tagging wording, the chekhov wording (healthy = loads are objects/promises/appointments, resolutions only after several turns, and c1 finally fires).
+
+## Round 2b evidence (2026-08-23 00:10Z, probe over 31 tracked turns of "Amelia of Evermere")
+
+| knob | measured | reading |
+|---|---|---|
+| DC-chip tagging (`sparing`) | 34 of 96 offered choices tagged (35%; DC spread 8×7, 10×5, 11×5, 12×6, 13×2, 14×5, none×4); 8 checks rolled (4 success / 2 crit / 1 partial / 1 fail) | unchanged from round 2 (29% → 35%); Ben has not flipped `frequent` |
+| Chekhov | 20 loads / 17 resolutions proposed (85%); 6 live bullets, ages 0–11, **none has ever fired** (c9 w3 age 11, c10 w2 age 9 …) | loads are now real plants (post-wording fix) but the fire thresholds (18/13/8 with −1/age) have still not been reached at age 11 with weight 3 → the firing side is untested live; if c9 hasn't fired by age ~15, lower the thresholds or raise the age decay |
+| World-sim arousal suppression (≥70) | **11 of 11** arousal samples ≥70 (last 95/90/85/95/85); `worldSimFrequency: lively` | E3 is switched off for this story in practice — Ben's call (raise to 90, or gate on the beat's rating instead of standing arousal) |
+| Rel pacing | bond 4 → 9 over 23 interaction turns (+1 at 21/31/41/51/61), sparks 6, grudge 0 | exactly the FF schedule; leave |
+| Notebook | 12 notes | healthy |
