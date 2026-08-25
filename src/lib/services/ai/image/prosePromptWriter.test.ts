@@ -78,3 +78,61 @@ describe('resolveProseScenePrompt gate', () => {
     )
   })
 })
+
+// ============================================================================
+// Chroma family (research/64 §3h–§3l)
+// ============================================================================
+
+import { defaultBodyState, BODY_STATE_KEY } from '$lib/services/be'
+import { buildEncoderNotes, chromaSizeClause } from './prosePromptWriter'
+
+function withTier(tier: number): Character['metadata'] {
+  return { [BODY_STATE_KEY]: defaultBodyState(tier) } as Character['metadata']
+}
+
+describe('chromaSizeClause', () => {
+  it('maps the BE band words onto the validated prose ladder', () => {
+    expect(chromaSizeClause(withTier(6))).toContain('natural handful')
+    expect(chromaSizeClause(withTier(50))).toContain('filling her lap')
+  })
+
+  it('NEVER emits the word "hyper" (rare tag, weaker than gigantic on Chroma)', () => {
+    for (const tier of [1, 6, 15, 25, 35, 45, 50, 51]) {
+      expect(chromaSizeClause(withTier(tier)) ?? '').not.toMatch(/hyper/i)
+    }
+  })
+
+  it('null without body state', () => {
+    expect(chromaSizeClause({} as Character['metadata'])).toBeNull()
+  })
+})
+
+describe('buildEncoderNotes', () => {
+  it('chroma gets the measured encoder rules', () => {
+    const notes = buildEncoderNotes('chroma')
+    expect(notes).toContain('ONE subject per sentence')
+    expect(notes).toContain('AFFIRMATIVELY')
+    expect(notes).toContain('occupation and contact')
+  })
+
+  it('empty for every other prose family (krea path byte-identical)', () => {
+    expect(buildEncoderNotes('krea')).toBe('')
+    expect(buildEncoderNotes('prose')).toBe('')
+  })
+})
+
+describe('buildProseSubjectDossier — chroma size line', () => {
+  const withState = {
+    ...amelia,
+    metadata: withTier(6),
+  } as unknown as Character
+
+  it('adds the plain-words size clause only for the chroma family in BE mode', () => {
+    const chroma = buildProseSubjectDossier([withState], ['Amelia'], true, 'chroma')
+    expect(chroma).toContain('size in plain words')
+    const krea = buildProseSubjectDossier([withState], ['Amelia'], true, 'krea')
+    expect(krea).not.toContain('size in plain words')
+    const dflt = buildProseSubjectDossier([withState], ['Amelia'], true)
+    expect(dflt).not.toContain('size in plain words')
+  })
+})

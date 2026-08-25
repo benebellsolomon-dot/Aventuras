@@ -53,7 +53,13 @@ import {
 } from '$lib/services/be'
 import { generateStructured } from '../sdk/generate'
 import { chunksLongPrompts } from './providerCapabilities'
-import { detectPromptDialect } from './dialect'
+import {
+  ANIMAGINE_QUALITY_PREFIX,
+  BOORU_QUALITY_PREFIX_SINGLE_WINDOW,
+  detectPromptDialect,
+  imageModelFamily,
+  type ImageModelFamily,
+} from './dialect'
 import {
   compressStateCues,
   engineSizeTags,
@@ -136,6 +142,25 @@ const MIN_POV_RUN_TAGS = 0
 const LACTATION_VISIBLE_FILL = 70
 /** Rating-block restatements dropped on single-window endpoints (research/64 §3g). */
 const SINGLE_WINDOW_RATING_DROPS: ReadonlySet<string> = new Set(['detailed anatomy', 'uncensored'])
+
+/**
+ * Animagine 4 knobs (research/64 §3m, all measured): `uncensored` DOES buy
+ * adherence there (unlike Illustrious) so only the prompt-ism drops; `nsfw`
+ * joins an explicit rating block per the model's own convention; and the shot
+ * type tag is DROPPED — it fights the POV tags (`medium shot` pulled the
+ * camera off the from-below composition until removed).
+ */
+const ANIMAGINE_RATING_DROPS: ReadonlySet<string> = new Set(['detailed anatomy'])
+const SHOT_TYPE_TAGS: ReadonlySet<string> = new Set([
+  'close-up',
+  'medium close-up',
+  'medium shot',
+  'upper body',
+  'cowboy shot',
+  'full body',
+  'wide shot',
+  'portrait',
+])
 
 /**
  * Rough CLIP token cost of one tag, plus its comma. Calibrated against the real
@@ -506,13 +531,28 @@ function trimmableCount(run: ReadonlyArray<string>): number {
  * narration that over-claims growth therefore cannot out-vote the engine's body
  * state in ANY phrasing — the failure this pass exists to stop.
  */
+/**
+ * Single-window BODY budget for a family: the base budget assumed the 5-token
+ * WAI prefix (`masterpiece, best quality`); a family with a longer prefix
+ * (Animagine's official score set) pays the difference out of the body.
+ */
+export function singleWindowBudgetFor(family: ImageModelFamily | undefined): number {
+  if (family !== 'animagine') return BOORU_SINGLE_WINDOW_TOKEN_BUDGET
+  const extra =
+    estimateTokens(ANIMAGINE_QUALITY_PREFIX.split(', ')) -
+    estimateTokens(BOORU_QUALITY_PREFIX_SINGLE_WINDOW.split(', '))
+  return BOORU_SINGLE_WINDOW_TOKEN_BUDGET - Math.max(0, extra)
+}
+
 export function composeBooruScenePrompt(
   sections: Partial<BooruSceneSections>,
   engineExpressions: ReadonlyArray<CharacterExpressionCue> = [],
   sizeSanctions: ReadonlyArray<SubjectSizeSanction> = [],
-  options: { singleWindow?: boolean } = {},
+  options: { singleWindow?: boolean; family?: ImageModelFamily } = {},
 ): string {
   const budget = options.singleWindow ? BOORU_MAX_TAGS_SINGLE_WINDOW : BOORU_MAX_TAGS
+  const animagine = options.family === 'animagine'
+  const tokenBudget = singleWindowBudgetFor(options.family)
   const stripped: string[] = []
   const sanitize = (tags: ReadonlyArray<string>, sanction: SizeSanction | undefined): string[] => {
     const result = sanitizeBreastTags(tags, sanction)
@@ -541,12 +581,30 @@ export function composeBooruScenePrompt(
   // 5 tokens back for content. Chunking backends keep the full triple. The
   // matching `pov` dedupe happens after assembly, against the runs that
   // actually survived.
-  const rating = dedupe(
-    toTags(sections.rating).filter(
-      (tag) => !(options.singleWindow && SINGLE_WINDOW_RATING_DROPS.has(tag.toLowerCase())),
-    ),
+  // Animagine's drops apply in BOTH window modes deliberately: they encode the
+  // MODEL's tag conventions (§3m — `medium shot` fights the POV tags, the
+  // score vocabulary replaces the prompt-isms), not a token-budget constraint.
+  // The WAI drops stay single-window-only: there they ARE budget relief.
+  const ratingDrops = animagine
+    ? ANIMAGINE_RATING_DROPS
+    : options.singleWindow
+      ? SINGLE_WINDOW_RATING_DROPS
+      : null
+  const writtenRating = toTags(sections.rating).filter(
+    (tag) => !ratingDrops?.has(tag.toLowerCase()),
   )
-  const camera = dedupe(toTags(sections.camera))
+  // Animagine's own rating convention leads an explicit block with `nsfw`
+  // (research/64 §3m — the measured recipe is `nsfw, explicit, uncensored`).
+  const rating = dedupe(
+    animagine && writtenRating.some((tag) => tag.toLowerCase() === 'explicit')
+      ? ['nsfw', ...writtenRating]
+      : writtenRating,
+  )
+  const camera = dedupe(
+    animagine
+      ? toTags(sections.camera).filter((tag) => !SHOT_TYPE_TAGS.has(tag.toLowerCase()))
+      : toTags(sections.camera),
+  )
   const count = dedupe(toTags(sections.countTags))
   const action = dedupe(sanitize(toTags(sections.action), sceneSanction))
   // Each run is filtered by ITS OWN subject's engine state. A run no sanction
@@ -621,7 +679,7 @@ export function composeBooruScenePrompt(
           runs: trimmedRuns,
           scene: trimmedScene,
         },
-        BOORU_SINGLE_WINDOW_TOKEN_BUDGET,
+        tokenBudget,
       )
     : { action: trimmedAction, camera, runs: trimmedRuns, scene: trimmedScene }
 
@@ -645,12 +703,12 @@ export function composeBooruScenePrompt(
       ...assembled.runs.flatMap((run) => [...run.base, ...run.expression]),
       ...assembled.scene,
     ])
-    if (fitted > BOORU_SINGLE_WINDOW_TOKEN_BUDGET) {
+    if (fitted > tokenBudget) {
       // Every block is at its floor and the window is still over: the
       // endpoint will truncate the tail. Diagnosable, not silent.
       log('single-window prompt over budget at floors', {
         estimated: fitted,
-        budget: BOORU_SINGLE_WINDOW_TOKEN_BUDGET,
+        budget: tokenBudget,
         runs: assembled.runs.length,
       })
     }
@@ -773,6 +831,10 @@ export interface BooruPromptWriterInput {
   /** Image provider — single-window endpoints get the tighter tag budget so
    * the WHOLE prompt fits in the one CLIP window that actually renders. */
   providerType?: ImageProviderType
+  /** Image model id — selects the per-family prompt knobs (quality prefix,
+   * rating/shot handling; research/64 §3m). Optional: absent means the
+   * family-neutral WAI defaults. */
+  model?: string
   /**
    * Story id — used to look up the current location for scene tags. Optional:
    * the regeneration path has no story id, and the location block is a
@@ -1454,7 +1516,10 @@ export async function writeBooruScenePrompt(input: BooruPromptWriterInput): Prom
       raw,
       buildExpressionCues(input.presentCharacters, input.tagCharacterNames, input.beMode),
       buildSizeSanctions(input.presentCharacters, input.tagCharacterNames, input.beMode),
-      { singleWindow: !chunksLongPrompts(input.providerType) },
+      {
+        singleWindow: !chunksLongPrompts(input.providerType),
+        family: imageModelFamily(input.model),
+      },
     )
     if (!rawWritten) {
       log('booru prompt writer returned empty — falling back')

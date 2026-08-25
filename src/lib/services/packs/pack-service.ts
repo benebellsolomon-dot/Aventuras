@@ -57,7 +57,10 @@ import type { PresetPack, FullPack } from './types'
 // v15: booru writer — per-run DRESS STATE rule (the beat's nudity beats the
 //     dossier's current-clothing line; live: "standing bare" rendered clothed)
 //     + prose writer identity anchors / expression-twice rules (research/64 §4).
-const SERVICE_TEMPLATE_SYNC_VERSION = 15
+// v16: prose writer gains the `{{ encoderNotes }}` slot — per-family encoder
+//     rules (Chroma: one-subject-per-sentence, arm-count, affirmative absence,
+//     no watermark words, occupation/contact size scaling; research/64 §3h–§3l).
+const SERVICE_TEMPLATE_SYNC_VERSION = 16
 const SERVICE_TEMPLATE_SYNC_KEY = 'service_template_sync_version'
 
 /**

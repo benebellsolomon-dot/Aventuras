@@ -22,9 +22,11 @@ import IpAdapterTxt2ImgWorkflow from './comfyWorkflows/ipadapter-txt2img-workflo
 import { parseImageSize } from '$lib/utils/image'
 import {
   detectPromptDialect,
+  imageModelFamily,
   sizeNegativeForPrompt,
+  sizeNegativeBidirectional,
   mergeNegativePrompt,
-  BOORU_DEFAULT_NEGATIVE,
+  defaultNegativeForModel,
 } from '../dialect'
 
 const DEFAULT_BASE_URL = 'http://localhost:8188'
@@ -406,13 +408,23 @@ export function createComfyProvider(config: ImageProviderConfig): ImageProvider 
       const positiveTags = (providerOptions?.positivePrompt as string) || ''
       const negativeTags = (providerOptions?.negativePrompt as string) || ''
       const finalPositivePrompt = positiveTags ? `${prompt}, ${positiveTags}` : prompt
-      // Profile negative merges with the standard anti-artifact default for
-      // booru models (deduped, matches the NanoGPT provider) rather than
-      // replacing it, plus the size-aware negative that stops downsizing drift.
+      // Profile negative merges with the FAMILY's anti-artifact default
+      // (deduped, matches the NanoGPT provider) rather than replacing it, plus
+      // the size-aware negative that stops downsizing drift. Chroma is
+      // prose-dialect but takes a real negative (de-distilled FLUX,
+      // research/64 §3h) and its size suppression is bidirectional (§3l).
+      // CFG/steps stay workflow-defined here — only the negative is shared.
       const isBooruModel = detectPromptDialect(model) === 'booru'
+      const isChromaModel = imageModelFamily(model) === 'chroma'
       const finalNegativePrompt = [
-        isBooruModel ? mergeNegativePrompt(negativeTags, BOORU_DEFAULT_NEGATIVE) : negativeTags,
-        isBooruModel ? sizeNegativeForPrompt(prompt) : '',
+        isBooruModel || isChromaModel
+          ? mergeNegativePrompt(negativeTags, defaultNegativeForModel(model))
+          : negativeTags,
+        isBooruModel
+          ? sizeNegativeForPrompt(prompt)
+          : isChromaModel
+            ? sizeNegativeBidirectional(prompt)
+            : '',
       ]
         .filter(Boolean)
         .join(', ')

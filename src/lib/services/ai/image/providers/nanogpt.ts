@@ -16,9 +16,11 @@ import type {
 import { imageFetch, imageGetFetch } from './fetchAdapter'
 import {
   detectPromptDialect,
+  imageModelFamily,
   sizeNegativeForPrompt,
+  sizeNegativeBidirectional,
   mergeNegativePrompt,
-  BOORU_DEFAULT_NEGATIVE,
+  defaultNegativeForModel,
 } from '../dialect'
 
 const DEFAULT_BASE_URL = 'https://nano-gpt.com/api/v1'
@@ -179,29 +181,40 @@ export function createNanoGPTProvider(config: ImageProviderConfig): ImageProvide
       }
 
       const isBooru = detectPromptDialect(model) === 'booru'
+      const family = imageModelFamily(model)
+      // Chroma is prose-dialect but de-distilled FLUX: real CFG and a real
+      // negative prompt (research/64 §3h). Everything below treats it as a
+      // third lane next to booru and plain-prose.
+      const isChroma = family === 'chroma'
 
       // Sampling knobs (NanoGPT: guidance_scale default 7.5, num_inference_steps
       // default 30). Booru anime SDXL checkpoints (Illustrious / Pony / NoobAI)
       // are trained for LOW guidance — the 7.5 default oversaturates and "burns"
-      // them (blown highlights, crunchy anatomy). ~5 CFG / ~30 steps is the
-      // community sweet spot and the single biggest raw-quality lever here.
-      // Prose/photoreal models keep NanoGPT's defaults. Both overridable per
-      // profile via providerOptions.cfgScale / providerOptions.steps.
-      const cfgScale = (config.providerOptions?.cfgScale as number) ?? (isBooru ? 5 : undefined)
-      const steps = (config.providerOptions?.steps as number) ?? (isBooru ? 30 : undefined)
+      // them (blown highlights, crunchy anatomy). Measured sweet spots
+      // (research/64): generic booru/WAI 5/30, Animagine 6/28 (§3m: CFG 7
+      // sharpens the act but voids the scene), Chroma 4/40 (§3h sweep: 3.0–4.0
+      // band, steps 26 re-summons watermarks). Other prose/photoreal models
+      // keep NanoGPT's defaults. All overridable per profile via
+      // providerOptions.cfgScale / providerOptions.steps.
+      const defaultCfg = isChroma ? 4 : family === 'animagine' ? 6 : isBooru ? 5 : undefined
+      const defaultSteps = isChroma ? 40 : family === 'animagine' ? 28 : isBooru ? 30 : undefined
+      const cfgScale = (config.providerOptions?.cfgScale as number) ?? defaultCfg
+      const steps = (config.providerOptions?.steps as number) ?? defaultSteps
       if (typeof cfgScale === 'number') body.guidance_scale = cfgScale
       if (typeof steps === 'number') body.num_inference_steps = steps
 
-      // Booru/SD-family models take a negative prompt; profile config merges
-      // with the standard anti-artifact default for booru models (deduped)
-      // rather than replacing it, so anatomy/hand negatives always apply.
-      // The size-aware negative (suppress smaller band words) stacks on top.
+      // Booru/SD-family models and Chroma take a negative prompt; profile
+      // config merges with the family's anti-artifact default (deduped) rather
+      // than replacing it, so anatomy/hand/watermark negatives always apply.
+      // The size-aware negative stacks on top: booru suppresses the bands BELOW
+      // the largest present (SD pulls big sizes down); Chroma suppresses BOTH
+      // directions (§3l — its explicit register also inflates small girls).
       const configuredNegative = (config.providerOptions?.negativePrompt as string) || ''
       const negativePrompt = [
-        isBooru
-          ? mergeNegativePrompt(configuredNegative, BOORU_DEFAULT_NEGATIVE)
+        isBooru || isChroma
+          ? mergeNegativePrompt(configuredNegative, defaultNegativeForModel(model))
           : configuredNegative,
-        isBooru ? sizeNegativeForPrompt(prompt) : '',
+        isBooru ? sizeNegativeForPrompt(prompt) : isChroma ? sizeNegativeBidirectional(prompt) : '',
       ]
         .filter(Boolean)
         .join(', ')

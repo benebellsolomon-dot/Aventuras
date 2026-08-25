@@ -18,6 +18,7 @@
 
 import { z } from 'zod'
 
+import { apparentTier, bandWord, readBodyState } from '$lib/services/be'
 import { ContextBuilder } from '$lib/services/context'
 import { database } from '$lib/services/database'
 import { createLogger } from '$lib/log'
@@ -36,7 +37,7 @@ import {
   resolveSubjects,
   type ResolveBooruSceneInput,
 } from './booruPromptWriter'
-import { detectPromptDialect } from './dialect'
+import { detectPromptDialect, imageModelFamily, type ImageModelFamily } from './dialect'
 
 const log = createLogger('ProsePromptWriter')
 
@@ -57,6 +58,46 @@ export const proseScenePromptSchema = z.object({
 export type ProsePromptWriterInput = ResolveBooruSceneInput
 
 /**
+ * The Chroma prose size ladder (research/64 §3l — 9 validated rungs, mapped
+ * onto the BE band words; NEVER the word "hyper", a rare tag weaker than
+ * gigantic there). The clause rides the dossier next to the canon band word so
+ * the writer states BOTH: the band anchors the size negatives, the clause
+ * carries the magnitude/shape language Chroma actually scales by (body-part
+ * multiples < body occupation < scene-object contact).
+ */
+export function chromaSizeClause(metadata: Character['metadata']): string | null {
+  const state = readBodyState(metadata)
+  if (!state) return null
+  const clauses: Record<string, string> = {
+    'flat chest': 'nearly flat, just the gentlest swell under her skin',
+    'small breasts': 'small and modest, barely a handful',
+    'medium breasts': 'medium sized, a comfortable natural handful, in proportion to her frame',
+    'large breasts': 'large and heavy, bigger than her own hands can cover',
+    'huge breasts': 'huge, each breast exactly as big as her own head',
+    'gigantic breasts':
+      'gigantic, each breast twice the size of her own head, wider than her hips, dominating her silhouette',
+    'hyper breasts':
+      'gigantic beyond reason, each single breast larger than her entire torso, filling her lap and spreading across whatever is beneath her, brushing objects beside her, utterly dwarfing her shoulders and hips',
+  }
+  return clauses[bandWord(apparentTier(state))] ?? null
+}
+
+/**
+ * Encoder-specific rules injected into the prose-writer template. Chroma's
+ * are all measured (research/64 §3h–§3l); other prose models get none.
+ */
+export function buildEncoderNotes(family: ImageModelFamily): string {
+  if (family !== 'chroma') return ''
+  return `## Encoder rules for THIS model (Chroma — every rule below is measured, follow all of them)
+- ONE subject per sentence: this encoder binds clauses by adjacency ("milk sprays from her breasts as she moves, her mouth open" draws the milk from her MOUTH). Give each fact its own short sentence.
+- State the exact people and arm count once ("exactly two people, four arms total") and place every hand explicitly ("her two hands braced flat on his stomach; his arms relaxed at his sides"). Never give a hand a target the camera cannot see.
+- NEVER write the words watermark, signature, or any "no text"-style wording — even negated, they summon the artifact. Leave artifact suppression out of the prompt entirely.
+- Describe absence AFFIRMATIVELY: "her hair loose and plain, her ears and neck bare" — never "no jewelry", "no ornaments".
+- For very large breasts, scale by occupation and contact ("filling her lap, spreading across his chest, brushing the cushions beside them") and hang ("hanging down past her navel"), never by comparison to unrelated objects (armchairs, beds — inert).
+`
+}
+
+/**
  * Per-subject dossier in PROSE terms: appearance (current descriptors win over
  * baseline), current clothing, and in BE mode the engine's body-size/state and
  * expression read. Pure and unit-tested.
@@ -65,6 +106,7 @@ export function buildProseSubjectDossier(
   presentCharacters: Character[],
   tagCharacterNames: string[],
   beMode: boolean,
+  family: ImageModelFamily = 'prose',
 ): string {
   const subjects = resolveSubjects(presentCharacters, tagCharacterNames)
   if (subjects.length === 0) {
@@ -96,6 +138,13 @@ export function buildProseSubjectDossier(
           lines.push(
             `  body (engine state — the breast-size band word is canon, state it): ${body}`,
           )
+        if (family === 'chroma') {
+          const sizeClause = chromaSizeClause(c.metadata)
+          if (sizeClause)
+            lines.push(
+              `  size in plain words (state this magnitude language too, in her own sentences): ${sizeClause}`,
+            )
+        }
         const expression = expressionPhrase(c.metadata)
         if (expression)
           lines.push(`  expression (engine state — render it concretely): ${expression}`)
@@ -143,6 +192,7 @@ export async function writeProseScenePrompt(input: ProsePromptWriterInput): Prom
       }
     }
 
+    const family = imageModelFamily(input.model)
     const ctx = new ContextBuilder()
     ctx.add({
       sceneIntent: input.scenePrompt.trim() || '(the narration gave no explicit scene prompt)',
@@ -152,7 +202,9 @@ export async function writeProseScenePrompt(input: ProsePromptWriterInput): Prom
         input.presentCharacters,
         input.tagCharacterNames,
         input.beMode,
+        family,
       ),
+      encoderNotes: buildEncoderNotes(family),
       storySetting: buildStorySettingBlock(story),
       povGuidance: buildProsePovGuidance(story?.settings?.pov),
       locationBlock: buildLocationBlock(location),

@@ -202,3 +202,59 @@ describe('wavespeed Krea img2img strength (research/64 §4 open item)', () => {
     expect(sanitizeKreaStrength('abc')).toBeUndefined()
   })
 })
+
+describe('NanoGPT per-family knobs (research/64 §3h/§3m)', () => {
+  it('Animagine gets CFG 6 / 28 steps and its official negative', async () => {
+    await gen({}, 'nsfw-gen-illustrious')
+    const body = lastBody()
+    expect(body.guidance_scale).toBe(6)
+    expect(body.num_inference_steps).toBe(28)
+    expect(body.negative_prompt as string).toContain('low score')
+    expect(body.negative_prompt as string).toContain('mosaic censoring')
+  })
+
+  it('Chroma gets CFG 4 / 40 steps, the model-card negative, and bidirectional size suppression', async () => {
+    const provider = createNanoGPTProvider({ apiKey: 'k' })
+    await provider.generate({
+      model: 'chroma',
+      prompt: 'a woman with medium breasts riding, exactly two people',
+      size: '1024x1536',
+    })
+    const body = lastBody()
+    expect(body.guidance_scale).toBe(4)
+    expect(body.num_inference_steps).toBe(40)
+    const negative = body.negative_prompt as string
+    expect(negative).toContain('flat colors')
+    expect(negative).toContain('patreon username')
+    // Bidirectional: bands above AND below medium suppressed.
+    expect(negative).toContain('small breasts')
+    expect(negative).toContain('gigantic breasts')
+    expect(negative).not.toContain('medium breasts,')
+  })
+
+  it('Nova Anime XL rides the standard booru path (CFG 5/30 + booru negative)', async () => {
+    await gen({}, 'persona:376130@2456367')
+    const body = lastBody()
+    expect(body.guidance_scale).toBe(5)
+    expect(body.num_inference_steps).toBe(30)
+    expect(body.negative_prompt as string).toContain('bad anatomy')
+  })
+
+  it('profile providerOptions still override every family default', async () => {
+    await gen(
+      { providerOptions: { cfgScale: 3.5, steps: 26, negativePrompt: 'my negative' } },
+      'chroma',
+    )
+    const body = lastBody()
+    expect(body.guidance_scale).toBe(3.5)
+    expect(body.num_inference_steps).toBe(26)
+    expect((body.negative_prompt as string).startsWith('my negative')).toBe(true)
+  })
+
+  it('non-chroma prose models (krea) keep endpoint defaults and no injected negative', async () => {
+    await gen({}, 'wavespeed-ai/krea-v2/turbo')
+    const body = lastBody()
+    expect(body.guidance_scale).toBeUndefined()
+    expect(body.negative_prompt).toBeUndefined()
+  })
+})

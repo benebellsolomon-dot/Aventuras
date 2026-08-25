@@ -49,6 +49,7 @@ import {
   buildSizeSanctions,
   buildSubjectDossier,
   composeBooruScenePrompt,
+  singleWindowBudgetFor,
   resolveBooruScenePrompt,
   stripCharacterNames,
   writeBooruScenePrompt,
@@ -1795,5 +1796,78 @@ describe('single-window budget — calibration and allocation (research/64 §3g)
       { singleWindow: true },
     ).split(', ')
     expect(single).toContain('pov')
+  })
+})
+
+describe('composeBooruScenePrompt — Animagine family knobs (research/64 §3m)', () => {
+  const sections = {
+    rating: 'explicit, uncensored, detailed anatomy',
+    camera: 'medium shot, from below, pov',
+    countTags: '1boy, 1girl',
+    actInProgress: true,
+    action: 'hetero, sex, vaginal, cowgirl position, straddling',
+    characters: ['male pov, faceless male', 'long hair, blonde hair, yellow eyes, completely nude'],
+    expressions: ['', 'blush, heavy breathing'],
+    scene: 'cluttered attic, pile of cushions, wooden crates',
+  }
+
+  it('prepends nsfw, keeps uncensored, drops only the prompt-ism from the rating block', () => {
+    const prompt = composeBooruScenePrompt(sections, [], [], {
+      singleWindow: true,
+      family: 'animagine',
+    })
+    expect(prompt.startsWith('nsfw, explicit, uncensored')).toBe(true)
+    expect(prompt).not.toContain('detailed anatomy')
+  })
+
+  it('drops the shot-type tag but keeps angle and pov camera tags', () => {
+    const prompt = composeBooruScenePrompt(sections, [], [], {
+      singleWindow: true,
+      family: 'animagine',
+    })
+    expect(prompt).not.toContain('medium shot')
+    expect(prompt).toContain('from below')
+  })
+
+  it('does not prepend nsfw on non-explicit beats', () => {
+    const prompt = composeBooruScenePrompt({ ...sections, rating: 'sensitive' }, [], [], {
+      singleWindow: true,
+      family: 'animagine',
+    })
+    expect(prompt.startsWith('nsfw')).toBe(false)
+  })
+
+  it('WAI behavior is untouched when no family is given (regression pin)', () => {
+    const withFamily = composeBooruScenePrompt(sections, [], [], { singleWindow: true })
+    expect(withFamily.startsWith('explicit')).toBe(true)
+    expect(withFamily).toContain('medium shot')
+    expect(withFamily).not.toContain('uncensored')
+  })
+
+  it('single-window body budget shrinks by the longer prefix cost', () => {
+    expect(singleWindowBudgetFor('animagine')).toBeLessThan(singleWindowBudgetFor('booru'))
+    expect(singleWindowBudgetFor(undefined)).toBe(singleWindowBudgetFor('booru'))
+  })
+})
+
+describe('composeBooruScenePrompt — Animagine knobs on chunking backends (pinned: model conventions, not budget relief)', () => {
+  it('nsfw prepend + shot-type drop + prompt-ism drop apply with singleWindow false too', () => {
+    const prompt = composeBooruScenePrompt(
+      {
+        rating: 'explicit, uncensored, detailed anatomy',
+        camera: 'medium shot, from below, pov',
+        countTags: '1boy, 1girl',
+        action: 'hetero, sex',
+        characters: ['long hair, blonde hair'],
+        scene: 'cluttered attic',
+      },
+      [],
+      [],
+      { family: 'animagine' },
+    )
+    expect(prompt.startsWith('nsfw, explicit, uncensored')).toBe(true)
+    expect(prompt).not.toContain('medium shot')
+    expect(prompt).not.toContain('detailed anatomy')
+    expect(prompt).toContain('from below')
   })
 })

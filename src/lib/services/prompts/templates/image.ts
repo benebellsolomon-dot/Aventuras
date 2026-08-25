@@ -549,7 +549,8 @@ Output ONE dense paragraph of natural prose, 600-1400 characters. Rules:
 - EXPRESSION TWICE: name the main subject's expression concretely in her own sentence, then restate it once more in different words just before the environment — an emotion stated once has softened by the time the encoder reaches the light.
 - CONTENT DISCIPLINE: depict only what the narrative beat and scene intent actually show. Clothing, nudity and any physical or sexual act must come from this beat — never from a character's stats or the story's rating; a clothed conversation is drawn clothed. When the beat IS explicit, describe it literally and anatomically in full sentences — who is where, what is bare, what touches what — with no euphemism, slang, or rating labels (no "uncensored", no "nsfw").
 - Honor the Camera/POV, Story setting and Current location blocks when present: era-correct attire and props, protagonist framed as the story's POV dictates.`,
-  userContent: `## Scene intent (from the narration — may be prose or a tag list; translate, do not copy)
+  userContent: `{{ encoderNotes }}
+## Scene intent (from the narration — may be prose or a tag list; translate, do not copy)
 {{ sceneIntent }}
 
 ## Narrative beat (context — the moment being illustrated is the LAST thing described)
